@@ -1,6 +1,6 @@
 ---
 name: Independent evaluation
-a bout: Submit a black-box, counterexample, reproduction, or model-disjoint evaluation
+about: Submit a black-box, counterexample, reproduction, or model-disjoint evaluation
 ---
 
 ## Evaluation type
