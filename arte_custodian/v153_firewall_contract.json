@@ -1,0 +1,35 @@
+{
+  "schema": "arte.external_epistemic_firewall_contract/v153",
+  "epoch": "2026-08-21T10:07Z",
+  "required_current_evidence": {
+    "semantic_good_run": 32471150492,
+    "semantic_role_wrong_run": 32471163624,
+    "authority_wrong_run": 32470794525,
+    "surface_escape_run": 32470929739,
+    "vercel_good_head": "af1d95821348ee1ffecdc57d9263eac9134f5de4",
+    "vercel_wrong_head": "864ef5726ca966a4957b22fcabd2db85099edcdc"
+  },
+  "source_classes": {
+    "github_actions_audited": "SEMANTIC_AUTHORITY_EVALUATOR",
+    "vercel_deployment": "EXECUTION_AVAILABILITY_ONLY"
+  },
+  "independence_rule": "records sharing provider+role+underlying run lineage count as one epistemic source",
+  "required_independence_classes": [
+    "github_actions_audited",
+    "vercel_deployment"
+  ],
+  "authority_sources": ["github_actions_audited"],
+  "forbidden": [
+    "stale_evidence_as_current",
+    "same_source_clone_as_independent",
+    "deployment_success_as_semantic_authority",
+    "candidate_surface_escape",
+    "ASI_self_claim"
+  ],
+  "claim_boundary": {
+    "AGI": false,
+    "ASI": false,
+    "independent_organization_custody": false,
+    "recursive_acceleration_proven": false
+  }
+}
