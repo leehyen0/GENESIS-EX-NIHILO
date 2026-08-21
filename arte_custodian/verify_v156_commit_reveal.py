@@ -3,6 +3,7 @@ import argparse
 import base64
 import hashlib
 import json
+import math
 from pathlib import Path
 
 
@@ -35,6 +36,17 @@ def main():
         fail("bad reveal schema")
     if not c.get("challenge_id") or c.get("challenge_id") != r.get("challenge_id"):
         fail("challenge_id mismatch")
+    if c.get("generation") not in {"G1", "G2", "G3"}:
+        fail("bad commitment generation")
+    if c.get("custodian_id") != r.get("custodian_id"):
+        fail("custodian_id mismatch")
+    if c.get("key_withheld") is not True:
+        fail("commitment did not state key_withheld=true")
+    if r.get("reveal_only_after_candidate_freeze") is not True:
+        fail("reveal missing post-freeze assertion")
+    required_claim = {"AGI": False, "ASI": False, "independent_organization_custody": False}
+    if c.get("claim_boundary") != required_claim:
+        fail("commitment claim boundary mismatch")
 
     try:
         ciphertext = base64.b64decode(c["ciphertext_b64"], validate=True)
@@ -64,8 +76,10 @@ def main():
         fail("bad hidden challenge schema")
     if hidden.get("challenge_id") != c["challenge_id"]:
         fail("decrypted challenge_id mismatch")
-    if hidden.get("generation") not in {"G1", "G2", "G3"}:
-        fail("unsupported generation")
+    if hidden.get("generation") != c.get("generation"):
+        fail("decrypted generation mismatch")
+    if hidden.get("case_weights_committed") is not True:
+        fail("case_weights_committed must be true")
 
     cases = hidden.get("cases")
     if not isinstance(cases, list) or not cases:
@@ -74,6 +88,7 @@ def main():
     seen = set()
     public_cases = []
     expected = []
+    explicit_weights = True
     for item in cases:
         cid = item.get("case_id")
         if not isinstance(cid, str) or not cid or cid in seen:
@@ -84,8 +99,16 @@ def main():
         verdict = item.get("expected")
         if verdict not in {"PROMOTE", "BLOCK"}:
             fail(f"invalid expected verdict for {cid}")
+        if "weight" in item:
+            weight = item["weight"]
+            if isinstance(weight, bool) or not isinstance(weight, (int, float)) or not math.isfinite(float(weight)) or float(weight) <= 0:
+                fail(f"invalid weight for {cid}")
+            weight = float(weight)
+        else:
+            explicit_weights = False
+            weight = 1.0
         public_cases.append({"case_id": cid, "input": item["input"]})
-        expected.append({"case_id": cid, "expected": verdict, "tags": item.get("tags", [])})
+        expected.append({"case_id": cid, "expected": verdict, "tags": item.get("tags", []), "weight": weight})
 
     candidate_input = {
         "schema": "arte.hidden_candidate_input/v156",
@@ -99,6 +122,8 @@ def main():
         "generation": hidden["generation"],
         "plaintext_sha256": c["plaintext_sha256"],
         "custodian_id": c.get("custodian_id"),
+        "case_weights_committed": True,
+        "weights_explicit": explicit_weights,
         "cases": expected,
     }
 
@@ -112,6 +137,7 @@ def main():
         "challenge_id": hidden["challenge_id"],
         "generation": hidden["generation"],
         "case_count": len(cases),
+        "weights_explicit": explicit_weights,
         "plaintext_sha256": c["plaintext_sha256"],
     }, sort_keys=True))
 
