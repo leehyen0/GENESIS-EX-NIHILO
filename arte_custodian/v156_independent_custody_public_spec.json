@@ -1,0 +1,54 @@
+{
+  "schema": "arte.independent_hidden_challenge_public_spec/v156",
+  "purpose": "Post-freeze commit-reveal evaluation whose hidden cases are information-custodied outside the candidate process.",
+  "candidate_interface": {
+    "path": "arte_candidate/run_v156.py",
+    "cli": "python run_v156.py --input <candidate_input.json> --output <decisions.json>",
+    "input_schema": {
+      "schema": "arte.hidden_candidate_input/v156",
+      "challenge_id": "string",
+      "generation": "G1|G2|G3",
+      "cases": [
+        {
+          "case_id": "string",
+          "input": {
+            "providers": "list of provider observations with provider_id, provider_class, status, evidenced_roles",
+            "evidence": "list of evidence records with source_id, independence_class, role, valid, epoch, required_epoch, external_verdict",
+            "required_axes": "list of required authority axes",
+            "min_independent_classes": "integer >= 1",
+            "parent": "object with external_pass and authority_product_complete",
+            "claim_boundary": "object with agi_claimed, asi_claimed, independent_custody_claimed"
+          }
+        }
+      ]
+    },
+    "output_schema": {
+      "schema": "arte.candidate_hidden_decisions/v156",
+      "challenge_id": "must equal input challenge_id",
+      "decisions": [{"case_id": "string", "decision": "PROMOTE|BLOCK"}],
+      "claim_boundary": {"AGI": false, "ASI": false, "independent_custody": false}
+    }
+  },
+  "public_semantics": [
+    "Deployment/execution availability may satisfy only an execution axis; it cannot substitute for semantic, freshness, independence, or claim-boundary evidence.",
+    "Every required authority axis must have at least one valid, role-matched, current-epoch evidence record with external_verdict=pass.",
+    "Distinct source_id values in the same independence_class count as one epistemic source for independence requirements.",
+    "Parent external_pass and authority_product_complete must both be true for promotion.",
+    "Missing, stale, cloned, role-swapped, invalid, or externally failed required evidence forces BLOCK.",
+    "Any AGI/ASI claim, or independent-custody claim before external custody is actually proven, forces BLOCK.",
+    "Unknown or malformed required fields force BLOCK rather than optimistic promotion."
+  ],
+  "hidden_custody_protocol": {
+    "commitment": "External custodian creates exact UTF-8 hidden challenge bytes, a uniformly random one-time-pad key of identical byte length, ciphertext = plaintext XOR key, and publishes ciphertext + SHA-256 commitments but withholds the key.",
+    "freeze": "Candidate head SHA and candidate file SHA-256 are frozen after commitment and before key reveal.",
+    "reveal": "Custodian reveals only the one-time-pad key after candidate freeze.",
+    "sandbox": "Candidate runs network-off in a Docker container with only candidate_input mounted read-only and output mounted writable. Ciphertext, key, expected labels, repository, and host verifier are not mounted.",
+    "authority": "A creation acknowledgement, ciphertext possession, deployment success, or self-owned dry run is not independent-custody evidence."
+  },
+  "claim_boundary": {
+    "AGI": false,
+    "ASI": false,
+    "independent_organization_custody": false,
+    "recursive_acceleration_proven": false
+  }
+}

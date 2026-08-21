@@ -1,0 +1,131 @@
+name: arte-v156-independent-hidden-eval
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'arte_custodian/v156_reveal_key.json'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  postfreeze-hidden-evaluation:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout reveal state
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup host verifier Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Load frozen authorities
+        id: freeze
+        shell: bash
+        run: |
+          python - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          f=json.load(open('arte_custodian/v156_candidate_freeze.json',encoding='utf-8'))
+          assert f['schema']=='arte.hidden_candidate_freeze/v156'
+          for key in ['candidate_head_sha','candidate_file_sha256','verifier_base_sha','workflow_file_sha256','challenge_id']:
+              value=f[key]
+              print(f"{key}={value}")
+          PY
+
+      - name: Audit post-freeze mutable surface
+        shell: bash
+        env:
+          VERIFIER_BASE_SHA: ${{ steps.freeze.outputs.verifier_base_sha }}
+        run: |
+          git cat-file -e "${VERIFIER_BASE_SHA}^{commit}"
+          mapfile -t changed < <(git diff --name-only "${VERIFIER_BASE_SHA}" HEAD)
+          printf 'post_freeze_changed=%s\n' "${changed[*]}"
+          for f in "${changed[@]}"; do
+            case "$f" in
+              arte_custodian/v156_challenge_commitment.json|arte_custodian/v156_candidate_freeze.json|arte_custodian/v156_reveal_key.json) ;;
+              *) echo "forbidden post-freeze mutation: $f" >&2; exit 1 ;;
+            esac
+          done
+
+      - name: Materialize frozen verifier and audit workflow hash
+        shell: bash
+        env:
+          VERIFIER_BASE_SHA: ${{ steps.freeze.outputs.verifier_base_sha }}
+          EXPECTED_WORKFLOW_SHA256: ${{ steps.freeze.outputs.workflow_file_sha256 }}
+        run: |
+          mkdir -p frozen_verifier
+          git show "${VERIFIER_BASE_SHA}:arte_custodian/verify_v156_commit_reveal.py" > frozen_verifier/verify_v156_commit_reveal.py
+          git show "${VERIFIER_BASE_SHA}:arte_custodian/verify_v156_hidden_eval.py" > frozen_verifier/verify_v156_hidden_eval.py
+          git show "${VERIFIER_BASE_SHA}:.github/workflows/arte-v156-independent-hidden-eval.yml" > frozen_verifier/workflow.yml
+          actual=$(sha256sum frozen_verifier/workflow.yml | awk '{print $1}')
+          echo "frozen_workflow_sha256=$actual"
+          test "$actual" = "$EXPECTED_WORKFLOW_SHA256"
+
+      - name: Verify commit-reveal and separate truth from candidate input
+        shell: bash
+        run: |
+          mkdir -p evaluation_output/candidate_output
+          python frozen_verifier/verify_v156_commit_reveal.py \
+            arte_custodian/v156_challenge_commitment.json \
+            arte_custodian/v156_reveal_key.json \
+            evaluation_output/candidate_input.json \
+            evaluation_output/expected_private.json
+
+      - name: Materialize exact frozen candidate
+        shell: bash
+        env:
+          CANDIDATE_SHA: ${{ steps.freeze.outputs.candidate_head_sha }}
+          CANDIDATE_FILE_SHA256: ${{ steps.freeze.outputs.candidate_file_sha256 }}
+        run: |
+          git fetch --no-tags origin "$CANDIDATE_SHA"
+          mkdir -p candidate_sandbox
+          git show "${CANDIDATE_SHA}:arte_candidate/run_v156.py" > candidate_sandbox/run_v156.py
+          actual=$(sha256sum candidate_sandbox/run_v156.py | awk '{print $1}')
+          echo "candidate_file_sha256=$actual"
+          test "$actual" = "$CANDIDATE_FILE_SHA256"
+
+      - name: Run candidate in network-off filesystem-isolated container
+        shell: bash
+        run: |
+          docker run --rm \
+            --network none \
+            --read-only \
+            --tmpfs /tmp:rw,noexec,nosuid,size=64m \
+            --cap-drop ALL \
+            --security-opt no-new-privileges \
+            -v "$PWD/candidate_sandbox:/candidate:ro" \
+            -v "$PWD/evaluation_output/candidate_input.json:/input/candidate_input.json:ro" \
+            -v "$PWD/evaluation_output/candidate_output:/output:rw" \
+            -w /candidate \
+            python:3.12-slim \
+            python run_v156.py --input /input/candidate_input.json --output /output/decisions.json
+
+      - name: Verify hidden outcome with frozen host verifier
+        shell: bash
+        run: |
+          python frozen_verifier/verify_v156_hidden_eval.py \
+            evaluation_output/expected_private.json \
+            evaluation_output/candidate_output/decisions.json \
+            arte_custodian/v156_candidate_freeze.json \
+            evaluation_output/v156_hidden_receipt.json
+
+      - name: Remove decrypted private truth before artifact upload
+        if: always()
+        shell: bash
+        run: |
+          rm -f evaluation_output/expected_private.json evaluation_output/candidate_input.json
+
+      - name: Upload bounded external receipt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: arte-v156-hidden-evaluation-${{ github.run_id }}
+          path: |
+            evaluation_output/v156_hidden_receipt.json
+            evaluation_output/candidate_output/decisions.json
