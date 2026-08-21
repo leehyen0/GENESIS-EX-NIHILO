@@ -3,6 +3,8 @@ name: arte-v149-audited-base
 on:
   pull_request:
     branches: [main]
+    paths:
+      - 'arte_candidate/run_v149.py'
 
 permissions:
   contents: read
