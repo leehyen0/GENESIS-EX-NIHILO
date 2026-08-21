@@ -1,0 +1,6 @@
+{
+  "experiment": "V148_GOOD",
+  "candidate_may_modify_base_verifier": false,
+  "candidate_may_modify_base_workflow": false,
+  "claim_boundary": "preserved"
+}
