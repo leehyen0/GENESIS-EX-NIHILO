@@ -1,0 +1,12 @@
+{
+  "schema": "arte.audited_base_contract/v149",
+  "challenge_id": "V149-AUDITED-BASE-001",
+  "artifact_schema": "arte.public_candidate_artifact/v149",
+  "required_claim_boundary": {
+    "AGI": false,
+    "ASI": false,
+    "independent_organization_custody": false,
+    "recursive_acceleration_proven": false
+  },
+  "expected_digest_rule": "sha256(candidate_sha + ':' + challenge_id + ':audited-base')"
+}
