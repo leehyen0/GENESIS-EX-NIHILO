@@ -1,0 +1,6 @@
+{
+  "generation": "V148_WRONG",
+  "base_sha": "254ba58b7bc915ca7c6fc8219ef3a7a6538a9670",
+  "expected_external_outcome": "FAIL",
+  "good_control_expected_outcome": "PASS"
+}
