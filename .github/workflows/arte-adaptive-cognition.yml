@@ -20,6 +20,8 @@ jobs:
         with:
           python-version: '3.12'
       - name: Compile cognition core
-        run: python -m py_compile arte_cognition/adaptive_cognition.py
+        run: |
+          python -m py_compile arte_cognition/adaptive_cognition.py
+          python -m py_compile arte_cognition/meta_router.py
       - name: Run cognition tests
-        run: python -m unittest arte_cognition.test_adaptive_cognition -v
+        run: python -m unittest discover -s arte_cognition -p 'test_*.py' -v
