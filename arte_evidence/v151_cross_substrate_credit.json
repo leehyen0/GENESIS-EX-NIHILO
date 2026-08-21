@@ -1,0 +1,34 @@
+{
+  "schema": "arte.cross_substrate_typed_authority/v151",
+  "recorded_at": "2026-08-21",
+  "parent": "V150",
+  "sources": {
+    "github_semantic_evaluator": {
+      "GOOD": {"head_sha": "8168a56c5d5a3e314df55a54c6d178c41a7f41ac", "run_id": 32470656619, "verdict": "PASS"},
+      "WRONG": {"head_sha": "8b2c085f84769c12a7d9688ae2ebe94ff467e7d9", "run_id": 32470670369, "verdict": "FAIL"}
+    },
+    "vercel_deployment_status": {
+      "GOOD": {"head_sha": "8168a56c5d5a3e314df55a54c6d178c41a7f41ac", "status": "SUCCESS", "semantic_authority": false},
+      "WRONG": {"head_sha": "8b2c085f84769c12a7d9688ae2ebe94ff467e7d9", "status": "SUCCESS", "semantic_authority": false}
+    }
+  },
+  "typed_authority_gate": "PROMOTE iff github_semantic=PASS AND vercel_deployment=SUCCESS",
+  "decisions": {
+    "GOOD": "PROMOTE_BOUNDED_DESCENDANT",
+    "WRONG": "REJECT_SEMANTIC_WRONG"
+  },
+  "cognition_update": {
+    "rule": "Provider outcomes are typed by what they actually evidence before fusion.",
+    "formal": [
+      "DeploymentSuccess != SemanticCorrectness",
+      "TypedAuthority = SemanticCorrectness(GitHubBaseVerifier) AND Deployability(Vercel)",
+      "A provider cannot vote outside its evidenced role"
+    ]
+  },
+  "claim_boundary": {
+    "ASI": false,
+    "AGI": false,
+    "independent_organization_custody": false,
+    "recursive_acceleration_proven": false
+  }
+}
