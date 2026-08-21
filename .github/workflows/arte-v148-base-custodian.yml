@@ -1,0 +1,83 @@
+name: arte-v148-base-custodian
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+
+jobs:
+  base-frozen-evaluation:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout frozen PR base
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: custodian
+          persist-credentials: false
+
+      - name: Checkout candidate head
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          ref: ${{ github.event.pull_request.head.sha }}
+          path: candidate
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Run candidate off-box
+        env:
+          CANDIDATE_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          mkdir -p evaluation_output
+          python candidate/arte_candidate/run_v148.py \
+            --output evaluation_output/candidate_artifact.json \
+            --candidate-sha "$CANDIDATE_SHA"
+
+      - name: Verify with base-frozen custodian
+        run: |
+          python custodian/arte_custodian/verify_v148.py \
+            evaluation_output/candidate_artifact.json \
+            custodian/arte_custodian/v148_contract.json
+
+      - name: Record execution separation
+        if: always()
+        env:
+          CANDIDATE_SHA: ${{ github.event.pull_request.head.sha }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          p = Path('evaluation_output')
+          p.mkdir(exist_ok=True)
+          receipt = {
+              'schema': 'arte.execution_separation/v148',
+              'candidate_sha': os.environ['CANDIDATE_SHA'],
+              'base_sha': os.environ['BASE_SHA'],
+              'github_run_id': os.environ['RUN_ID'],
+              'candidate_checkout': 'pull_request_head',
+              'verifier_checkout': 'pull_request_base',
+              'candidate_can_select_verifier_ref': False,
+              'workflow_source': 'pull_request_target/base',
+              'permissions': 'contents:read',
+              'secrets_intentionally_used': False,
+              'independent_organization_custody': False,
+              'AGI': False,
+              'ASI': False
+          }
+          (p/'execution_separation_receipt.json').write_text(json.dumps(receipt, indent=2)+'\n')
+          PY
+
+      - name: Upload evaluation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: arte-v148-evaluation-${{ github.event.pull_request.number }}
+          path: evaluation_output/
