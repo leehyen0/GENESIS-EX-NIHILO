@@ -1,0 +1,13 @@
+{
+  "schema": "arte.base_frozen_contract/v148",
+  "challenge_id": "V148-BASE-FROZEN-001",
+  "artifact_schema": "arte.public_candidate_artifact/v148",
+  "required_claim_boundary": {
+    "AGI": false,
+    "ASI": false,
+    "independent_organization_custody": false,
+    "recursive_acceleration_proven": false
+  },
+  "expected_digest_rule": "sha256(candidate_sha + ':' + challenge_id)",
+  "authority_note": "Passing proves bounded off-box execution against a base-frozen verifier only."
+}
