@@ -1,0 +1,59 @@
+name: arte-v149-audited-base
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  audited-base-evaluation:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout candidate merge context
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Enforce candidate-only diff surface
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          python - <<'PY'
+          import os, subprocess
+          base = os.environ['BASE_SHA']
+          out = subprocess.check_output(['git','diff','--name-only',base,'HEAD'], text=True)
+          files = [x for x in out.splitlines() if x.strip()]
+          bad = [x for x in files if not x.startswith('arte_candidate/')]
+          print('changed_files=', files)
+          if bad:
+              raise SystemExit(f'candidate escaped allowed surface: {bad}')
+          PY
+
+      - name: Run candidate off-box
+        env:
+          CANDIDATE_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          mkdir -p evaluation_output
+          python arte_candidate/run_v149.py \
+            --output evaluation_output/candidate_artifact.json \
+            --candidate-sha "$CANDIDATE_SHA"
+
+      - name: Verify against frozen base contract
+        run: |
+          python arte_custodian/verify_v149.py \
+            evaluation_output/candidate_artifact.json \
+            arte_custodian/v149_contract.json
+
+      - name: Upload external evaluation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: arte-v149-evaluation-${{ github.event.pull_request.number }}
+          path: evaluation_output/
