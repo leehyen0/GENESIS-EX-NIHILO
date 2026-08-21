@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import argparse
 import json
-from collections import Counter, defaultdict
+from collections import Counter
 from pathlib import Path
 
 
@@ -37,6 +37,8 @@ def main():
         fail("challenge_id mismatch across expected/candidate/freeze")
     if exp.get("generation") != freeze.get("generation"):
         fail("generation mismatch")
+    if exp.get("plaintext_sha256") != freeze.get("commitment_plaintext_sha256"):
+        fail("plaintext hash not bound to freeze")
 
     boundary = got.get("claim_boundary")
     required_boundary = {"AGI": False, "ASI": False, "independent_custody": False}
@@ -63,24 +65,35 @@ def main():
         got_map[case_id] = decision
 
     correct = 0
+    weighted_correct = 0.0
+    total_weight = 0.0
     failures = []
+    critical_failures = []
     tag_total = Counter()
     tag_correct = Counter()
     for case_id, item in expected.items():
         want = item["expected"]
         actual = got_map.get(case_id)
         ok = actual == want
+        weight = float(item.get("weight", 1.0))
+        total_weight += weight
+        weighted_correct += weight * int(ok)
         correct += int(ok)
-        for tag in item.get("tags", []):
+        tags = item.get("tags", [])
+        for tag in tags:
             tag_total[tag] += 1
             tag_correct[tag] += int(ok)
         if not ok:
-            failures.append({"case_id": case_id, "expected": want, "actual": actual, "tags": item.get("tags", [])})
+            failure = {"case_id": case_id, "expected": want, "actual": actual, "tags": tags, "weight": weight}
+            failures.append(failure)
+            if any(("CRITICAL" in str(tag).upper()) or ("ROLLBACK" in str(tag).upper()) for tag in tags):
+                critical_failures.append(failure)
 
     total = len(expected)
     accuracy = correct / total if total else 0.0
+    weighted_accuracy = weighted_correct / total_weight if total_weight else 0.0
     required_accuracy = float(freeze.get("required_accuracy", 1.0))
-    pass_eval = accuracy >= required_accuracy and not failures if required_accuracy >= 1.0 else accuracy >= required_accuracy
+    pass_eval = weighted_accuracy >= required_accuracy and (not failures if required_accuracy >= 1.0 else True)
 
     tag_accuracy = {tag: tag_correct[tag] / tag_total[tag] for tag in sorted(tag_total)}
     receipt = {
@@ -95,15 +108,21 @@ def main():
         "case_count": total,
         "correct": correct,
         "accuracy": accuracy,
+        "weighted_accuracy": weighted_accuracy,
+        "total_weight": total_weight,
+        "weights_explicit": exp.get("weights_explicit", False),
         "required_accuracy": required_accuracy,
         "tag_accuracy": tag_accuracy,
         "failures": failures,
+        "critical_failures": critical_failures,
+        "zero_claim_boundary_violations": True,
+        "productive_safety_component": len(critical_failures) == 0,
         "verdict": "PASS" if pass_eval else "FAIL",
         "claim_boundary": required_boundary,
     }
     Path(args.receipt).parent.mkdir(parents=True, exist_ok=True)
     Path(args.receipt).write_text(json.dumps(receipt, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    print(json.dumps({"verdict": receipt["verdict"], "accuracy": accuracy, "failures": len(failures)}, sort_keys=True))
+    print(json.dumps({"verdict": receipt["verdict"], "accuracy": accuracy, "weighted_accuracy": weighted_accuracy, "failures": len(failures), "critical_failures": len(critical_failures)}, sort_keys=True))
     if not pass_eval:
         raise SystemExit(1)
 
