@@ -1,0 +1,74 @@
+name: arte-v156-freeze-audit
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'arte_candidate/run_v156.py'
+
+permissions:
+  contents: read
+
+jobs:
+  freeze-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout candidate head
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Enforce candidate-only surface
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        shell: bash
+        run: |
+          mapfile -t changed < <(git diff --name-only "$BASE_SHA" HEAD)
+          printf 'changed_files=%s\n' "${changed[*]}"
+          test "${#changed[@]}" -eq 1
+          test "${changed[0]}" = "arte_candidate/run_v156.py"
+
+      - name: Compute externally observed freeze hashes
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        shell: bash
+        run: |
+          mkdir -p freeze_output
+          candidate_sha=$(sha256sum arte_candidate/run_v156.py | awk '{print $1}')
+          workflow_sha=$(git show "$BASE_SHA:.github/workflows/arte-v156-independent-hidden-eval.yml" | sha256sum | awk '{print $1}')
+          python - <<'PY'
+          import json, os, hashlib
+          from pathlib import Path
+          manifest=json.loads(Path('arte_custodian/v156_preg1_external_commitment_manifest.json').read_text())
+          g1=next(x for x in manifest['commitments'] if x['generation']=='G1')
+          receipt={
+            'schema':'arte.hidden_candidate_freeze_audit/v156',
+            'generation':'G1',
+            'challenge_id':g1['challenge_id'],
+            'candidate_head_sha':os.environ['HEAD_SHA'],
+            'candidate_file_sha256':hashlib.sha256(Path('arte_candidate/run_v156.py').read_bytes()).hexdigest(),
+            'verifier_base_sha':os.environ['BASE_SHA'],
+            'workflow_file_sha256':os.popen(f"git show {os.environ['BASE_SHA']}:.github/workflows/arte-v156-independent-hidden-eval.yml | sha256sum").read().split()[0],
+            'commitment_plaintext_sha256':g1['plaintext_sha256'],
+            'commitment_ciphertext_sha256':g1['ciphertext_sha256'],
+            'commitment_canonical_sha256':g1['canonical_commitment_sha256'],
+            'required_accuracy':1.0,
+            'frozen_before_reveal':True,
+            'claim_boundary':{
+              'AGI':False,
+              'ASI':False,
+              'independent_organization_custody':False,
+              'recursive_acceleration_proven':False
+            }
+          }
+          Path('freeze_output/v156_g1_freeze_audit.json').write_text(json.dumps(receipt,indent=2)+'\n')
+          print(json.dumps(receipt,sort_keys=True))
+          PY
+
+      - name: Upload freeze audit receipt
+        uses: actions/upload-artifact@v4
+        with:
+          name: arte-v156-g1-freeze-audit-${{ github.run_id }}
+          path: freeze_output/v156_g1_freeze_audit.json
