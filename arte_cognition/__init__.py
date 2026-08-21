@@ -14,6 +14,12 @@ from .meta_router import (
     ModuleExperience,
     OutcomeLearnedCognitionRouter,
 )
+from .possibility_space import (
+    Fact,
+    OperatorSpec,
+    PossibilityCandidate,
+    PossibilitySpaceGenerator,
+)
 
 __all__ = [
     "AdaptiveCognitionCompiler",
@@ -28,4 +34,8 @@ __all__ = [
     "CognitionPolicyState",
     "ModuleExperience",
     "OutcomeLearnedCognitionRouter",
+    "Fact",
+    "OperatorSpec",
+    "PossibilityCandidate",
+    "PossibilitySpaceGenerator",
 ]
