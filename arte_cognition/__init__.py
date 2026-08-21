@@ -9,6 +9,11 @@ from .adaptive_cognition import (
     TaskState,
     plan_to_dict,
 )
+from .meta_router import (
+    CognitionPolicyState,
+    ModuleExperience,
+    OutcomeLearnedCognitionRouter,
+)
 
 __all__ = [
     "AdaptiveCognitionCompiler",
@@ -20,4 +25,7 @@ __all__ = [
     "QuestionScore",
     "TaskState",
     "plan_to_dict",
+    "CognitionPolicyState",
+    "ModuleExperience",
+    "OutcomeLearnedCognitionRouter",
 ]
