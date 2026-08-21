@@ -1,6 +1,10 @@
 name: arte-v156-independent-hidden-eval
 
 on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'arte_custodian/v156_reveal_key.json'
   push:
     branches: [main]
     paths:
