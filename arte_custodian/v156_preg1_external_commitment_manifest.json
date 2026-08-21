@@ -1,0 +1,48 @@
+{
+  "schema": "arte.v156_preg1_external_commitment_manifest/v1",
+  "custodian_id": "Gemini",
+  "received_before_G1_freeze": true,
+  "full_commitment_transport": "user-provided conversation attachment; exact full ciphertext objects retained outside candidate process",
+  "commitments": [
+    {
+      "generation": "G1",
+      "challenge_id": "gemini-v156-G1-a8522b6b0f6119bc817b2990",
+      "byte_length": 17532,
+      "plaintext_sha256": "7cd29f87e300311041eb69372ee4a11ee879c2ee00fcc2e30f5178260c1648a7",
+      "ciphertext_sha256": "2d4d68e4b12f0240f44784b3fc2d68a4239622b255eabf92843a52902048fa16",
+      "canonical_commitment_sha256": "18c3d262efd05a4bd1f88832c0310109081b833e97bc26b6746027bfe86ed6fa",
+      "ciphertext_b64_char_length": 23376
+    },
+    {
+      "generation": "G2",
+      "challenge_id": "gemini-v156-G2-bd7ef1de93a2c0d3209414ba",
+      "byte_length": 25097,
+      "plaintext_sha256": "9e5d674d2ef051c079d87613e4543136d493b83f0acdabd5cc9b5ff3188769ff",
+      "ciphertext_sha256": "b0fff78afdd41d3977d66d7b4cb8848a35ae2757e1717aa7c216f4968c166143",
+      "canonical_commitment_sha256": "2d6c9083af4b337d4c5dbddd9ceab8a373712ccfb80281a62df228a6064330b3",
+      "ciphertext_b64_char_length": 33464
+    },
+    {
+      "generation": "G3",
+      "challenge_id": "gemini-v156-G3-b67df64566b67781df602c77",
+      "byte_length": 33065,
+      "plaintext_sha256": "5f4d5d203a4fec350723cbb7a32b6403d0a4743d0ce95d2fd671524daeb1d0b8",
+      "ciphertext_sha256": "f4c3a1bfb9d563190b161028ed8e5014692b814ede64e0024e44b1447d9cda5a",
+      "canonical_commitment_sha256": "0e0ac0e08c2e67936b07b6c8bafbaae892627046f6bb79b9c442ee0465de4b61",
+      "ciphertext_b64_char_length": 44088
+    }
+  ],
+  "validation": {
+    "all_schema_valid": true,
+    "all_decoded_ciphertext_lengths_match": true,
+    "all_ciphertext_sha256_match": true,
+    "all_plaintext_ciphertext_hashes_differ": true,
+    "keys_withheld": true
+  },
+  "claim_boundary": {
+    "AGI": false,
+    "ASI": false,
+    "independent_organization_custody": false,
+    "recursive_acceleration_proven": false
+  }
+}
