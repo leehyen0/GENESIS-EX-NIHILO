@@ -1,0 +1,32 @@
+{
+  "schema": "arte.external_evidence_roles_contract/v152",
+  "observed_external_evidence": {
+    "github_actions_audited_semantic": {
+      "good_run_id": 32470656619,
+      "good_outcome": "success",
+      "integrity_wrong_run_id": 32470670369,
+      "integrity_wrong_outcome": "failure",
+      "authority_wrong_run_id": 32470794525,
+      "authority_wrong_outcome": "failure",
+      "surface_escape_run_id": 32470929739,
+      "surface_escape_outcome": "failure"
+    },
+    "vercel_deployment": {
+      "good_head": "8168a56c5d5a3e314df55a54c6d178c41a7f41ac",
+      "integrity_wrong_head": "8b2c085f84769c12a7d9688ae2ebe94ff467e7d9",
+      "authority_wrong_head": "e7057622bd45e12beaf3f690814d3d2578dd5ed1",
+      "all_observed_state": "success"
+    }
+  },
+  "required_role_map": {
+    "github_actions_audited_semantic": ["execution", "semantic_validity", "authority_boundary"],
+    "vercel_deployment": ["execution_availability"]
+  },
+  "forbidden_inference": "vercel_deployment_success_implies_semantic_validity",
+  "claim_boundary": {
+    "AGI": false,
+    "ASI": false,
+    "independent_organization_custody": false,
+    "recursive_acceleration_proven": false
+  }
+}
