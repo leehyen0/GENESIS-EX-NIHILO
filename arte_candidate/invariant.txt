@@ -1,0 +1,1 @@
+candidate cannot select verifier ref
