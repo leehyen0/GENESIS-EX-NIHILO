@@ -1,0 +1,17 @@
+name: arte-public-runner-probe
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Prove public runner started
+        run: |
+          echo "runner_started=true"
+          echo "repository=$GITHUB_REPOSITORY"
+          echo "sha=$GITHUB_SHA"
+          python --version
