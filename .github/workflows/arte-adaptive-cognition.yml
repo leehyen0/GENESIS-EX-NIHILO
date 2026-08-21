@@ -1,0 +1,25 @@
+name: arte-adaptive-cognition
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'arte_cognition/**'
+      - '.github/workflows/arte-adaptive-cognition.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  cognition-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile cognition core
+        run: python -m py_compile arte_cognition/adaptive_cognition.py
+      - name: Run cognition tests
+        run: python -m unittest arte_cognition.test_adaptive_cognition -v
