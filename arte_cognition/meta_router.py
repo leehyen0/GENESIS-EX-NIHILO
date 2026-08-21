@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Dict, Iterable, List, Mapping, Optional, Sequence
+from typing import Dict, Iterable, List, Mapping, Optional
 import math
 
 from .adaptive_cognition import (
@@ -44,11 +44,11 @@ class CognitionPolicyState:
         return self.modules[module]
 
     def observe(self, credits: Iterable[ModuleCredit]) -> None:
-        """Update only from causally relevant modules.
+        """Learn only from causally relevant behavioral changes.
 
-        Mere activation is ignored. Positive treatment delta moves signed_value up;
-        a behavior-changing negative delta moves it down. Values are bounded to
-        avoid one regime permanently dominating the router.
+        Mere activation never changes the router. A positive realized delta lowers
+        future activation thresholds; a negative realized delta raises them. All
+        changes are bounded so one regime cannot permanently monopolize cognition.
         """
         for credit in credits:
             if credit.module not in LEARNABLE_MODULES or not credit.decision_changed:
@@ -69,16 +69,14 @@ class CognitionPolicyState:
         exp = self.experience(module)
         if exp.evidence_count < self.min_evidence_before_routing_change:
             return 0.0
-        # Positive validated value lowers the activation threshold; negative raises it.
         return -self.max_threshold_shift * math.tanh(2.0 * exp.signed_value)
 
 
 class OutcomeLearnedCognitionRouter:
     """Bounded meta-router over the sparse cognition compiler.
 
-    The base compiler supplies structural necessities. Learned routing may alter
-    only marginal specialist activation. It cannot suppress hard representation,
-    temporal-identity, or world-interaction requirements.
+    Structural necessities remain non-negotiable. Outcome learning may only alter
+    marginal specialist activation after repeated causally attributed evidence.
     """
 
     BASE_THRESHOLDS = {
@@ -101,7 +99,9 @@ class OutcomeLearnedCognitionRouter:
         if module == "COUNTEREXAMPLE_SEARCH":
             return max(pressure.contradiction, pressure.ambiguity)
         if module == "MODAL_EXPANSION":
-            return max(pressure.residual, pressure.novelty)
+            # Base compiler activates at residual>=.25 OR novelty>=.65. Mapping
+            # novelty to novelty-.40 puts both causes on the same .25 threshold.
+            return max(pressure.residual, max(0.0, pressure.novelty - 0.40))
         if module == "REPRESENTATION_ESCAPE":
             return 1.0 if self.compiler.detect_boundary_shadow(task) else 0.0
         if module == "TEMPORAL_IDENTITY":
