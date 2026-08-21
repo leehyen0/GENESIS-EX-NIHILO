@@ -1,0 +1,54 @@
+{
+  "schema": "arte.external_epistemic_firewall_outcome/v153",
+  "recorded_at": "2026-08-21T10:13:00Z",
+  "base_firewall_commit": "37817b2726d6efbdcd1c7f3772e27d723a64bf7c",
+  "prospective_controls": {
+    "GOOD": {
+      "head": "07c301152edcfa8ff67fdf74c724cbb387ca95d0",
+      "github_actions_run": 32471540902,
+      "github_outcome": "success",
+      "vercel_outcome": "success",
+      "expected": "PASS",
+      "matched": true
+    },
+    "STALE": {
+      "head": "e9071942a51510123898250db0b87449330a67de",
+      "github_actions_run": 32471551820,
+      "github_outcome": "failure",
+      "failure_code": "STALE_OR_ALIASED_EVIDENCE",
+      "vercel_outcome": "success",
+      "expected": "FAIL",
+      "matched": true
+    },
+    "CLONE": {
+      "head": "a337b17770895dda1cc137f6615783b11fd6127a",
+      "github_actions_run": 32471568904,
+      "github_outcome": "failure",
+      "failure_code": "CLONED_OR_MISSING_INDEPENDENCE_CLASS",
+      "vercel_outcome": "success",
+      "expected": "FAIL",
+      "matched": true
+    }
+  },
+  "compiled_external_gates": [
+    "CANDIDATE_SURFACE",
+    "ARTIFACT_INTEGRITY",
+    "SEMANTIC_VALIDITY",
+    "CLAIM_AUTHORITY",
+    "SOURCE_ROLE",
+    "EVIDENCE_FRESHNESS",
+    "EVIDENCE_INDEPENDENCE"
+  ],
+  "higher_law": "deployment success is availability evidence only; semantic authority requires role-correct, current, non-cloned evaluator evidence",
+  "custody_audit": {
+    "github_user_org_memberships": 0,
+    "github_app_installation_owner": "leehyen0",
+    "independent_organization_custody": false
+  },
+  "claim_boundary": {
+    "AGI": false,
+    "ASI": false,
+    "recursive_acceleration_proven": false,
+    "foundation_weight_change": false
+  }
+}
