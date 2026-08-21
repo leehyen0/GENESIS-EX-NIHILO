@@ -1,0 +1,55 @@
+name: arte-v154-authority-product
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'arte_candidate/run_v154.py'
+
+permissions:
+  contents: read
+
+jobs:
+  authority-product-evaluation:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Enforce candidate-only surface
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          python - <<'PY'
+          import os, subprocess
+          base = os.environ['BASE_SHA']
+          files = [x for x in subprocess.check_output(['git','diff','--name-only',base,'HEAD'], text=True).splitlines() if x]
+          bad = [x for x in files if not x.startswith('arte_candidate/')]
+          print('changed_files=', files)
+          if bad:
+              raise SystemExit(f'candidate escaped allowed surface: {bad}')
+          PY
+
+      - name: Run authority-product candidate
+        run: |
+          mkdir -p evaluation_output
+          python arte_candidate/run_v154.py --output evaluation_output/authority_product.json
+
+      - name: Verify cross-substrate authority product
+        run: |
+          python arte_custodian/verify_v154_authority_product.py \
+            evaluation_output/authority_product.json \
+            arte_custodian/v154_authority_product_contract.json
+
+      - name: Upload authority-product evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: arte-v154-authority-product-${{ github.event.pull_request.number }}
+          path: evaluation_output/
