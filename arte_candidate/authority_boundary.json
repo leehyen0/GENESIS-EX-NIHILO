@@ -1,0 +1,7 @@
+{
+  "AGI": false,
+  "ASI": true,
+  "independent_organization_custody": false,
+  "recursive_acceleration_proven": false,
+  "note": "intentional wrong control; base verifier must reject"
+}
