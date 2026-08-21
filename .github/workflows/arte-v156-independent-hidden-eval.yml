@@ -42,6 +42,33 @@ jobs:
               print(f"{key}={value}")
           PY
 
+      - name: Bind current commitment to pre-G1 manifest and freeze
+        shell: bash
+        run: |
+          python - <<'PY'
+          import hashlib, json
+          from pathlib import Path
+          c=json.loads(Path('arte_custodian/v156_challenge_commitment.json').read_text(encoding='utf-8'))
+          f=json.loads(Path('arte_custodian/v156_candidate_freeze.json').read_text(encoding='utf-8'))
+          m=json.loads(Path('arte_custodian/v156_preg1_external_commitment_manifest.json').read_text(encoding='utf-8'))
+          assert c['schema']=='arte.hidden_challenge_commitment/v156'
+          assert c['challenge_id']==f['challenge_id']
+          assert c['generation']==f['generation']
+          assert c['plaintext_sha256']==f['commitment_plaintext_sha256']
+          assert c['ciphertext_sha256']==f['commitment_ciphertext_sha256']
+          assert c['custodian_id']=='Gemini'
+          entry=next(x for x in m['commitments'] if x['generation']==f['generation'])
+          assert entry['challenge_id']==c['challenge_id']
+          assert entry['byte_length']==c['byte_length']
+          assert entry['plaintext_sha256']==c['plaintext_sha256']
+          assert entry['ciphertext_sha256']==c['ciphertext_sha256']
+          canonical=json.dumps(c,ensure_ascii=False,sort_keys=True,separators=(',',':')).encode('utf-8')
+          canonical_sha=hashlib.sha256(canonical).hexdigest()
+          assert canonical_sha==entry['canonical_commitment_sha256']
+          assert canonical_sha==f['commitment_canonical_sha256']
+          print('PRE_G1_COMMITMENT_BINDING_VERIFIED', canonical_sha)
+          PY
+
       - name: Audit post-freeze mutable surface
         shell: bash
         env:
