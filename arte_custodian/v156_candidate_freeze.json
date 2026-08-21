@@ -1,0 +1,20 @@
+{
+  "schema": "arte.hidden_candidate_freeze/v156",
+  "challenge_id": "selfcontrol-v156-G1-mini-20260821",
+  "generation": "G1",
+  "candidate_head_sha": "8ee41e85b5bdb45f4b326b8f774da4847eabd457",
+  "candidate_file_sha256": "7345e060749254afee4b7338348cb140b8384e2faa8fe42a2301bdd3663a0be4",
+  "verifier_base_sha": "a61822aac1e63eacf2175fa059d5860512a86c6b",
+  "workflow_file_sha256": "055a5eb37f43e35ce07d5ef2a9adb402991b548f60e5ce36311cf6ae3f6585ea",
+  "commitment_plaintext_sha256": "0b2cd6da8e22cd6c35dbace17c2d1112a82504ed4e95db6905f76c7ab882739e",
+  "commitment_ciphertext_sha256": "77903f498ef2bdbc3b7199d0b77f1e6602d86d743f948b5dd007609646abd535",
+  "required_accuracy": 1.0,
+  "custody_class": "SELF_CUSTODY_PROTOCOL_CONTROL_NOT_INDEPENDENT",
+  "frozen_before_reveal": true,
+  "claim_boundary": {
+    "AGI": false,
+    "ASI": false,
+    "independent_organization_custody": false,
+    "recursive_acceleration_proven": false
+  }
+}
