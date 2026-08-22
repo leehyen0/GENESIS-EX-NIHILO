@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
+from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 import math
 
 from .adaptive_cognition import QueryCandidate
@@ -22,6 +22,12 @@ class CausalWorldModel:
     model_id: str
     prior: float
     predictions: Tuple[Tuple[str, str], ...]
+    origin: str = "AUTHORED"
+    family: str = "UNSPECIFIED"
+    structure: Tuple[str, ...] = ()
+    generation: int = 0
+    parent_model_ids: Tuple[str, ...] = ()
+    equivalent_structures: Tuple[str, ...] = ()
 
     def prediction_for(self, intervention_id: str) -> Optional[str]:
         return dict(self.predictions).get(intervention_id)
@@ -60,23 +66,46 @@ class EpistemicInterventionScore:
 class WorldModelEcology:
     """Maintain competing causal models and spend more when epistemic depth demands it.
 
-    Cost is a soft penalty, not the optimization target. When competing models
-    remain unresolved or authenticated world evidence contradicts every live model,
-    the BODY expands possibility/representation/intervention budgets and discounts
-    cost more weakly so high-information interventions can dominate cheap but
-    uninformative probes.
+    Model-class inadequacy is recomputed against the current model set. Structural
+    expansion additionally requires multiple externally derived independence
+    classes, preventing one authenticated but correlated source from opening a new
+    causal-model generation by itself.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, min_inadequacy_source_classes: int = 2) -> None:
         self.models: Dict[str, CausalWorldModel] = {}
         self.evidence: List[ModelEvidence] = []
         self.inadequacy_events: List[str] = []
+        self.min_inadequacy_source_classes = max(1, int(min_inadequacy_source_classes))
 
     def register(self, models: Iterable[CausalWorldModel]) -> None:
         for model in models:
             if not model.model_id:
                 continue
             self.models[model.model_id] = model
+
+    def authoritative_evidence(self) -> List[ModelEvidence]:
+        return [item for item in self.evidence if item.authoritative]
+
+    def jointly_compatible_model_ids(self) -> Tuple[str, ...]:
+        evidence = self.authoritative_evidence()
+        if not evidence:
+            return tuple(sorted(self.models))
+        compatible: List[str] = []
+        for model_id, model in self.models.items():
+            contradicted = False
+            made_known_prediction = False
+            for item in evidence:
+                prediction = model.prediction_for(item.intervention_id)
+                if prediction is None:
+                    continue
+                made_known_prediction = True
+                if prediction != item.observed_outcome:
+                    contradicted = True
+                    break
+            if not contradicted and made_known_prediction:
+                compatible.append(model_id)
+        return tuple(sorted(compatible))
 
     def posterior(self) -> Dict[str, float]:
         if not self.models:
@@ -143,13 +172,19 @@ class WorldModelEcology:
 
     @property
     def model_class_inadequate(self) -> bool:
-        return bool(self.inadequacy_events)
+        evidence = self.authoritative_evidence()
+        if not self.models or not evidence:
+            return False
+        source_classes = {item.source_class for item in evidence if item.source_class != "UNVERIFIED"}
+        if len(source_classes) < self.min_inadequacy_source_classes:
+            return False
+        return not bool(self.jointly_compatible_model_ids())
 
     def depth_plan(self) -> EpistemicDepthPlan:
         entropy = self.normalized_entropy()
         reasons: List[str] = []
         if self.model_class_inadequate:
-            reasons.append("authenticated outcome contradicted every live causal model")
+            reasons.append("independent authenticated evidence has no jointly compatible live causal model")
             return EpistemicDepthPlan(
                 mode="EXPAND_MODEL_CLASS",
                 normalized_model_entropy=entropy,

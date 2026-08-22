@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 from dataclasses import asdict
-from typing import Mapping, Optional, Sequence
+from typing import List, Mapping, Optional, Sequence
 
 from .adaptive_cognition import QueryCandidate, TaskState
 from .body_checkpoint import checkpoint_dict, restore_runtime
+from .causal_model_genesis import CausalModelGenesisEngine, GeneratedCausalModel, InterventionDescriptor
 from .cognitive_runtime import CognitiveCycle, PersistentCognitiveRuntime
 from .possibility_space import Fact, OperatorSpec
 from .representation_genesis import MeasurementObservation, RepresentationGenesisEngine
@@ -22,22 +23,60 @@ EPISTEMIC_DEPTH_SCHEMA = "arte.epistemic_depth_same_body/v1"
 
 
 class EpistemicallyDeepPersistentCognitiveRuntime(PersistentCognitiveRuntime):
-    """Same PersistentCognitiveRuntime with explicit causal-model depth control.
+    """Same PersistentCognitiveRuntime with causal-model depth and model genesis.
 
-    This is not a second BODY: all existing router/topology/memory/world-coupling
-    state is inherited directly. The extension adds a competing causal-model
-    ecology whose state is reconstructed from model definitions plus externally
-    reverified world receipts. Cost is intentionally only a soft penalty.
+    This is not a second BODY. The runtime inherits router/topology/memory/world
+    state directly, expands resources under model-class failure, and may generate
+    replacement causal structures only when externally grounded evidence leaves no
+    jointly compatible live model. Generated models are hypotheses, never evidence.
     """
 
-    def __init__(self, *args, world_models: Optional[WorldModelEcology] = None, **kwargs) -> None:
+    def __init__(
+        self,
+        *args,
+        world_models: Optional[WorldModelEcology] = None,
+        model_genesis: Optional[CausalModelGenesisEngine] = None,
+        **kwargs,
+    ) -> None:
         super().__init__(*args, **kwargs)
         self.world_models = world_models or WorldModelEcology()
+        self.model_genesis = model_genesis or CausalModelGenesisEngine()
         self.last_epistemic_depth = self.world_models.depth_plan()
 
     def register_causal_world_models(self, models: Sequence[CausalWorldModel]) -> None:
         self.world_models.register(models)
         self.last_epistemic_depth = self.world_models.depth_plan()
+
+    def generate_replacement_causal_models(
+        self,
+        variables: Sequence[str],
+        descriptors: Sequence[InterventionDescriptor],
+    ) -> List[GeneratedCausalModel]:
+        """Generate a new causal-model class only after authenticated class failure."""
+        if self.epistemic_depth_plan().mode != "EXPAND_MODEL_CLASS":
+            return []
+        generated = self.model_genesis.generate(
+            variables=variables,
+            descriptors=descriptors,
+            residual_evidence=self.world_models.authoritative_evidence(),
+        )
+        self.world_models.register([item.model for item in generated])
+        self.last_epistemic_depth = self.world_models.depth_plan()
+        return generated
+
+    def generated_model_queries(
+        self,
+        descriptors: Sequence[InterventionDescriptor],
+        generated: Optional[Sequence[GeneratedCausalModel]] = None,
+    ) -> List[QueryCandidate]:
+        if generated is None:
+            models = [
+                model for model in self.world_models.models.values()
+                if model.origin == "GENERATED"
+            ]
+        else:
+            models = [item.model for item in generated]
+        return self.model_genesis.query_candidates(descriptors, models)
 
     def epistemic_depth_plan(self) -> EpistemicDepthPlan:
         self.last_epistemic_depth = self.world_models.depth_plan()
@@ -101,9 +140,9 @@ class EpistemicallyDeepPersistentCognitiveRuntime(PersistentCognitiveRuntime):
 
 def epistemic_checkpoint_dict(runtime: EpistemicallyDeepPersistentCognitiveRuntime):
     payload = checkpoint_dict(runtime)
-    # Store only model definitions. Posterior, inadequacy and evidence authority are
-    # deliberately not serialized as trusted cognition; they are reconstructed
-    # from externally reverified world receipts during restore.
+    # Posterior, inadequacy and authority are never trusted serialized state. Model
+    # definitions (including generated structure lineage) are persistent phenotype;
+    # evidence authority is reconstructed from signed receipts after restore.
     payload["epistemic_depth_schema"] = EPISTEMIC_DEPTH_SCHEMA
     payload["world_model_ecology"] = {
         "models": [asdict(model) for _, model in sorted(runtime.world_models.models.items())],
@@ -141,6 +180,12 @@ def restore_epistemic_runtime(payload, world_verifier: Optional[WorldReceiptVeri
                 (str(key), str(value))
                 for key, value in item.get("predictions", ())
             ),
+            origin=str(item.get("origin", "AUTHORED")),
+            family=str(item.get("family", "UNSPECIFIED")),
+            structure=tuple(str(value) for value in item.get("structure", ())),
+            generation=int(item.get("generation", 0)),
+            parent_model_ids=tuple(str(value) for value in item.get("parent_model_ids", ())),
+            equivalent_structures=tuple(str(value) for value in item.get("equivalent_structures", ())),
         ))
     runtime.register_causal_world_models(models)
     for pair in runtime.world_coupling.pairs:
