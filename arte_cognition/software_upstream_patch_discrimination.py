@@ -49,9 +49,10 @@ class UpstreamPatchSelectorPolicy:
 def generate_upstream_patch_selectors() -> Tuple[UpstreamPatchSelector, ...]:
     """Bounded outcome-independent selector shadow language.
 
-    The rules inspect only AST relations among call elements. They do not inspect
-    literal feature/outcome values, historical fixes, candidate execution results,
-    file names, or concrete row identifiers.
+    The rules inspect only AST relations among call elements. Constant payload values
+    are erased before core comparison; a boolean True keyword marker is used only to
+    identify the unique heldout-like anchor row. No feature/outcome literal identity,
+    historical fix, candidate execution result, file name, or row identifier is used.
     """
     return (
         UpstreamPatchSelector(_RULE_TOWARD_ANCHOR),
@@ -98,11 +99,27 @@ def _assigned_list_by_name(source: str, name: str) -> Optional[ast.List]:
     return matches[-1].value
 
 
+def _literal_erased_ast_shape(value):
+    """Canonical AST shape retaining syntax/identifiers but erasing Constant payloads."""
+    if isinstance(value, ast.Constant):
+        return ("Constant", type(value.value).__name__)
+    if isinstance(value, ast.AST):
+        fields = []
+        for field in value._fields:
+            fields.append((field, _literal_erased_ast_shape(getattr(value, field))))
+        return (type(value).__name__, tuple(fields))
+    if isinstance(value, list):
+        return tuple(_literal_erased_ast_shape(item) for item in value)
+    if isinstance(value, tuple):
+        return tuple(_literal_erased_ast_shape(item) for item in value)
+    return value
+
+
 def _core(call: ast.Call) -> str:
     payload = {
-        "func": ast.dump(call.func, include_attributes=False),
+        "func": _literal_erased_ast_shape(call.func),
         "args_after_identity": [
-            ast.dump(item, include_attributes=False) for item in call.args[1:]
+            _literal_erased_ast_shape(item) for item in call.args[1:]
         ],
     }
     return json.dumps(payload, sort_keys=True, separators=(",", ":"))
