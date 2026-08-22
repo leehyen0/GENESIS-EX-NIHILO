@@ -44,6 +44,7 @@ jobs:
           python -m py_compile evaluations/run_end_to_end_world_genesis.py
           python -m py_compile evaluations/run_descendant_phenotype_reconstruction.py
           python -m py_compile evaluations/run_world_caused_cognition_rewrite.py
+          python -m py_compile evaluations/run_world_revision_causal_credit.py
       - name: Run cognition tests
         run: python -m unittest discover -s arte_cognition -p 'test_*.py' -v
       - name: Generate evaluator-owned hidden world seeds
@@ -55,6 +56,7 @@ jobs:
           Path('/tmp/arte_end_to_end_seed').write_text(str(secrets.randbits(128)))
           Path('/tmp/arte_descendant_phenotype_seed').write_text(str(secrets.randbits(128)))
           Path('/tmp/arte_world_rewrite_seed').write_text(str(secrets.randbits(128)))
+          Path('/tmp/arte_world_rewrite_credit_seed').write_text(str(secrets.randbits(128)))
           PY
       - name: Run hidden software-world descendant evaluation
         run: python evaluations/run_hidden_world_coupling.py /tmp/arte_hidden_world_seed
@@ -64,3 +66,5 @@ jobs:
         run: python evaluations/run_descendant_phenotype_reconstruction.py /tmp/arte_descendant_phenotype_seed
       - name: Run authenticated world-caused cognition rewrite evaluation
         run: python evaluations/run_world_caused_cognition_rewrite.py /tmp/arte_world_rewrite_seed
+      - name: Run world rewrite REMOVE-ablation causal credit evaluation
+        run: python evaluations/run_world_revision_causal_credit.py /tmp/arte_world_rewrite_credit_seed
