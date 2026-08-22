@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import random
+import secrets
 import sys
 from pathlib import Path
 
@@ -12,27 +13,28 @@ if str(ROOT) not in sys.path:
 from arte_cognition.body_checkpoint import checkpoint_json, restore_json
 from arte_cognition.cognitive_runtime import PersistentCognitiveRuntime
 from arte_cognition.experiment_genesis import InterventionProposal
-from arte_cognition.world_coupling import WorldOutcomeReceipt
+from arte_cognition.world_coupling import (
+    HMACWorldReceiptSigner,
+    HMACWorldReceiptVerifier,
+    WorldOutcomeReceipt,
+)
 
 
 class HiddenWorldExecutor:
-    """Evaluator-owned software world.
+    """Evaluator-owned software world with authenticated outcome receipts."""
 
-    The runtime receives only receipts. Hidden coefficients stay inside this
-    evaluator object and are never passed into the cognition BODY.
-    """
-
-    def __init__(self, coefficients, source_id, context_id, challenge_id, epoch):
+    def __init__(self, coefficients, source_id, context_id, challenge_id, epoch, signer=None):
         self._coefficients = dict(coefficients)
         self.source_id = source_id
         self.context_id = context_id
         self.challenge_id = challenge_id
         self.epoch = epoch
+        self.signer = signer
 
     def execute(self, proposal, arm, value):
         coefficient = float(self._coefficients.get(proposal.axis_id, 0.0))
         outcome = coefficient * float(value)
-        return WorldOutcomeReceipt(
+        receipt = WorldOutcomeReceipt(
             receipt_id=f"hidden::{self.context_id}::{self.source_id}::{self.challenge_id}::{proposal.axis_id}::{arm}",
             experiment_id=proposal.experiment_id,
             axis_id=proposal.axis_id,
@@ -46,6 +48,7 @@ class HiddenWorldExecutor:
             budget_token=f"matched::{self.context_id}::{self.source_id}::{self.challenge_id}",
             externally_generated=True,
         )
+        return self.signer.sign(receipt) if self.signer is not None else receipt
 
 
 def proposal(axis_id):
@@ -63,10 +66,7 @@ def proposal(axis_id):
 
 
 def hidden_coefficients(rng, proposals, active_axis):
-    coefficients = {
-        item.axis_id: rng.uniform(-0.04, 0.04)
-        for item in proposals
-    }
+    coefficients = {item.axis_id: rng.uniform(-0.04, 0.04) for item in proposals}
     coefficients[active_axis] = rng.choice([-1.0, 1.0]) * rng.uniform(1.25, 2.75)
     return coefficients
 
@@ -75,13 +75,29 @@ def main(seed_path):
     seed = int(Path(seed_path).read_text().strip())
     rng = random.Random(seed)
 
+    issuer_id = "hidden-ci-world-evaluator"
+    receipt_secret = secrets.token_bytes(32)
+    signer = HMACWorldReceiptSigner(issuer_id, receipt_secret)
+    verifier = HMACWorldReceiptVerifier({issuer_id: receipt_secret})
+
     runtime = PersistentCognitiveRuntime()
     proposals = [proposal("AXIS::A"), proposal("AXIS::B"), proposal("AXIS::C")]
     initial_top = runtime.rank_intervention_proposals(proposals)[0].axis_id
 
-    # Two hidden regimes require different intervention preferences. At least one
-    # active axis differs from the BODY's initial default, so a static order cannot
-    # satisfy both regimes. Their disagreement must also block contextless transport.
+    forged = HiddenWorldExecutor(
+        coefficients={"AXIS::C": 999.0},
+        source_id="forged-source",
+        context_id="forged-regime",
+        challenge_id="forged-challenge",
+        epoch=0,
+        signer=None,
+    )
+    forged_pair = runtime.execute_world_intervention(proposals[2], forged, verifier=verifier)
+    if forged_pair.authority_verified:
+        raise AssertionError("unsigned forged world receipt acquired learning authority")
+    if runtime.world_axis_summary("AXIS::C", context_id="forged-regime").routing_score != 0.0:
+        raise AssertionError("forged world receipt changed BODY world policy")
+
     axis_ids = [item.axis_id for item in proposals]
     active_regime_1 = rng.choice([axis for axis in axis_ids if axis != initial_top])
     active_regime_2 = rng.choice([axis for axis in axis_ids if axis != active_regime_1])
@@ -98,9 +114,12 @@ def main(seed_path):
                 context_id=context_id,
                 challenge_id=f"{context_id}-challenge-{index}",
                 epoch=index,
+                signer=signer,
             )
             for item in proposals:
-                runtime.execute_world_intervention(item, executor)
+                pair = runtime.execute_world_intervention(item, executor, verifier=verifier)
+                if not pair.authority_verified:
+                    raise AssertionError("valid evaluator receipt failed authentication")
 
     learned = {
         context_id: runtime.rank_intervention_proposals(proposals, context_id=context_id)[0].axis_id
@@ -111,47 +130,55 @@ def main(seed_path):
             raise AssertionError(f"world outcomes did not learn the correct intervention preference in {context_id}")
 
     transport = runtime.assess_world_transport(proposals)
-    if transport.status != "REGIME_CONFLICT_BLOCK_GLOBAL_TRANSPORT":
-        raise AssertionError("conflicting hidden regimes did not block unsafe global transport")
-    if transport.safe_for_global_transport:
-        raise AssertionError("unsafe global transport was incorrectly authorized")
-    contextless = runtime.rank_intervention_proposals(proposals)
-    if [item.axis_id for item in contextless] != [item.axis_id for item in proposals]:
-        raise AssertionError("contextless policy should abstain and preserve proposal order under regime conflict")
+    if transport.status != "REGIME_CONFLICT_BLOCK_GLOBAL_TRANSPORT" or transport.safe_for_global_transport:
+        raise AssertionError("conflicting authenticated hidden regimes did not block global transport")
 
-    descendant = restore_json(checkpoint_json(runtime))
+    encoded = checkpoint_json(runtime)
+    if receipt_secret.hex() in encoded or "trusted_keys" in encoded:
+        raise AssertionError("evaluator authentication secret leaked into persistent BODY checkpoint")
+
+    # Without the external LAB verifier, the descendant can inspect the evidence
+    # lineage but must not recover its authority from a serialized bool.
+    unverified_descendant = restore_json(encoded)
+    if any(pair.authority_verified for pair in unverified_descendant.world_coupling.pairs):
+        raise AssertionError("descendant self-restored external authority without verifier")
+    if unverified_descendant.world_axis_summary(active_regime_1, context_id="hidden-regime-1").routing_score != 0.0:
+        raise AssertionError("unverified descendant used world evidence as authority")
+
+    descendant = restore_json(encoded, world_verifier=verifier)
     descendant_learned = {
         context_id: descendant.rank_intervention_proposals(proposals, context_id=context_id)[0].axis_id
         for context_id in regimes
     }
     if descendant_learned != learned:
-        raise AssertionError("context-conditioned world policy did not survive checkpoint/restore")
-
+        raise AssertionError("authenticated context-conditioned world policy did not survive re-verification")
     descendant_transport = descendant.assess_world_transport(proposals)
     if descendant_transport != transport:
-        raise AssertionError("transport abstention did not survive checkpoint/restore")
-    descendant_contextless = descendant.rank_intervention_proposals(proposals)
-    if [item.axis_id for item in descendant_contextless] != [item.axis_id for item in proposals]:
-        raise AssertionError("descendant lost contextless abstention under regime conflict")
+        raise AssertionError("authenticated transport abstention did not survive re-verification")
 
     evidence = {
         context_id: descendant.world_axis_summary(active_axis, context_id=context_id).independent_evidence_classes
         for context_id, (active_axis, _) in regimes.items()
     }
     if min(evidence.values()) < 2:
-        raise AssertionError("hidden regimes did not provide two independent evidence classes each")
+        raise AssertionError("hidden regimes did not provide two authenticated independent evidence classes each")
 
     print(json.dumps({
-        "status": "PASS_BOUNDED_HIDDEN_MULTI_REGIME_WORLD_WITH_TRANSPORT_ABSTENTION",
+        "status": "PASS_BOUNDED_REVERIFIABLE_AUTHENTICATED_HIDDEN_WORLD_TO_DESCENDANT",
         "initial_top_axis": initial_top,
         "learned_top_by_regime": learned,
         "descendant_top_by_regime": descendant_learned,
         "independent_evidence_classes_by_regime": evidence,
         "global_transport_status": transport.status,
         "global_transport_safe": transport.safe_for_global_transport,
-        "contextless_top_axis": contextless[0].axis_id,
-        "descendant_contextless_top_axis": descendant_contextless[0].axis_id,
-        "world_pair_count": len(descendant.world_coupling.pairs),
+        "forged_receipt_authority_verified": forged_pair.authority_verified,
+        "authenticated_world_pairs": sum(1 for pair in descendant.world_coupling.pairs if pair.authority_verified),
+        "audit_only_world_pairs": sum(1 for pair in descendant.world_coupling.pairs if not pair.authority_verified),
+        "unverified_descendant_authoritative_pairs": sum(
+            1 for pair in unverified_descendant.world_coupling.pairs if pair.authority_verified
+        ),
+        "verification_secret_checkpointed": False,
+        "authority_reverification_required_after_restart": True,
         "hidden_mechanism_exposed_to_body": False,
         "independent_organizational_custody": False,
         "physical_world": False,

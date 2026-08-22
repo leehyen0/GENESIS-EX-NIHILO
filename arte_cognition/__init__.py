@@ -73,11 +73,15 @@ from .validation_matrix import (
 )
 from .world_coupling import (
     AxisWorldSummary,
+    HMACWorldReceiptSigner,
+    HMACWorldReceiptVerifier,
     WorldCouplingEngine,
     WorldExecutor,
     WorldOutcomePair,
     WorldOutcomeReceipt,
+    WorldReceiptVerifier,
     WorldTransportAssessment,
+    receipt_payload,
 )
 from .cognitive_runtime import CognitiveCycle, PersistentCognitiveRuntime
 from .body_checkpoint import (
@@ -136,11 +140,15 @@ __all__ = [
     "ValidationGateResult",
     "ValidationObservation",
     "AxisWorldSummary",
+    "HMACWorldReceiptSigner",
+    "HMACWorldReceiptVerifier",
     "WorldCouplingEngine",
     "WorldExecutor",
     "WorldOutcomePair",
     "WorldOutcomeReceipt",
+    "WorldReceiptVerifier",
     "WorldTransportAssessment",
+    "receipt_payload",
     "CognitiveCycle",
     "PersistentCognitiveRuntime",
     "checkpoint_dict",
