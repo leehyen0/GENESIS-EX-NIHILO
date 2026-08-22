@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 
 from .adaptive_cognition import AdaptiveCognitionCompiler, CognitionPlan, ModuleCredit, TaskState
@@ -15,6 +15,14 @@ from .projection_generator_metapolicy import (
     ProjectionGeneratorPolicy,
     derive_projection_generator_frontier,
     derive_projection_generator_policy,
+)
+from .projection_generator_program_genesis import (
+    PROGRAM_MARKER,
+    ProjectionGeneratorProgramFrontier,
+    ProjectionGeneratorProgramPolicy,
+    derive_projection_generator_program_frontier,
+    derive_projection_generator_program_policy,
+    generate_projection_generator_programs,
 )
 from .projection_scale_genesis import (
     ProjectionScaleFrontier,
@@ -75,10 +83,11 @@ class PersistentCognitiveRuntime:
     a bounded policy space for the smallest cross-context sufficient probe subset.
     When the authored numeric probe vocabulary itself leaves a strong-effect world
     residual, the BODY can generate off-grid scale atoms. Repeated authenticated
-    success of generated atoms can additionally induce a reusable interpolation
-    generator policy, which is transferred to new authored brackets. Search subsets,
-    generated atoms, and generator policy are reconstructed from reverified BODY
-    evidence after restart rather than trusted as serialized authority scalars.
+    success of generated atoms can induce reusable interpolation parameters and,
+    above that, a bounded generator program such as affine, geometric, or harmonic
+    interpolation. Search subsets, generated atoms, and generator policies are
+    reconstructed from reverified BODY evidence after restart rather than trusted as
+    serialized authority scalars.
     """
 
     def __init__(
@@ -174,7 +183,7 @@ class PersistentCognitiveRuntime:
         return self.projection_search_metapolicy().schedule
 
     def projection_generator_policy(self) -> ProjectionGeneratorPolicy:
-        """Reconstruct a reusable refinement generator from authenticated history."""
+        """Reconstruct a reusable scalar refinement generator from authenticated history."""
         if not self.adaptive_projection_search:
             return ProjectionGeneratorPolicy(
                 status="GENERATOR_POLICY_DISABLED",
@@ -199,7 +208,7 @@ class PersistentCognitiveRuntime:
         context_id: Optional[str],
         max_candidates: int = 16,
     ) -> ProjectionGeneratorFrontier:
-        """Generate a shadow or learned-generator refinement frontier for a context."""
+        """Generate a shadow or learned scalar-generator refinement frontier."""
         policy = self.projection_generator_policy()
         return derive_projection_generator_frontier(
             authored_scales=self._authored_projection_scales(),
@@ -220,7 +229,7 @@ class PersistentCognitiveRuntime:
         context_id: Optional[str],
         max_candidates: int = 16,
     ) -> List[InterventionProposal]:
-        """Instantiate proposal-only atoms from the BODY's current generator frontier."""
+        """Instantiate proposal-only atoms from the BODY's scalar-generator frontier."""
         if axis.family != "PROJECTION":
             return []
         frontier = self.projection_generator_frontier(
@@ -237,6 +246,96 @@ class PersistentCognitiveRuntime:
         generated = engine.propose(axis, reference_values)
         for proposal in generated:
             self.memory.remember_experiment(proposal)
+        return generated
+
+    def projection_generator_program_policy(self) -> ProjectionGeneratorProgramPolicy:
+        """Reconstruct the minimum-complexity repeated-success generator program."""
+        if not self.adaptive_projection_search:
+            return ProjectionGeneratorProgramPolicy(
+                status="GENERATOR_PROGRAM_POLICY_DISABLED",
+                program_id=None,
+                family=None,
+                alpha=None,
+                supporting_contexts=(),
+                candidate_program_count=0,
+                reason="adaptive projection search is disabled",
+            )
+        programs = generate_projection_generator_programs()
+        return derive_projection_generator_program_policy(
+            proposals=self._persisted_proposals(),
+            world_pairs=self.world_coupling.pairs,
+            min_independent_classes=self.world_coupling.min_independent_classes,
+            programs=programs,
+            strong_effect_threshold=0.9,
+            min_contexts=2,
+        )
+
+    def projection_generator_program_frontier(
+        self,
+        context_id: str,
+        left: float,
+        right: float,
+        max_candidates: int = 32,
+        apply_learned_program: bool = True,
+    ) -> ProjectionGeneratorProgramFrontier:
+        """Open a bounded generator-program frontier for one authenticated weak bracket.
+
+        `apply_learned_program=False` is an explicit REMOVE-ablation surface: it
+        preserves the same BODY memory and world evidence but suppresses only the
+        application of the causally learned generator program.
+        """
+        policy = self.projection_generator_program_policy() if apply_learned_program else None
+        return derive_projection_generator_program_frontier(
+            proposals=self._persisted_proposals(),
+            world_pairs=self.world_coupling.pairs,
+            min_independent_classes=self.world_coupling.min_independent_classes,
+            probe_scale=self._proposal_probe_scale,
+            context_id=context_id,
+            left=left,
+            right=right,
+            policy=policy,
+            programs=generate_projection_generator_programs(),
+            strong_effect_threshold=0.9,
+            max_candidates=max_candidates,
+        )
+
+    def generate_projection_generator_program_interventions(
+        self,
+        axis: RepresentationAxis,
+        reference_values: Mapping[str, float],
+        context_id: str,
+        left: float,
+        right: float,
+        max_candidates: int = 32,
+        apply_learned_program: bool = True,
+    ) -> List[InterventionProposal]:
+        """Generate proposal-only atoms and bind exact generator-program provenance."""
+        if axis.family != "PROJECTION":
+            return []
+        frontier = self.projection_generator_program_frontier(
+            context_id=context_id,
+            left=left,
+            right=right,
+            max_candidates=max_candidates,
+            apply_learned_program=apply_learned_program,
+        )
+        if not frontier.candidates:
+            return []
+        generated: List[InterventionProposal] = []
+        for candidate in frontier.candidates:
+            engine = ExperimentGenesisEngine(
+                relative_margin=self.experiment.relative_margin,
+                max_proposals=max(self.experiment.max_proposals, len(axis.coefficients)),
+                projection_margin_multipliers=(candidate.scale,),
+            )
+            for proposal in engine.propose(axis, reference_values):
+                reason = (
+                    f"{proposal.reason} {PROGRAM_MARKER}"
+                    f"{'|'.join(candidate.program_ids)}"
+                )
+                bound = replace(proposal, reason=reason)
+                self.memory.remember_experiment(bound)
+                generated.append(bound)
         return generated
 
     def projection_scale_frontier(
