@@ -51,15 +51,20 @@ class BooleanCausalPredicateGenesisEngine:
     such as `(DELAY & !CONTEXT) | (!DELAY & CONTEXT)` without a hardcoded XOR
     causal operator. The Boolean metalanguage is still human-authored and bounded.
 
-    The default budget deliberately covers the full prediction-equivalence surface
-    of the current two-variable hidden evaluation (1269 unique signatures). Depth
-    is preferred over cheap truncation. `last_truncated` remains visible so a
-    caller can refuse to treat an incomplete candidate universe as exhaustive.
+    The completeness budget covers the bounded two-variable/four-atom syntax used
+    by the autonomous intervention surface. There are 64 possible one-to-three
+    literal conjunction terms per cause and fewer than 2,080 one/two-term DNF
+    syntaxes per cause/sign after the absorption rule; across two causes and two
+    signs the syntactic universe is below 8,320 before prediction quotienting.
+    A 16,384 budget therefore leaves margin for complete prediction-equivalence
+    coverage instead of silently truncating as the intervention surface grows.
+    `last_truncated` remains visible and callers still fail closed if a future
+    surface exceeds this bounded completeness envelope.
     """
 
     def __init__(
         self,
-        model_budget: int = 2048,
+        model_budget: int = 16384,
         max_literals_per_term: int = 3,
         max_terms: int = 2,
     ) -> None:
