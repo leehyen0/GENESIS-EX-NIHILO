@@ -24,6 +24,14 @@ from .projection_generator_program_genesis import (
     derive_projection_generator_program_policy,
     generate_projection_generator_programs,
 )
+from .projection_generator_transform_grammar import (
+    TRANSFORM_PROGRAM_MARKER,
+    ProjectionTransformFrontier,
+    ProjectionTransformPolicy,
+    derive_projection_transform_frontier,
+    derive_projection_transform_policy,
+    generate_projection_transform_programs,
+)
 from .projection_scale_genesis import (
     ProjectionScaleFrontier,
     derive_projection_scale_frontier,
@@ -83,9 +91,9 @@ class PersistentCognitiveRuntime:
     a bounded policy space for the smallest cross-context sufficient probe subset.
     When the authored numeric probe vocabulary itself leaves a strong-effect world
     residual, the BODY can generate off-grid scale atoms. Repeated authenticated
-    success of generated atoms can induce reusable interpolation parameters and,
-    above that, a bounded generator program such as affine, geometric, or harmonic
-    interpolation. Search subsets, generated atoms, and generator policies are
+    success of generated atoms can induce reusable interpolation parameters, bounded
+    generator programs, and compositional transform ASTs built from primitive unary
+    operators. Search subsets, generated atoms, and generator policies are always
     reconstructed from reverified BODY evidence after restart rather than trusted as
     serialized authority scalars.
     """
@@ -331,6 +339,95 @@ class PersistentCognitiveRuntime:
             for proposal in engine.propose(axis, reference_values):
                 reason = (
                     f"{proposal.reason} {PROGRAM_MARKER}"
+                    f"{'|'.join(candidate.program_ids)}"
+                )
+                bound = replace(proposal, reason=reason)
+                self.memory.remember_experiment(bound)
+                generated.append(bound)
+        return generated
+
+    def projection_transform_program_policy(self) -> ProjectionTransformPolicy:
+        """Reconstruct a repeated-success transform AST from authenticated history."""
+        if not self.adaptive_projection_search:
+            return ProjectionTransformPolicy(
+                status="TRANSFORM_PROGRAM_POLICY_DISABLED",
+                program_id=None,
+                operations=(),
+                alpha=None,
+                supporting_contexts=(),
+                candidate_program_count=0,
+                reason="adaptive projection search is disabled",
+            )
+        programs = generate_projection_transform_programs()
+        return derive_projection_transform_policy(
+            proposals=self._persisted_proposals(),
+            world_pairs=self.world_coupling.pairs,
+            min_independent_classes=self.world_coupling.min_independent_classes,
+            programs=programs,
+            strong_effect_threshold=0.9,
+            min_contexts=2,
+        )
+
+    def projection_transform_frontier(
+        self,
+        context_id: str,
+        left: float,
+        right: float,
+        max_candidates: int = 64,
+        apply_learned_program: bool = True,
+    ) -> ProjectionTransformFrontier:
+        """Open a bounded compositional transform frontier for a weak bracket.
+
+        The REMOVE surface preserves identical evidence and only suppresses transfer
+        of the learned transform AST into the fresh bracket.
+        """
+        policy = self.projection_transform_program_policy() if apply_learned_program else None
+        return derive_projection_transform_frontier(
+            proposals=self._persisted_proposals(),
+            world_pairs=self.world_coupling.pairs,
+            min_independent_classes=self.world_coupling.min_independent_classes,
+            probe_scale=self._proposal_probe_scale,
+            context_id=context_id,
+            left=left,
+            right=right,
+            policy=policy,
+            programs=generate_projection_transform_programs(),
+            strong_effect_threshold=0.9,
+            max_candidates=max_candidates,
+        )
+
+    def generate_projection_transform_interventions(
+        self,
+        axis: RepresentationAxis,
+        reference_values: Mapping[str, float],
+        context_id: str,
+        left: float,
+        right: float,
+        max_candidates: int = 64,
+        apply_learned_program: bool = True,
+    ) -> List[InterventionProposal]:
+        """Generate proposal-only atoms with exact compositional transform provenance."""
+        if axis.family != "PROJECTION":
+            return []
+        frontier = self.projection_transform_frontier(
+            context_id=context_id,
+            left=left,
+            right=right,
+            max_candidates=max_candidates,
+            apply_learned_program=apply_learned_program,
+        )
+        if not frontier.candidates:
+            return []
+        generated: List[InterventionProposal] = []
+        for candidate in frontier.candidates:
+            engine = ExperimentGenesisEngine(
+                relative_margin=self.experiment.relative_margin,
+                max_proposals=max(self.experiment.max_proposals, len(axis.coefficients)),
+                projection_margin_multipliers=(candidate.scale,),
+            )
+            for proposal in engine.propose(axis, reference_values):
+                reason = (
+                    f"{proposal.reason} {TRANSFORM_PROGRAM_MARKER}"
                     f"{'|'.join(candidate.program_ids)}"
                 )
                 bound = replace(proposal, reason=reason)
