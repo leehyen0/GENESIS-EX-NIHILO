@@ -42,6 +42,7 @@ jobs:
           python -m py_compile arte_cognition/representation_genesis.py
           python -m py_compile arte_cognition/representation_value.py
           python -m py_compile arte_cognition/experiment_genesis.py
+          python -m py_compile arte_cognition/projection_search_metapolicy.py
           python -m py_compile arte_cognition/subgraph_credit.py
           python -m py_compile arte_cognition/topology_learning.py
           python -m py_compile arte_cognition/validation_matrix.py
@@ -54,6 +55,7 @@ jobs:
           python -m py_compile arte_cognition/body_checkpoint.py
           python -m py_compile arte_cognition/epistemic_depth_runtime.py
           python -m py_compile arte_cognition/primitive_genesis_runtime.py
+          python -m py_compile arte_cognition/canonical_body_checkpoint.py
           python -m py_compile evaluations/run_hidden_world_coupling.py
           python -m py_compile evaluations/run_end_to_end_world_genesis.py
           python -m py_compile evaluations/run_descendant_phenotype_reconstruction.py
@@ -61,6 +63,7 @@ jobs:
           python -m py_compile evaluations/run_world_revision_causal_credit.py
           python -m py_compile evaluations/run_multi_episode_world_rewrite.py
           python -m py_compile evaluations/run_matched_descendant_search_acceleration.py
+          python -m py_compile evaluations/run_cross_context_projection_metapolicy.py
           python -m py_compile evaluations/run_epistemic_depth_expansion.py
           python -m py_compile evaluations/run_autonomous_causal_model_genesis.py
           python -m py_compile evaluations/run_compositional_causal_grammar_genesis.py
@@ -87,6 +90,7 @@ jobs:
           Path('/tmp/arte_world_rewrite_credit_seed').write_text(str(secrets.randbits(128)))
           Path('/tmp/arte_multi_episode_rewrite_seed').write_text(str(secrets.randbits(128)))
           Path('/tmp/arte_matched_descendant_accel_seed').write_text(str(secrets.randbits(128)))
+          Path('/tmp/arte_cross_context_metapolicy_seed').write_text(str(secrets.randbits(128)))
           Path('/tmp/arte_epistemic_depth_seed').write_text(str(secrets.randbits(128)))
           Path('/tmp/arte_causal_model_genesis_seed').write_text(str(secrets.randbits(128)))
           Path('/tmp/arte_compositional_causal_seed').write_text(str(secrets.randbits(128)))
@@ -113,6 +117,8 @@ jobs:
         run: python evaluations/run_multi_episode_world_rewrite.py /tmp/arte_multi_episode_rewrite_seed
       - name: Run matched descendant search acceleration evaluation
         run: python evaluations/run_matched_descendant_search_acceleration.py /tmp/arte_matched_descendant_accel_seed
+      - name: Run cross-context generated search metapolicy evaluation
+        run: python evaluations/run_cross_context_projection_metapolicy.py /tmp/arte_cross_context_metapolicy_seed
       - name: Run cost-tolerant causal-model depth expansion evaluation
         run: python evaluations/run_epistemic_depth_expansion.py /tmp/arte_epistemic_depth_seed
       - name: Run autonomous causal-model structure genesis evaluation
