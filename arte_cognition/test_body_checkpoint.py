@@ -3,6 +3,7 @@ import unittest
 from arte_cognition.adaptive_cognition import TaskState
 from arte_cognition.body_checkpoint import checkpoint_json, restore_json
 from arte_cognition.cognitive_runtime import PersistentCognitiveRuntime
+from arte_cognition.representation_genesis import MeasurementObservation
 from arte_cognition.semantic_genesis import ResidualObservation
 
 
@@ -36,6 +37,38 @@ class BodyCheckpointTests(unittest.TestCase):
         runtime.observe_world([ResidualObservation("world-new", ("hot",), "PASS")])
         return runtime
 
+    @staticmethod
+    def _representation_runtime():
+        measurements = [
+            MeasurementObservation("a1", {"x": -2, "y": -3, "z": -1}, "A"),
+            MeasurementObservation("a2", {"x": 1, "y": 3, "z": -3}, "A"),
+            MeasurementObservation("a3", {"x": -5, "y": 5, "z": -2}, "A"),
+            MeasurementObservation("b1", {"x": -1, "y": -4, "z": 5}, "B"),
+            MeasurementObservation("b2", {"x": 2, "y": 1, "z": 3}, "B"),
+            MeasurementObservation("a4", {"x": -1, "y": 3, "z": 2}, "A"),
+            MeasurementObservation("b3", {"x": 3, "y": 2, "z": -5}, "B"),
+            MeasurementObservation("b4", {"x": 1, "y": 0, "z": -3}, "B"),
+            MeasurementObservation("ha", {"x": 0, "y": 2, "z": 0}, "A", heldout=True),
+            MeasurementObservation("hb", {"x": 0, "y": 0, "z": 0}, "B", heldout=True),
+        ]
+        residuals = [
+            ResidualObservation(
+                residual_id=row.observation_id,
+                features=("raw",),
+                outcome=row.outcome,
+                heldout=row.heldout,
+            )
+            for row in measurements
+        ]
+        runtime = PersistentCognitiveRuntime()
+        runtime.cycle(
+            TaskState(goal="discover latent representation", novelty=0.9),
+            residuals=residuals,
+            measurements=measurements,
+            experiment_reference_values={"x": 0.0, "y": 1.0, "z": 0.0},
+        )
+        return runtime
+
     def test_checkpoint_restore_preserves_router_behavior(self):
         runtime = self._trained_runtime()
         task = TaskState(goal="novel", novelty=0.62)
@@ -63,6 +96,20 @@ class BodyCheckpointTests(unittest.TestCase):
         self.assertEqual(runtime.topology.reorder(reversed_modules), restored.topology.reorder(reversed_modules))
         self.assertEqual(runtime.topology.propose_macros(), restored.topology.propose_macros())
         self.assertTrue(restored.topology.propose_macros())
+
+    def test_checkpoint_restore_preserves_exact_generated_representation_and_experiment(self):
+        runtime = self._representation_runtime()
+        before_axes = runtime.persisted_representation_axes()
+        before_proposals = runtime.persisted_intervention_proposals()
+        self.assertTrue(any(axis.family == "PROJECTION" for axis in before_axes))
+        self.assertTrue(before_proposals)
+
+        restored = restore_json(checkpoint_json(runtime))
+        self.assertEqual(before_axes, restored.persisted_representation_axes())
+        self.assertEqual(before_proposals, restored.persisted_intervention_proposals())
+        projection = next(axis for axis in restored.persisted_representation_axes() if axis.family == "PROJECTION")
+        self.assertTrue(projection.coefficients)
+        self.assertTrue(any(p.axis_id == projection.axis_id for p in restored.persisted_intervention_proposals()))
 
     def test_checkpoint_roundtrip_is_semantically_stable(self):
         runtime = self._trained_runtime()
