@@ -6,6 +6,7 @@ from typing import List, Mapping, Optional, Sequence
 from .adaptive_cognition import QueryCandidate, TaskState
 from .body_checkpoint import checkpoint_dict, restore_runtime
 from .causal_model_genesis import CausalModelGenesisEngine, GeneratedCausalModel, InterventionDescriptor
+from .causal_program_genesis import CompositionalCausalProgramGenesisEngine, GeneratedCausalProgram
 from .cognitive_runtime import CognitiveCycle, PersistentCognitiveRuntime
 from .possibility_space import Fact, OperatorSpec
 from .representation_genesis import MeasurementObservation, RepresentationGenesisEngine
@@ -23,12 +24,12 @@ EPISTEMIC_DEPTH_SCHEMA = "arte.epistemic_depth_same_body/v1"
 
 
 class EpistemicallyDeepPersistentCognitiveRuntime(PersistentCognitiveRuntime):
-    """Same PersistentCognitiveRuntime with causal-model depth and model genesis.
+    """Same BODY with depth control and staged causal structure generation.
 
-    This is not a second BODY. The runtime inherits router/topology/memory/world
-    state directly, expands resources under model-class failure, and may generate
-    replacement causal structures only when externally grounded evidence leaves no
-    jointly compatible live model. Generated models are hypotheses, never evidence.
+    Evidence-conditioned generation returns compatible candidates for immediate
+    reasoning, but the BODY also preserves an evidence-unfiltered bounded shadow
+    candidate pool. Otherwise the *absence* of rejected candidates in a checkpoint
+    would leak external authority into a verifierless descendant.
     """
 
     def __init__(
@@ -36,33 +37,83 @@ class EpistemicallyDeepPersistentCognitiveRuntime(PersistentCognitiveRuntime):
         *args,
         world_models: Optional[WorldModelEcology] = None,
         model_genesis: Optional[CausalModelGenesisEngine] = None,
+        program_genesis: Optional[CompositionalCausalProgramGenesisEngine] = None,
         **kwargs,
     ) -> None:
         super().__init__(*args, **kwargs)
         self.world_models = world_models or WorldModelEcology()
         self.model_genesis = model_genesis or CausalModelGenesisEngine()
+        self.program_genesis = program_genesis or CompositionalCausalProgramGenesisEngine()
         self.last_epistemic_depth = self.world_models.depth_plan()
 
     def register_causal_world_models(self, models: Sequence[CausalWorldModel]) -> None:
         self.world_models.register(models)
         self.last_epistemic_depth = self.world_models.depth_plan()
 
+    @staticmethod
+    def _model_union(*groups) -> List[CausalWorldModel]:
+        by_id = {}
+        for group in groups:
+            for item in group:
+                model = item.model if hasattr(item, "model") else item
+                by_id[model.model_id] = model
+        return list(by_id.values())
+
     def generate_replacement_causal_models(
         self,
         variables: Sequence[str],
         descriptors: Sequence[InterventionDescriptor],
     ) -> List[GeneratedCausalModel]:
-        """Generate a new causal-model class only after authenticated class failure."""
+        """Generate first-generation active candidates plus bounded shadow alternatives."""
         if self.epistemic_depth_plan().mode != "EXPAND_MODEL_CLASS":
             return []
-        generated = self.model_genesis.generate(
+        evidence = self.world_models.authoritative_evidence()
+        active = self.model_genesis.generate(
+            variables=variables,
+            descriptors=descriptors,
+            residual_evidence=evidence,
+        )
+        shadow = self.model_genesis.generate(
+            variables=variables,
+            descriptors=descriptors,
+            residual_evidence=(),
+        )
+        self.world_models.register(self._model_union(shadow, active))
+        self.last_epistemic_depth = self.world_models.depth_plan()
+        return active
+
+    def generate_compositional_causal_models(
+        self,
+        variables: Sequence[str],
+        descriptors: Sequence[InterventionDescriptor],
+    ) -> List[GeneratedCausalProgram]:
+        """Open second-generation composition after first-generation ancestry fails.
+
+        Active candidates are evidence-compatible, while a bounded unfiltered
+        compositional shadow pool is persisted too. Thus a restart without an
+        external verifier retains hypotheses but cannot infer which ones survived
+        earlier external evidence merely from candidate-set membership.
+        """
+        if self.epistemic_depth_plan().mode != "EXPAND_MODEL_CLASS":
+            return []
+        if not any(model.origin == "GENERATED" for model in self.world_models.models.values()):
+            return []
+        existing = list(self.world_models.models.values())
+        active = self.program_genesis.generate_novel(
             variables=variables,
             descriptors=descriptors,
             residual_evidence=self.world_models.authoritative_evidence(),
+            existing_models=existing,
         )
-        self.world_models.register([item.model for item in generated])
+        shadow = self.program_genesis.generate_novel(
+            variables=variables,
+            descriptors=descriptors,
+            residual_evidence=(),
+            existing_models=existing,
+        )
+        self.world_models.register(self._model_union(shadow, active))
         self.last_epistemic_depth = self.world_models.depth_plan()
-        return generated
+        return active
 
     def generated_model_queries(
         self,
@@ -73,6 +124,20 @@ class EpistemicallyDeepPersistentCognitiveRuntime(PersistentCognitiveRuntime):
             models = [
                 model for model in self.world_models.models.values()
                 if model.origin == "GENERATED"
+            ]
+        else:
+            models = [item.model for item in generated]
+        return self.model_genesis.query_candidates(descriptors, models)
+
+    def compositional_model_queries(
+        self,
+        descriptors: Sequence[InterventionDescriptor],
+        generated: Optional[Sequence[GeneratedCausalProgram]] = None,
+    ) -> List[QueryCandidate]:
+        if generated is None:
+            models = [
+                model for model in self.world_models.models.values()
+                if model.origin == "GENERATED_COMPOSITIONAL"
             ]
         else:
             models = [item.model for item in generated]
@@ -140,9 +205,8 @@ class EpistemicallyDeepPersistentCognitiveRuntime(PersistentCognitiveRuntime):
 
 def epistemic_checkpoint_dict(runtime: EpistemicallyDeepPersistentCognitiveRuntime):
     payload = checkpoint_dict(runtime)
-    # Posterior, inadequacy and authority are never trusted serialized state. Model
-    # definitions (including generated structure lineage) are persistent phenotype;
-    # evidence authority is reconstructed from signed receipts after restore.
+    # Model definitions, including shadow alternatives and ancestry, persist. Their
+    # posterior authority does not: signed receipts must be externally reverified.
     payload["epistemic_depth_schema"] = EPISTEMIC_DEPTH_SCHEMA
     payload["world_model_ecology"] = {
         "models": [asdict(model) for _, model in sorted(runtime.world_models.models.items())],
