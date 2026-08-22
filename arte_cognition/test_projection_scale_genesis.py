@@ -1,5 +1,10 @@
 from __future__ import annotations
 
+import contextlib
+import io
+import json
+from pathlib import Path
+import tempfile
 import unittest
 
 from arte_cognition.canonical_body_checkpoint import checkpoint_dict, restore_runtime
@@ -16,6 +21,7 @@ from arte_cognition.world_coupling import (
     WorldOutcomePair,
     WorldOutcomeReceipt,
 )
+from evaluations.run_generated_probe_scale_genesis import main as run_generated_probe_scale_evaluation
 
 
 AUTHORED = (1.0, 2.0, 4.0)
@@ -240,6 +246,33 @@ class ProjectionScaleGenesisTests(unittest.TestCase):
         fresh_scales = {restored._proposal_probe_scale(p) for p in fresh}
         self.assertIn(target, fresh_scales)
         self.assertLess(len(fresh_scales), len(restored.projection_probe_vocabulary()))
+
+    def test_full_off_grid_evaluator_for_both_midpoint_targets(self):
+        # Seeds 0 and 1 freeze the evaluator target to 3x and 1.5x respectively.
+        # Running both removes dependence on one lucky midpoint while retaining the
+        # same externally signed/independence-gated developmental protocol.
+        expected = {0: 3.0, 1: 1.5}
+        with tempfile.TemporaryDirectory() as tmp:
+            for seed, target in expected.items():
+                seed_path = Path(tmp) / f"seed-{seed}.txt"
+                seed_path.write_text(str(seed))
+                capture = io.StringIO()
+                with contextlib.redirect_stdout(capture):
+                    run_generated_probe_scale_evaluation(str(seed_path))
+                payload = json.loads(capture.getvalue().strip().splitlines()[-1])
+                self.assertEqual(
+                    payload["status"],
+                    "PASS_BOUNDED_WORLD_RESIDUAL_GENERATED_PROBE_SCALE_AND_DESCENDANT_ACCELERATION",
+                )
+                self.assertEqual(payload["hidden_target_scale"], target)
+                self.assertTrue(payload["hidden_target_absent_from_authored_vocabulary"])
+                self.assertEqual(payload["descendant_generation_3"]["strong_capability"], 1.0)
+                self.assertEqual(payload["descendant_generation_3"]["external_pair_count"], 8)
+                self.assertEqual(payload["remove"]["strong_capability"], 1.0)
+                self.assertEqual(payload["remove"]["external_pair_count"], 32)
+                self.assertEqual(payload["wrong_swap"]["strong_capability"], 0.0)
+                self.assertEqual(payload["reset"]["strong_capability"], 0.0)
+                self.assertAlmostEqual(payload["external_evidence_reduction_vs_remove_g3"], 0.75)
 
 
 if __name__ == "__main__":
