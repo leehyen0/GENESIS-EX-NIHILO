@@ -120,6 +120,78 @@ class WorldCouplingTests(unittest.TestCase):
         self.assertEqual(restored.world_coupling.pairs, [])
         self.assertEqual(checkpoint_json(restored), checkpoint_json(restore_json(checkpoint_json(restored))))
 
+    def test_opposite_regimes_learn_opposite_intervention_preferences(self):
+        runtime = PersistentCognitiveRuntime()
+        proposals = [proposal("AXIS::A"), proposal("AXIS::B")]
+
+        for index in (1, 2):
+            calm = LinearExecutor(
+                {"AXIS::A": 2.0, "AXIS::B": 0.05},
+                source_id=f"calm-source-{index}",
+                context_id="CALM",
+                challenge_id=f"calm-challenge-{index}",
+            )
+            turbulent = LinearExecutor(
+                {"AXIS::A": 0.05, "AXIS::B": 2.0},
+                source_id=f"turbulent-source-{index}",
+                context_id="TURBULENT",
+                challenge_id=f"turbulent-challenge-{index}",
+            )
+            for item in proposals:
+                runtime.execute_world_intervention(item, calm)
+                runtime.execute_world_intervention(item, turbulent)
+
+        self.assertEqual(runtime.rank_intervention_proposals(proposals, context_id="CALM")[0].axis_id, "AXIS::A")
+        self.assertEqual(runtime.rank_intervention_proposals(proposals, context_id="TURBULENT")[0].axis_id, "AXIS::B")
+        self.assertGreater(
+            runtime.world_axis_summary("AXIS::A", context_id="CALM").routing_score,
+            runtime.world_axis_summary("AXIS::B", context_id="CALM").routing_score,
+        )
+        self.assertGreater(
+            runtime.world_axis_summary("AXIS::B", context_id="TURBULENT").routing_score,
+            runtime.world_axis_summary("AXIS::A", context_id="TURBULENT").routing_score,
+        )
+
+    def test_same_evaluator_challenge_across_regimes_is_not_globally_independent(self):
+        runtime = PersistentCognitiveRuntime()
+        item = proposal("AXIS::A")
+        for context_id in ("CALM", "TURBULENT"):
+            executor = LinearExecutor(
+                {"AXIS::A": 1.0},
+                source_id="shared-source",
+                context_id=context_id,
+                challenge_id="shared-challenge",
+            )
+            runtime.execute_world_intervention(item, executor)
+
+        self.assertEqual(len(runtime.world_coupling.pairs), 2)
+        self.assertEqual(runtime.world_axis_summary("AXIS::A", context_id="CALM").independent_evidence_classes, 1)
+        self.assertEqual(runtime.world_axis_summary("AXIS::A", context_id="TURBULENT").independent_evidence_classes, 1)
+        self.assertEqual(runtime.world_axis_summary("AXIS::A").independent_evidence_classes, 1)
+
+    def test_context_conditioning_survives_descendant_restore(self):
+        runtime = PersistentCognitiveRuntime()
+        proposals = [proposal("AXIS::A"), proposal("AXIS::B")]
+        for index in (1, 2):
+            executor = LinearExecutor(
+                {"AXIS::A": 0.0, "AXIS::B": 1.5},
+                source_id=f"source-{index}",
+                context_id="REGIME-B",
+                challenge_id=f"challenge-{index}",
+            )
+            for item in proposals:
+                runtime.execute_world_intervention(item, executor)
+
+        restored = restore_json(checkpoint_json(runtime))
+        self.assertEqual(
+            restored.rank_intervention_proposals(proposals, context_id="REGIME-B")[0].axis_id,
+            "AXIS::B",
+        )
+        self.assertEqual(
+            restored.world_axis_summary("AXIS::B", context_id="REGIME-B"),
+            runtime.world_axis_summary("AXIS::B", context_id="REGIME-B"),
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
