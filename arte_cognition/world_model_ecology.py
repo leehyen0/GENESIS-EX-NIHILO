@@ -66,16 +66,17 @@ class EpistemicInterventionScore:
 class WorldModelEcology:
     """Maintain competing causal models and spend more when epistemic depth demands it.
 
-    Cost is a soft penalty, not the optimization target. Model-class inadequacy is
-    recomputed against the *current* model class rather than frozen forever: a new
-    generated structure may explain an old authenticated surprise, while the old
-    inadequacy event remains in lineage history.
+    Model-class inadequacy is recomputed against the current model set. Structural
+    expansion additionally requires multiple externally derived independence
+    classes, preventing one authenticated but correlated source from opening a new
+    causal-model generation by itself.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, min_inadequacy_source_classes: int = 2) -> None:
         self.models: Dict[str, CausalWorldModel] = {}
         self.evidence: List[ModelEvidence] = []
         self.inadequacy_events: List[str] = []
+        self.min_inadequacy_source_classes = max(1, int(min_inadequacy_source_classes))
 
     def register(self, models: Iterable[CausalWorldModel]) -> None:
         for model in models:
@@ -171,7 +172,11 @@ class WorldModelEcology:
 
     @property
     def model_class_inadequate(self) -> bool:
-        if not self.models or not self.authoritative_evidence():
+        evidence = self.authoritative_evidence()
+        if not self.models or not evidence:
+            return False
+        source_classes = {item.source_class for item in evidence if item.source_class != "UNVERIFIED"}
+        if len(source_classes) < self.min_inadequacy_source_classes:
             return False
         return not bool(self.jointly_compatible_model_ids())
 
@@ -179,7 +184,7 @@ class WorldModelEcology:
         entropy = self.normalized_entropy()
         reasons: List[str] = []
         if self.model_class_inadequate:
-            reasons.append("authenticated evidence has no jointly compatible live causal model")
+            reasons.append("independent authenticated evidence has no jointly compatible live causal model")
             return EpistemicDepthPlan(
                 mode="EXPAND_MODEL_CLASS",
                 normalized_model_entropy=entropy,
