@@ -12,6 +12,8 @@ from .world_coupling import WorldOutcomePair
 TRANSFORM_PROGRAM_MARKER = "generator_transform_programs="
 DEFAULT_TRANSFORM_PRIMITIVES: Tuple[str, ...] = ("LOG", "INV")
 DEFAULT_TRANSFORM_ALPHAS: Tuple[float, ...] = (0.25, 0.5, 0.75)
+DEFAULT_TRANSFORM_SIGNATURE_ANCHORS: Tuple[float, ...] = (1.5, 2.0, 3.0, 4.0, 8.0, 16.0)
+DEEP_TRANSFORM_SIGNATURE_ANCHORS: Tuple[float, ...] = (32.0, 64.0, 128.0, 256.0, 512.0, 1024.0)
 
 
 @dataclass(frozen=True)
@@ -116,12 +118,14 @@ class ProjectionTransformFrontier:
     reason: str
 
 
-def _transform_signature(operations: Tuple[str, ...]) -> Optional[Tuple[float, ...]]:
-    anchors = (1.5, 2.0, 3.0, 4.0, 8.0, 16.0)
+def _transform_signature(
+    operations: Tuple[str, ...],
+    anchors: Sequence[float] = DEFAULT_TRANSFORM_SIGNATURE_ANCHORS,
+) -> Optional[Tuple[float, ...]]:
     probe = ProjectionTransformProgram("probe", operations, 0.5, len(operations))
     values = []
     for anchor in anchors:
-        value = probe.transform(anchor)
+        value = probe.transform(float(anchor))
         if value is None:
             return None
         values.append(round(value, 10))
@@ -132,6 +136,7 @@ def generate_projection_transform_programs(
     primitives: Sequence[str] = DEFAULT_TRANSFORM_PRIMITIVES,
     alphas: Sequence[float] = DEFAULT_TRANSFORM_ALPHAS,
     max_transform_depth: int = 2,
+    signature_anchors: Sequence[float] = DEFAULT_TRANSFORM_SIGNATURE_ANCHORS,
 ) -> Tuple[ProjectionTransformProgram, ...]:
     """Generate and quotient a bounded transform grammar without world outcomes.
 
@@ -139,22 +144,37 @@ def generate_projection_transform_programs(
     families are not enumerated: each retained transform sequence is wrapped in the
     same inverse-transform/weighted-mix construction and identified by its primitive
     ancestry. Equivalent transform sequences are quotiented by anchor signatures.
+
+    `signature_anchors` is a representation-domain parameter, not evidence. Deeper
+    nested logarithms require a positive high-magnitude quotient domain; callers may
+    therefore use `DEEP_TRANSFORM_SIGNATURE_ANCHORS` without exposing world outcomes.
     """
-    primitive_set = tuple(sorted(set(str(item).upper() for item in primitives if str(item).upper() in {"LOG", "INV"})))
+    primitive_set = tuple(sorted(set(
+        str(item).upper()
+        for item in primitives
+        if str(item).upper() in {"LOG", "INV"}
+    )))
+    anchors = tuple(float(value) for value in signature_anchors)
+    if not anchors:
+        anchors = DEFAULT_TRANSFORM_SIGNATURE_ANCHORS
     signatures: Dict[Tuple[float, ...], Tuple[str, ...]] = {}
     sequences = [()]
     for depth in range(1, max(0, int(max_transform_depth)) + 1):
         sequences.extend(itertools.product(primitive_set, repeat=depth))
     for raw in sequences:
         operations = tuple(raw)
-        signature = _transform_signature(operations)
+        signature = _transform_signature(operations, anchors=anchors)
         if signature is None:
             continue
         previous = signatures.get(signature)
         if previous is None or (len(operations), operations) < (len(previous), previous):
             signatures[signature] = operations
 
-    alpha_set = tuple(sorted(set(round(float(value), 12) for value in alphas if 0.0 < float(value) < 1.0)))
+    alpha_set = tuple(sorted(set(
+        round(float(value), 12)
+        for value in alphas
+        if 0.0 < float(value) < 1.0
+    )))
     programs = []
     for operations in sorted(signatures.values(), key=lambda item: (len(item), item)):
         transform_name = "IDENTITY" if not operations else ">".join(operations)
@@ -204,7 +224,9 @@ def derive_projection_transform_policy(
     for pair in world_pairs:
         if not _authoritative(pair) or pair.experiment_id not in program_ids_by_experiment:
             continue
-        grouped.setdefault((pair.experiment_id, pair.context_id), {}).setdefault(pair.independence_class_id, pair)
+        grouped.setdefault((pair.experiment_id, pair.context_id), {}).setdefault(
+            pair.independence_class_id, pair
+        )
 
     minimum_classes = max(1, int(min_independent_classes))
     support: Dict[str, Dict[str, float]] = {}
@@ -272,7 +294,11 @@ def _endpoint_scores(
             scale_by_experiment[proposal.experiment_id] = float(scale)
     grouped: Dict[str, Dict[str, WorldOutcomePair]] = {}
     for pair in world_pairs:
-        if pair.context_id == context_id and _authoritative(pair) and pair.experiment_id in scale_by_experiment:
+        if (
+            pair.context_id == context_id
+            and _authoritative(pair)
+            and pair.experiment_id in scale_by_experiment
+        ):
             grouped.setdefault(pair.experiment_id, {}).setdefault(pair.independence_class_id, pair)
     out: Dict[float, float] = {}
     minimum = max(1, int(min_independent_classes))
@@ -301,9 +327,13 @@ def derive_projection_transform_frontier(
     left = float(left)
     right = float(right)
     if not (0.0 < left < right):
-        return ProjectionTransformFrontier("INVALID_BRACKET", (), (left, right), None, 0, "positive ordered bracket required")
+        return ProjectionTransformFrontier(
+            "INVALID_BRACKET", (), (left, right), None, 0, "positive ordered bracket required"
+        )
     proposal_list = tuple(proposals)
-    scores = _endpoint_scores(proposal_list, world_pairs, min_independent_classes, probe_scale, context_id)
+    scores = _endpoint_scores(
+        proposal_list, world_pairs, min_independent_classes, probe_scale, context_id
+    )
     if left not in scores or right not in scores:
         return ProjectionTransformFrontier(
             "INSUFFICIENT_AUTHENTICATED_BRACKET", (), (left, right), None, 0,
@@ -317,7 +347,11 @@ def derive_projection_transform_frontier(
 
     program_space = tuple(programs) or generate_projection_transform_programs()
     by_id = {program.program_id: program for program in program_space}
-    if policy is not None and policy.status == "REPRODUCED_TRANSFORM_PROGRAM" and policy.program_id in by_id:
+    if (
+        policy is not None
+        and policy.status == "REPRODUCED_TRANSFORM_PROGRAM"
+        and policy.program_id in by_id
+    ):
         active = (by_id[policy.program_id],)
         status = "LEARNED_TRANSFORM_PROGRAM_TRANSFER"
         policy_id = policy.program_id
