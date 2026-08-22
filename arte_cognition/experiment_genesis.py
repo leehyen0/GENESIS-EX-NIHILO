@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import List, Mapping, Tuple
+import hashlib
+import json
 
 from .representation_genesis import RepresentationAxis
 
@@ -23,9 +25,10 @@ class InterventionProposal:
 class ExperimentGenesisEngine:
     """Translate measurable representation axes into discriminating interventions.
 
-    Proposals cross the learned representation threshold while holding other parent
-    variables fixed where possible. They are experiment proposals, not evidence or
-    actions, until an external executor performs them and returns outcomes.
+    Experiment identity is a fingerprint of the actual intervention phenotype:
+    axis, manipulated variable, held-fixed values, and LOW/HIGH values. Evidence
+    from one reference state therefore cannot authorize a numerically different
+    intervention that happens to manipulate the same variable on the same axis.
     """
 
     def __init__(self, relative_margin: float = 0.15, max_proposals: int = 8) -> None:
@@ -35,6 +38,26 @@ class ExperimentGenesisEngine:
     def _around(self, value: float) -> Tuple[float, float]:
         margin = max(abs(value) * self.relative_margin, self.relative_margin)
         return value - margin, value + margin
+
+    @staticmethod
+    def _experiment_id(
+        axis_id: str,
+        variable: str,
+        low: float,
+        high: float,
+        fixed: Tuple[Tuple[str, float], ...],
+    ) -> str:
+        payload = {
+            "axis_id": str(axis_id),
+            "manipulated_variable": str(variable),
+            "held_fixed": [[str(name), float(value)] for name, value in fixed],
+            "low_value": float(low),
+            "high_value": float(high),
+        }
+        digest = hashlib.sha256(
+            json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        ).hexdigest()[:16]
+        return f"EXPERIMENT::{axis_id}::{variable}::{digest}"
 
     def propose(
         self,
@@ -53,13 +76,22 @@ class ExperimentGenesisEngine:
             low_side: str = "LE_THRESHOLD",
             high_side: str = "GT_THRESHOLD",
         ) -> None:
+            fixed_items = tuple(sorted((k, float(v)) for k, v in fixed.items()))
+            low_value = float(low)
+            high_value = float(high)
             proposals.append(InterventionProposal(
-                experiment_id=f"EXPERIMENT::{axis.axis_id}::{variable}",
+                experiment_id=self._experiment_id(
+                    axis.axis_id,
+                    variable,
+                    low_value,
+                    high_value,
+                    fixed_items,
+                ),
                 axis_id=axis.axis_id,
                 manipulated_variable=variable,
-                held_fixed=tuple(sorted((k, float(v)) for k, v in fixed.items())),
-                low_value=float(low),
-                high_value=float(high),
+                held_fixed=fixed_items,
+                low_value=low_value,
+                high_value=high_value,
                 predicted_low_side=low_side,
                 predicted_high_side=high_side,
                 reason=reason,
@@ -110,8 +142,6 @@ class ExperimentGenesisEngine:
         elif axis.family == "PROJECTION" and axis.coefficients:
             low_score, high_score = self._around(threshold)
             coeffs = dict(axis.coefficients)
-            # Prefer variables with larger absolute leverage, yielding smaller and
-            # more local interventions around the reference state.
             for variable, coefficient in sorted(coeffs.items(), key=lambda kv: (-abs(kv[1]), kv[0])):
                 if abs(coefficient) <= 1e-12:
                     continue
@@ -140,5 +170,8 @@ class ExperimentGenesisEngine:
                         high_side="LE_THRESHOLD",
                     )
 
-        valid = [p for p in proposals if p.low_value == p.low_value and p.high_value == p.high_value and p.low_value < p.high_value]
+        valid = [
+            p for p in proposals
+            if p.low_value == p.low_value and p.high_value == p.high_value and p.low_value < p.high_value
+        ]
         return valid[: self.max_proposals]
