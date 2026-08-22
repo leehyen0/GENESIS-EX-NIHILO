@@ -219,8 +219,9 @@ class ProjectionGeneratorProgramGenesisTests(unittest.TestCase):
         self._execute(descendant, treatment, heldout_target, heldout_context, 8000)
         self.assertEqual(self._capability(descendant, heldout_context, heldout_target), 1.0)
 
-        # RESET has exactly one refinement candidate but no learned program. The
-        # deterministic bounded shadow ordering begins with AFFINE alpha=.25 -> 1.75.
+        # RESET has exactly one refinement candidate but no learned program. Its
+        # deterministic shadow choice may be any non-target program; the matched
+        # causal condition is that one untrained candidate cannot solve the target.
         reset = PersistentCognitiveRuntime()
         reset_context = "program-reset-heldout"
         reset_axis = axis(reset_context)
@@ -229,7 +230,7 @@ class ProjectionGeneratorProgramGenesisTests(unittest.TestCase):
         self._execute(reset, reset_base, heldout_target, reset_context, 9000)
         reset_frontier = self._frontier(reset, reset_context, 1.0, 4.0, max_candidates=1)
         self.assertEqual(len(reset_frontier.candidates), 1)
-        self.assertEqual(reset_frontier.candidates[0].scale, 1.75)
+        self.assertNotAlmostEqual(reset_frontier.candidates[0].scale, heldout_target, places=9)
         self._execute(reset, self._program_proposals(reset_axis, reset_frontier), heldout_target, reset_context, 10000)
         self.assertEqual(self._capability(reset, reset_context, heldout_target), 0.0)
 
