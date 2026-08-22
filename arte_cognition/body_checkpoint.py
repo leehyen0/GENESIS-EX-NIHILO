@@ -6,8 +6,17 @@ import json
 
 from .adaptive_cognition import AdaptiveCognitionCompiler
 from .cognitive_runtime import PersistentCognitiveRuntime
-from .epistemic_memory import ConceptRecord, EpistemicMemory, LawRecord, RepresentationMutation
+from .epistemic_memory import (
+    ConceptRecord,
+    EpistemicMemory,
+    ExperimentRecord,
+    LawRecord,
+    RepresentationMutation,
+    RepresentationRecord,
+)
+from .experiment_genesis import InterventionProposal
 from .meta_router import CognitionPolicyState, ModuleExperience, OutcomeLearnedCognitionRouter
+from .representation_genesis import RepresentationAxis
 from .semantic_genesis import ConceptCandidate, LawCandidate
 from .topology_learning import CognitionTopologyLearner, EdgeExperience
 from .world_coupling import (
@@ -18,10 +27,15 @@ from .world_coupling import (
 )
 
 
-SCHEMA = "arte.cognition_body_checkpoint/v3"
+SCHEMA = "arte.cognition_body_checkpoint/v4"
 LEGACY_SCHEMAS = {
     "arte.cognition_body_checkpoint/v1",
     "arte.cognition_body_checkpoint/v2",
+    "arte.cognition_body_checkpoint/v3",
+}
+AUTHENTICATED_WORLD_SCHEMAS = {
+    "arte.cognition_body_checkpoint/v3",
+    SCHEMA,
 }
 
 
@@ -59,6 +73,25 @@ def checkpoint_dict(runtime: PersistentCognitiveRuntime) -> Dict[str, Any]:
             "pairs": [asdict(pair) for pair in world.pairs],
         },
         "memory": {
+            "representations": {
+                axis_id: {
+                    "axis": asdict(record.axis),
+                    "status": record.status,
+                    "value_status": record.value_status,
+                    "revisions": record.revisions,
+                    "history": [asdict(axis) for axis in record.history],
+                }
+                for axis_id, record in sorted(runtime.memory.representations.items())
+            },
+            "experiments": {
+                experiment_id: {
+                    "proposal": asdict(record.proposal),
+                    "status": record.status,
+                    "revisions": record.revisions,
+                    "history": [asdict(proposal) for proposal in record.history],
+                }
+                for experiment_id, record in sorted(runtime.memory.experiments.items())
+            },
             "concepts": {
                 concept_id: {
                     "concept": asdict(record.concept),
@@ -106,6 +139,44 @@ def _restore_receipt(item: Optional[Dict[str, Any]]) -> Optional[WorldOutcomeRec
     )
 
 
+def _restore_axis(item: Dict[str, Any]) -> RepresentationAxis:
+    return RepresentationAxis(
+        axis_id=item["axis_id"],
+        family=item["family"],
+        inputs=tuple(item.get("inputs", ())),
+        threshold=float(item["threshold"]),
+        direction=item["direction"],
+        information_gain=float(item["information_gain"]),
+        train_support=int(item["train_support"]),
+        positive_partition=tuple(item.get("positive_partition", ())),
+        formula=item["formula"],
+        coefficients=tuple(
+            (str(name), float(weight))
+            for name, weight in item.get("coefficients", ())
+        ),
+        bias=float(item.get("bias", 0.0)),
+        status=item.get("status", "PROPOSAL_ONLY"),
+    )
+
+
+def _restore_proposal(item: Dict[str, Any]) -> InterventionProposal:
+    return InterventionProposal(
+        experiment_id=item["experiment_id"],
+        axis_id=item["axis_id"],
+        manipulated_variable=item["manipulated_variable"],
+        held_fixed=tuple(
+            (str(name), float(value))
+            for name, value in item.get("held_fixed", ())
+        ),
+        low_value=float(item["low_value"]),
+        high_value=float(item["high_value"]),
+        predicted_low_side=item["predicted_low_side"],
+        predicted_high_side=item["predicted_high_side"],
+        reason=item["reason"],
+        status=item.get("status", "PROPOSAL_ONLY"),
+    )
+
+
 def restore_runtime(
     payload: Dict[str, Any],
     world_verifier: Optional[WorldReceiptVerifier] = None,
@@ -149,7 +220,7 @@ def restore_runtime(
     world = WorldCouplingEngine(
         min_independent_classes=int(world_data.get("min_independent_classes", 2))
     )
-    is_authenticated_schema = schema == SCHEMA
+    is_authenticated_schema = schema in AUTHENTICATED_WORLD_SCHEMAS
     restored_pairs = []
     for item in world_data.get("pairs", []):
         restored_pairs.append(WorldOutcomePair(
@@ -171,7 +242,9 @@ def restore_runtime(
                 if is_authenticated_schema
                 else "LEGACY_UNVERIFIED"
             ),
-            # Never trust a serialized authority flag. It is re-derived below.
+            # Never trust serialized authority or independence claims. Both are
+            # re-derived by the external verifier in `restore_pairs`.
+            independence_class_id="UNVERIFIED",
             authority_verified=False,
             low_receipt=(
                 _restore_receipt(item.get("low_receipt"))
@@ -190,6 +263,24 @@ def restore_runtime(
     router = OutcomeLearnedCognitionRouter(compiler=compiler, policy=policy)
     memory = EpistemicMemory()
     memory_data = payload.get("memory", {})
+
+    for axis_id, item in memory_data.get("representations", {}).items():
+        memory.representations[axis_id] = RepresentationRecord(
+            axis=_restore_axis(item["axis"]),
+            status=item.get("status", "ACTIVE_VALIDATED"),
+            value_status=item.get("value_status", "INCREMENTAL_REPRESENTATION_VALUE"),
+            revisions=int(item.get("revisions", 0)),
+            history=[_restore_axis(axis) for axis in item.get("history", [])],
+        )
+
+    for experiment_id, item in memory_data.get("experiments", {}).items():
+        memory.experiments[experiment_id] = ExperimentRecord(
+            proposal=_restore_proposal(item["proposal"]),
+            status=item.get("status", "PROPOSAL_ONLY"),
+            revisions=int(item.get("revisions", 0)),
+            history=[_restore_proposal(proposal) for proposal in item.get("history", [])],
+        )
+
     for concept_id, item in memory_data.get("concepts", {}).items():
         c = item["concept"]
         concept = ConceptCandidate(
