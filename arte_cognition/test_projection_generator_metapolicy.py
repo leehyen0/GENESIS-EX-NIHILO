@@ -7,6 +7,7 @@ from arte_cognition.cognitive_runtime import PersistentCognitiveRuntime
 from arte_cognition.experiment_genesis import ExperimentGenesisEngine
 from arte_cognition.projection_generator_metapolicy import (
     ProjectionGeneratorPolicy,
+    _strong_scale_contexts,
     derive_projection_generator_frontier,
     derive_projection_generator_policy,
 )
@@ -175,8 +176,16 @@ class ProjectionGeneratorMetaPolicyTests(unittest.TestCase):
             generated = self._proposals(ax, shadow.candidate_scales)
             self._remember_and_execute(runtime, generated, 1.25, context, 1500 + index * 1000)
 
+        strong = _strong_scale_contexts(
+            (record.proposal for record in runtime.memory.experiments.values()),
+            runtime.world_coupling.pairs,
+            runtime.world_coupling.min_independent_classes,
+            scale_of,
+            0.9,
+        )
+        print("GENERATOR_STRONG_CONTEXTS", strong)
         learned = self._policy(runtime)
-        self.assertEqual(learned.status, "REPRODUCED_GENERATOR_POLICY")
+        self.assertEqual(learned.status, "REPRODUCED_GENERATOR_POLICY", msg=f"strong={strong!r}; learned={learned!r}")
         self.assertEqual(learned.alpha, 0.25)
         self.assertEqual(len(learned.supporting_contexts), 2)
 
