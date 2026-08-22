@@ -84,9 +84,15 @@ def main(seed_path: str) -> None:
     variables = [x, z]
     descriptors = InterventionSurfaceGenesisEngine(budget=256).generate(variables)
 
-    g3_engine = BooleanCausalPredicateGenesisEngine(model_budget=2048, max_literals_per_term=3, max_terms=2)
+    # The autonomous 39-intervention surface resolves more G3 prediction signatures
+    # than the earlier 15-intervention evaluator. Use the full bounded G3 grammar,
+    # not a stale 2,048-candidate truncation, before claiming that G3 is falsified.
+    g3_engine = BooleanCausalPredicateGenesisEngine(
+        model_budget=16384, max_literals_per_term=3, max_terms=2
+    )
     g3 = g3_engine.generate_novel(variables, descriptors, (), ())
     assert g3 and not g3_engine.last_truncated
+    assert g3_engine.last_unique_signature_count > 2048
     g3_models = [item.model for item in g3]
     g3_signatures = {tuple(sorted(model.predictions)) for model in g3_models}
 
@@ -103,7 +109,12 @@ def main(seed_path: str) -> None:
     hidden = rng.choice(hidden_pool)
     hidden_model = hidden.model
 
-    runtime = EpistemicallyDeepPersistentCognitiveRuntime()
+    runtime = EpistemicallyDeepPersistentCognitiveRuntime(
+        predicate_genesis=BooleanCausalPredicateGenesisEngine(
+            model_budget=16384, max_literals_per_term=3, max_terms=2
+        ),
+        minterm_genesis=SparseMintermCausalGenesisEngine(model_budget=4096, max_minterms=3),
+    )
     runtime.register_causal_world_models(g3_models)
 
     keys = {
@@ -117,7 +128,8 @@ def main(seed_path: str) -> None:
     })
 
     # Exhaustively expose the bounded intervention surface. Because the selected
-    # three-minterm truth signature is absent from G3, all G3 hypotheses must die.
+    # three-minterm truth signature is absent from the complete G3 class, every G3
+    # hypothesis must be independently contradicted somewhere on this surface.
     for index, descriptor in enumerate(descriptors):
         execute_two(runtime, descriptor, hidden_model, signers, verifier, suffix, f"g3-refute-{index}")
     g3_space = runtime.generation_version_space(3)
@@ -157,6 +169,8 @@ def main(seed_path: str) -> None:
         "hidden_g4_model": hidden_model.model_id,
         "hidden_g4_minterm_count": len(hidden.minterms),
         "g3_shadow_model_count": len(g3_models),
+        "g3_unique_signature_count": g3_engine.last_unique_signature_count,
+        "g3_complete_candidate_universe": not g3_engine.last_truncated,
         "g3_final_version_space": len(g3_space.compatible_model_ids),
         "g3_falsified_by_two_independence_classes": True,
         "external_evaluator_selected_g4_generator": False,
