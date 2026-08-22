@@ -27,16 +27,17 @@ from .world_coupling import (
 )
 
 
-SCHEMA = "arte.cognition_body_checkpoint/v4"
+# Generated phenotype memory is a backward-compatible extension of the existing
+# authenticated v3 checkpoint envelope. Keeping the authority envelope stable
+# avoids reclassifying signed v3 receipts as legacy while a separate sub-schema
+# versions the newly persistent representation/experiment phenotype.
+SCHEMA = "arte.cognition_body_checkpoint/v3"
+PHENOTYPE_SCHEMA = "arte.cognition_generated_phenotype/v1"
 LEGACY_SCHEMAS = {
     "arte.cognition_body_checkpoint/v1",
     "arte.cognition_body_checkpoint/v2",
-    "arte.cognition_body_checkpoint/v3",
 }
-AUTHENTICATED_WORLD_SCHEMAS = {
-    "arte.cognition_body_checkpoint/v3",
-    SCHEMA,
-}
+AUTHENTICATED_WORLD_SCHEMAS = {SCHEMA}
 
 
 def checkpoint_dict(runtime: PersistentCognitiveRuntime) -> Dict[str, Any]:
@@ -45,6 +46,7 @@ def checkpoint_dict(runtime: PersistentCognitiveRuntime) -> Dict[str, Any]:
     world = runtime.world_coupling
     return {
         "schema": SCHEMA,
+        "phenotype_schema": PHENOTYPE_SCHEMA,
         "policy": {
             "learning_rate": policy.learning_rate,
             "min_evidence_before_routing_change": policy.min_evidence_before_routing_change,
@@ -184,6 +186,9 @@ def restore_runtime(
     schema = payload.get("schema")
     if schema != SCHEMA and schema not in LEGACY_SCHEMAS:
         raise ValueError("unsupported cognition checkpoint schema")
+    phenotype_schema = payload.get("phenotype_schema")
+    if phenotype_schema not in (None, PHENOTYPE_SCHEMA):
+        raise ValueError("unsupported generated phenotype checkpoint schema")
 
     policy_data = payload.get("policy", {})
     policy = CognitionPolicyState(
