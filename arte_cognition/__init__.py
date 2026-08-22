@@ -48,10 +48,28 @@ from .representation_genesis import (
     RepresentationAxis,
     RepresentationGenesisEngine,
 )
+from .representation_value import (
+    RepresentationValueAssessment,
+    RepresentationValueEvaluator,
+)
+from .experiment_genesis import (
+    ExperimentGenesisEngine,
+    InterventionProposal,
+)
+from .subgraph_credit import (
+    MinimumCausalSubgraphFinder,
+    MinimumSufficientSubgraph,
+    SubgraphEvaluation,
+)
 from .topology_learning import (
     CognitionTopologyLearner,
     EdgeExperience,
     MacroCognitionCandidate,
+)
+from .validation_matrix import (
+    RobustPromotionGate,
+    ValidationGateResult,
+    ValidationObservation,
 )
 from .cognitive_runtime import CognitiveCycle, PersistentCognitiveRuntime
 from .body_checkpoint import (
@@ -96,9 +114,19 @@ __all__ = [
     "MeasurementObservation",
     "RepresentationAxis",
     "RepresentationGenesisEngine",
+    "RepresentationValueAssessment",
+    "RepresentationValueEvaluator",
+    "ExperimentGenesisEngine",
+    "InterventionProposal",
+    "MinimumCausalSubgraphFinder",
+    "MinimumSufficientSubgraph",
+    "SubgraphEvaluation",
     "CognitionTopologyLearner",
     "EdgeExperience",
     "MacroCognitionCandidate",
+    "RobustPromotionGate",
+    "ValidationGateResult",
+    "ValidationObservation",
     "CognitiveCycle",
     "PersistentCognitiveRuntime",
     "checkpoint_dict",
