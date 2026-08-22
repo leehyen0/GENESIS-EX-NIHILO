@@ -1,15 +1,17 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Iterable, List, Optional, Sequence
+from typing import Iterable, List, Mapping, Optional, Sequence
 
 from .adaptive_cognition import AdaptiveCognitionCompiler, CognitionPlan, ModuleCredit, TaskState
 from .causal_credit import OutcomeAblationCredit, OutcomeAblationCreditEngine
 from .causal_law import CausalLawAssessment, CausalLawEvaluator, InterventionObservation
 from .epistemic_memory import EpistemicMemory, RepresentationMutation
+from .experiment_genesis import ExperimentGenesisEngine, InterventionProposal
 from .meta_router import OutcomeLearnedCognitionRouter
 from .possibility_space import Fact, OperatorSpec, PossibilityCandidate, PossibilitySpaceGenerator
 from .representation_genesis import MeasurementObservation, RepresentationAxis, RepresentationGenesisEngine
+from .representation_value import RepresentationValueAssessment, RepresentationValueEvaluator
 from .semantic_genesis import (
     ConceptCandidate,
     LawCandidate,
@@ -17,7 +19,9 @@ from .semantic_genesis import (
     SemanticGenesisEngine,
     SemanticQuery,
 )
+from .subgraph_credit import MinimumCausalSubgraphFinder, MinimumSufficientSubgraph, SubgraphEvaluation
 from .topology_learning import CognitionTopologyLearner, MacroCognitionCandidate
+from .validation_matrix import RobustPromotionGate, ValidationGateResult, ValidationObservation
 
 
 @dataclass
@@ -27,6 +31,8 @@ class CognitiveCycle:
     macro_candidates: List[MacroCognitionCandidate]
     possibilities: List[PossibilityCandidate]
     representation_axes: List[RepresentationAxis]
+    representation_value: List[RepresentationValueAssessment]
+    intervention_proposals: List[InterventionProposal]
     concepts: List[ConceptCandidate]
     laws: List[LawCandidate]
     semantic_queries: List[SemanticQuery]
@@ -39,10 +45,10 @@ class PersistentCognitiveRuntime:
     """One executable loop from task pressure to self-revising cognition.
 
     The runtime composes sparse routing, bounded topology learning, modal
-    generation, measurable representation-axis genesis, residual-driven semantic
-    genesis, reversible epistemic memory, outcome-ablation credit, causal-law
-    staging and outcome-learned routing. Generated objects never become evidence
-    merely by existing.
+    generation, measurable representation-axis genesis, incremental-value gates,
+    experiment genesis, residual-driven semantic genesis, reversible epistemic
+    memory, outcome-ablation credit, causal-law staging and robust promotion.
+    Generated objects never become evidence merely by existing.
     """
 
     def __init__(
@@ -52,20 +58,28 @@ class PersistentCognitiveRuntime:
         topology: Optional[CognitionTopologyLearner] = None,
         possibility: Optional[PossibilitySpaceGenerator] = None,
         representation: Optional[RepresentationGenesisEngine] = None,
+        representation_value: Optional[RepresentationValueEvaluator] = None,
+        experiment: Optional[ExperimentGenesisEngine] = None,
         semantic: Optional[SemanticGenesisEngine] = None,
         memory: Optional[EpistemicMemory] = None,
         credit_engine: Optional[OutcomeAblationCreditEngine] = None,
         causal_law: Optional[CausalLawEvaluator] = None,
+        subgraph_finder: Optional[MinimumCausalSubgraphFinder] = None,
+        promotion_gate: Optional[RobustPromotionGate] = None,
     ) -> None:
         self.compiler = compiler or AdaptiveCognitionCompiler()
         self.router = router or OutcomeLearnedCognitionRouter(self.compiler)
         self.topology = topology or CognitionTopologyLearner()
         self.possibility = possibility or PossibilitySpaceGenerator()
         self.representation = representation or RepresentationGenesisEngine()
+        self.representation_value = representation_value or RepresentationValueEvaluator()
+        self.experiment = experiment or ExperimentGenesisEngine()
         self.semantic = semantic or SemanticGenesisEngine()
         self.memory = memory or EpistemicMemory()
         self.credit_engine = credit_engine or OutcomeAblationCreditEngine()
         self.causal_law = causal_law or CausalLawEvaluator()
+        self.subgraph_finder = subgraph_finder or MinimumCausalSubgraphFinder()
+        self.promotion_gate = promotion_gate or RobustPromotionGate()
 
     def cycle(
         self,
@@ -75,6 +89,7 @@ class PersistentCognitiveRuntime:
         measurements: Sequence[MeasurementObservation] = (),
         operator_spec: Optional[OperatorSpec] = None,
         possibility_budget: int = 32,
+        experiment_reference_values: Optional[Mapping[str, float]] = None,
     ) -> CognitiveCycle:
         plan = self.router.compile(task)
         execution_order = self.topology.reorder(plan.active_subgraph)
@@ -87,11 +102,23 @@ class PersistentCognitiveRuntime:
         )
 
         axes = self.representation.propose_axes(measurements) if measurements else []
+        value_assessments = [self.representation_value.assess(axis, measurements) for axis in axes] if measurements else []
+        eligible_axis_ids = {
+            item.axis_id for item in value_assessments
+            if item.status == "INCREMENTAL_REPRESENTATION_VALUE"
+        }
+        semantically_eligible_axes = [axis for axis in axes if axis.axis_id in eligible_axis_ids]
+
         semantic_rows = (
-            self.representation.augment_residuals(residuals, measurements, axes)
+            self.representation.augment_residuals(residuals, measurements, semantically_eligible_axes)
             if measurements and residuals
             else list(residuals)
         )
+
+        intervention_proposals: List[InterventionProposal] = []
+        if experiment_reference_values:
+            for axis in semantically_eligible_axes:
+                intervention_proposals.extend(self.experiment.propose(axis, experiment_reference_values))
 
         concepts = self.semantic.propose_concepts(semantic_rows)
         semantic_queries = self.semantic.propose_queries(semantic_rows, concepts)
@@ -110,6 +137,8 @@ class PersistentCognitiveRuntime:
             macro_candidates=macro_candidates,
             possibilities=possibilities,
             representation_axes=axes,
+            representation_value=value_assessments,
+            intervention_proposals=intervention_proposals,
             concepts=concepts,
             laws=laws,
             semantic_queries=semantic_queries,
@@ -170,3 +199,17 @@ class PersistentCognitiveRuntime:
         observations: Sequence[InterventionObservation],
     ) -> CausalLawAssessment:
         return self.causal_law.assess(law, observations)
+
+    def find_minimum_sufficient_subgraph(
+        self,
+        full_modules: Sequence[str],
+        evaluations: Mapping[tuple, SubgraphEvaluation],
+    ) -> MinimumSufficientSubgraph:
+        return self.subgraph_finder.find(full_modules, evaluations)
+
+    def assess_robust_promotion(
+        self,
+        observations: Sequence[ValidationObservation],
+        protected_contexts: Iterable[str] = (),
+    ) -> ValidationGateResult:
+        return self.promotion_gate.assess(observations, protected_contexts)
