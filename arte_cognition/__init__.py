@@ -33,7 +33,23 @@ from .epistemic_memory import (
     LawRecord,
     RepresentationMutation,
 )
+from .causal_credit import (
+    OutcomeAblationCredit,
+    OutcomeAblationCreditEngine,
+    PairSynergyCredit,
+)
+from .representation_genesis import (
+    MeasurementObservation,
+    RepresentationAxis,
+    RepresentationGenesisEngine,
+)
 from .cognitive_runtime import CognitiveCycle, PersistentCognitiveRuntime
+from .body_checkpoint import (
+    checkpoint_dict,
+    checkpoint_json,
+    restore_json,
+    restore_runtime,
+)
 
 __all__ = [
     "AdaptiveCognitionCompiler",
@@ -61,6 +77,16 @@ __all__ = [
     "EpistemicMemory",
     "LawRecord",
     "RepresentationMutation",
+    "OutcomeAblationCredit",
+    "OutcomeAblationCreditEngine",
+    "PairSynergyCredit",
+    "MeasurementObservation",
+    "RepresentationAxis",
+    "RepresentationGenesisEngine",
     "CognitiveCycle",
     "PersistentCognitiveRuntime",
+    "checkpoint_dict",
+    "checkpoint_json",
+    "restore_json",
+    "restore_runtime",
 ]
