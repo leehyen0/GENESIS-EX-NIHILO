@@ -27,6 +27,7 @@ from .world_coupling import (
     WorldCouplingEngine,
     WorldExecutor,
     WorldOutcomePair,
+    WorldReceiptVerifier,
     WorldTransportAssessment,
 )
 
@@ -49,17 +50,12 @@ class CognitiveCycle:
 
 
 class PersistentCognitiveRuntime:
-    """One executable loop from task pressure to self-revising cognition.
+    """Executable loop from task pressure to authenticated world self-revision.
 
-    The runtime composes sparse routing, bounded topology learning, modal
-    generation, measurable representation-axis genesis, incremental-value gates,
-    experiment genesis, residual-driven semantic genesis, reversible epistemic
-    memory, outcome-ablation credit, causal-law staging, robust promotion and a
-    context-conditioned world-coupling memory. Externally realized intervention
-    consequences can change future experiment ordering in the regime where they
-    were learned, and global transport is blocked when supported regimes disagree.
-    That state survives BODY checkpoint/restore. Generated objects never become
-    evidence merely by existing.
+    World receipts are audit data by default. They acquire learning authority only
+    when a separately supplied verifier authenticates both intervention arms. The
+    resulting context-conditioned state and transport abstentions survive BODY
+    checkpoint/restore; verifier secrets never become persistent BODY state.
     """
 
     def __init__(
@@ -122,7 +118,6 @@ class PersistentCognitiveRuntime:
             if item.status == "INCREMENTAL_REPRESENTATION_VALUE"
         }
         semantically_eligible_axes = [axis for axis in axes if axis.axis_id in eligible_axis_ids]
-
         semantic_rows = (
             self.representation.augment_residuals(residuals, measurements, semantically_eligible_axes)
             if measurements and residuals
@@ -142,7 +137,6 @@ class PersistentCognitiveRuntime:
         semantic_queries = self.semantic.propose_queries(semantic_rows, concepts)
         laws: List[LawCandidate] = []
         mutations_before = len(self.memory.mutation_log)
-
         for concept in concepts:
             self.memory.remember_concept(concept)
             law = self.semantic.induce_law(concept, semantic_rows)
@@ -180,7 +174,6 @@ class PersistentCognitiveRuntime:
         treatment_outcome: float,
         ablation_decisions=None,
     ) -> List[ModuleCredit]:
-        """Legacy behavior-sensitive credit path retained for compatibility."""
         return self.router.learn_from_outcome(
             active_modules=active_modules,
             baseline_decision=baseline_decision,
@@ -197,7 +190,6 @@ class PersistentCognitiveRuntime:
         ablation_outcomes,
         matched_compute=None,
     ) -> List[OutcomeAblationCredit]:
-        """Preferred module-learning path: realized outcome ablations."""
         credits = self.credit_engine.assign(
             full_outcome=full_outcome,
             ablation_outcomes=ablation_outcomes,
@@ -208,7 +200,6 @@ class PersistentCognitiveRuntime:
         return credits
 
     def learn_topology(self, sequence, edge_synergy) -> None:
-        """Update routing order only from explicit pair-synergy evidence."""
         self.topology.observe_sequence(sequence=sequence, edge_synergy=edge_synergy)
 
     def assess_causal_law(
@@ -236,9 +227,10 @@ class PersistentCognitiveRuntime:
         self,
         proposal: InterventionProposal,
         executor: WorldExecutor,
+        verifier: Optional[WorldReceiptVerifier] = None,
     ) -> WorldOutcomePair:
-        """Enact a proposal through an external executor and consume its outcome."""
-        return self.world_coupling.execute(proposal, executor)
+        """Consume a world intervention; unverified receipts have audit-only status."""
+        return self.world_coupling.execute(proposal, executor, verifier=verifier)
 
     def world_axis_summary(
         self,
