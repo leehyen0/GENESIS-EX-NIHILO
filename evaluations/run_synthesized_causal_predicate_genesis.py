@@ -120,7 +120,7 @@ def main(seed_path: str) -> None:
     base_engine = CausalModelGenesisEngine(model_budget=128)
     program_engine = CompositionalCausalProgramGenesisEngine(model_budget=256, max_extra_primitives=2)
     predicate_engine = BooleanCausalPredicateGenesisEngine(
-        model_budget=512, max_literals_per_term=3, max_terms=2
+        model_budget=2048, max_literals_per_term=3, max_terms=2
     )
     base_surface = base_engine.generate([x, z], descriptors)
     comp_surface = program_engine.generate_novel(
@@ -128,10 +128,9 @@ def main(seed_path: str) -> None:
     )
     prior_surface = [item.model for item in base_surface] + [item.model for item in comp_surface]
     pred_surface = predicate_engine.generate_novel([x, z], descriptors, (), prior_surface)
+    assert not predicate_engine.last_truncated
+    full_predicate_signature_count = predicate_engine.last_unique_signature_count
 
-    # Hidden truth: x must be manipulated, z co-targeted, and exactly one of delay
-    # or context must be active. This XOR-like gate is absent from the conjunction-
-    # only causal primitive grammar.
     wanted = {
         d["do-both"].intervention_id: "NO_EFFECT",
         d["delay-both"].intervention_id: "POSITIVE_EFFECT",
@@ -169,29 +168,28 @@ def main(seed_path: str) -> None:
         f"issuer-a-{suffix}": "independent-A", f"issuer-b-{suffix}": "independent-B",
     })
 
-    # Generation 0 -> generation 1 failure.
     execute_two(runtime, surprise, hidden_model, signers, verifier, suffix, "authored-failure")
     assert runtime.epistemic_depth_plan().mode == "EXPAND_MODEL_CLASS"
     first = runtime.generate_replacement_causal_models([x, z], descriptors)
     assert first and runtime.epistemic_depth_plan().mode != "EXPAND_MODEL_CLASS"
 
-    first_discovery = [d["delay-both"], d["delay-x"], d["delay-z"]]
+    first_candidates = [d["delay-both"], d["delay-x"], d["delay-z"]]
     first_probes = []
-    for round_index in range(len(first_discovery)):
+    used_first = set()
+    for round_index in range(len(first_candidates)):
         if runtime.epistemic_depth_plan().mode == "EXPAND_MODEL_CLASS":
             break
-        available = first_discovery[round_index:]
+        available = [item for item in first_candidates if item.intervention_id not in used_first]
+        if not available:
+            break
         ranked = runtime.rank_epistemic_interventions(runtime.generated_model_queries(available, first))
         assert ranked
         selected = next(item for item in available if item.intervention_id == ranked[0].intervention_id)
         execute_two(runtime, selected, hidden_model, signers, verifier, suffix, f"g1-{round_index}")
+        used_first.add(selected.intervention_id)
         first_probes.append({"id": selected.intervention_id, "cost": selected.cost, "eig": ranked[0].expected_information_gain})
-        first_discovery.remove(selected)
-        first_discovery.insert(round_index, selected)
     assert runtime.epistemic_depth_plan().mode == "EXPAND_MODEL_CLASS"
 
-    # Generation 1 -> generation 2. REQUIRE(z)+LAG-like conjunctions can explain
-    # non-context evidence, so compositional generation temporarily repairs the class.
     second = runtime.generate_compositional_causal_models([x, z], descriptors)
     assert second and runtime.epistemic_depth_plan().mode != "EXPAND_MODEL_CLASS"
     second_all = {
@@ -200,26 +198,25 @@ def main(seed_path: str) -> None:
     }
     assert second_all
 
-    # Reveal context behavior that no conjunction-only generation-2 program can fit.
     second_failure_descriptors = [d["context-both"], d["context-delay-both"]]
     second_probes = []
-    for round_index, descriptor in enumerate(second_failure_descriptors):
+    used_second = set()
+    for round_index in range(len(second_failure_descriptors)):
         if runtime.epistemic_depth_plan().mode == "EXPAND_MODEL_CLASS":
             break
-        ranked = runtime.rank_epistemic_interventions(runtime.compositional_model_queries(second_failure_descriptors[round_index:]))
+        available = [item for item in second_failure_descriptors if item.intervention_id not in used_second]
+        assert available
+        ranked = runtime.rank_epistemic_interventions(runtime.compositional_model_queries(available))
         assert ranked
-        selected = next(
-            item for item in second_failure_descriptors[round_index:]
-            if item.intervention_id == ranked[0].intervention_id
-        )
+        selected = next(item for item in available if item.intervention_id == ranked[0].intervention_id)
         execute_two(runtime, selected, hidden_model, signers, verifier, suffix, f"g2-{round_index}")
+        used_second.add(selected.intervention_id)
         second_probes.append({"id": selected.intervention_id, "cost": selected.cost, "eig": ranked[0].expected_information_gain})
     assert runtime.epistemic_depth_plan().mode == "EXPAND_MODEL_CLASS"
 
-    # Generation 3 synthesizes a Boolean activation predicate. Active candidates
-    # are evidence-compatible; unfiltered alternatives remain shadow phenotype.
     third_active = runtime.generate_predicate_causal_models([x, z], descriptors)
     assert third_active
+    assert not runtime.predicate_genesis.last_truncated
     third_all_models = [
         model for model in runtime.world_models.models.values()
         if model.origin == "GENERATED_PREDICATE"
@@ -234,7 +231,6 @@ def main(seed_path: str) -> None:
     assert all(tuple(sorted(model.predictions)) not in old_signatures for model in third_all_models)
     assert len({tuple(sorted(model.predictions)) for model in third_all_models}) == len(third_all_models)
 
-    # Held-out z/block variants distinguish the full third-generation shadow pool.
     validation = [
         d["context-delay-both"], d["delay-both-block-z"],
         d["context-both-block-z"], d["context-delay-both-block-z"],
@@ -286,6 +282,8 @@ def main(seed_path: str) -> None:
         "hidden_predicate": hidden.predicate.render(),
         "hidden_structure": list(hidden_model.structure),
         "hidden_signature_absent_from_generation_1_and_2": True,
+        "full_predicate_equivalence_signature_count": full_predicate_signature_count,
+        "predicate_search_truncated": False,
         "generation_1_probes": first_probes,
         "generation_2_probes": second_probes,
         "generation_3_active_count": len(third_active),
@@ -297,6 +295,7 @@ def main(seed_path: str) -> None:
         "reverified_descendant_top_model": verified_top_id,
         "reverified_descendant_top_probability": verified_top_prob,
         "generation_3_parent_count": len(restored.parent_model_ids),
+        "candidate_presence_evidence_independent": True,
         "boolean_metalanguage_human_authored": True,
         "unrestricted_logic_operator_genesis": False,
         "foundation_weight_change": False,
