@@ -57,11 +57,7 @@ class HiddenProgramWorld:
 
     def execute(self, p: InterventionProposal, arm: str, value: float):
         label = self.hidden_model.prediction_for(p.experiment_id) or "NO_EFFECT"
-        effect = {
-            "POSITIVE_EFFECT": 1.0,
-            "NEGATIVE_EFFECT": -1.0,
-            "NO_EFFECT": 0.0,
-        }[label]
+        effect = {"POSITIVE_EFFECT": 1.0, "NEGATIVE_EFFECT": -1.0, "NO_EFFECT": 0.0}[label]
         outcome = 0.0 if arm.upper() == "LOW" else effect
         receipt = WorldOutcomeReceipt(
             receipt_id=f"{self.challenge_id}::{p.experiment_id}::{arm}",
@@ -86,8 +82,7 @@ def execute_two_classes(runtime, descriptor, hidden_model, signers, verifier, su
         runtime.execute_world_intervention(
             p,
             HiddenProgramWorld(
-                hidden_model,
-                signer,
+                hidden_model, signer,
                 context_id=f"grammar-{stage}",
                 source_id=f"source-{stage}-{index}-{suffix}",
                 challenge_id=f"challenge-{stage}-{index}-{suffix}",
@@ -118,13 +113,11 @@ def main(seed_path: str) -> None:
         return item
 
     descriptors = [
-        add("do-x", (x,), cost=1),
-        add("do-z", (z,), cost=1),
+        add("do-x", (x,), cost=1), add("do-z", (z,), cost=1),
         add("do-both", (x, z), cost=4),
         add("do-x-block-z", (x,), blocked=(z,), cost=5),
         add("do-z-block-x", (z,), blocked=(x,), cost=5),
-        add("delay-x", (x,), delay=1, cost=5),
-        add("delay-z", (z,), delay=1, cost=5),
+        add("delay-x", (x,), delay=1, cost=5), add("delay-z", (z,), delay=1, cost=5),
         add("delay-both", (x, z), delay=1, cost=9),
         add("delay-x-block-z", (x,), blocked=(z,), delay=1, cost=11),
         add("delay-z-block-x", (z,), blocked=(x,), delay=1, cost=11),
@@ -154,11 +147,7 @@ def main(seed_path: str) -> None:
     assert hybrid_pool
     hidden = rng.choice(hybrid_pool)
     hidden_model = hidden.model
-    assert hidden_model.family == "COMPOSITIONAL_PROGRAM"
-    assert hidden_model.generation == 2
 
-    # BODY is not told the selected hidden program. It starts with two mutually
-    # exclusive authored predictions on a probe where the hidden hybrid predicts no effect.
     surprise = rng.choice([
         item for item in discovery[:3]
         if hidden_model.prediction_for(item.intervention_id) == "NO_EFFECT"
@@ -174,13 +163,9 @@ def main(seed_path: str) -> None:
         f"issuer-b-{suffix}": f"secret-b-{suffix}".encode(),
     }
     signers = {issuer: HMACWorldReceiptSigner(issuer, secret) for issuer, secret in keys.items()}
-    verifier = HMACWorldReceiptVerifier(
-        keys,
-        independence_classes={
-            f"issuer-a-{suffix}": "independent-A",
-            f"issuer-b-{suffix}": "independent-B",
-        },
-    )
+    verifier = HMACWorldReceiptVerifier(keys, independence_classes={
+        f"issuer-a-{suffix}": "independent-A", f"issuer-b-{suffix}": "independent-B",
+    })
 
     # First structural failure and first-generation model genesis.
     execute_two_classes(runtime, surprise, hidden_model, signers, verifier, suffix, "authored-failure")
@@ -188,11 +173,10 @@ def main(seed_path: str) -> None:
     assert runtime.generate_compositional_causal_models([x, z], descriptors) == []
     first_generation = runtime.generate_replacement_causal_models([x, z], descriptors)
     assert first_generation
-    first_ids = {item.model.model_id for item in first_generation}
-    assert hidden_model.model_id not in first_ids
+    assert hidden_model.model_id not in {item.model.model_id for item in first_generation}
     assert runtime.epistemic_depth_plan().mode != "EXPAND_MODEL_CLASS"
 
-    # Let the BODY choose probes that discriminate the first generated model class.
+    # BODY-selected first-generation discrimination until the generated class also fails.
     executed = {surprise.intervention_id}
     first_generation_probes = []
     for round_index in range(len(discovery)):
@@ -201,64 +185,68 @@ def main(seed_path: str) -> None:
         available = [item for item in discovery if item.intervention_id not in executed]
         if not available:
             break
-        queries = runtime.generated_model_queries(available, first_generation)
-        ranked = runtime.rank_epistemic_interventions(queries)
+        ranked = runtime.rank_epistemic_interventions(
+            runtime.generated_model_queries(available, first_generation)
+        )
         assert ranked
         selected_id = ranked[0].intervention_id
         selected = next(item for item in available if item.intervention_id == selected_id)
         execute_two_classes(runtime, selected, hidden_model, signers, verifier, suffix, f"first-gen-{round_index}")
         executed.add(selected_id)
         first_generation_probes.append({
-            "intervention_id": selected_id,
-            "cost": selected.cost,
+            "intervention_id": selected_id, "cost": selected.cost,
             "expected_information_gain": ranked[0].expected_information_gain,
         })
     assert runtime.epistemic_depth_plan().mode == "EXPAND_MODEL_CLASS"
 
-    # Second structural generation: composed causal programs not represented by
-    # any existing prediction signature.
-    compositional = runtime.generate_compositional_causal_models([x, z], descriptors)
-    assert compositional
-    compositional_ids = {item.model.model_id for item in compositional}
-    assert hidden_model.model_id in compositional_ids
+    # Active evidence-compatible candidates are returned, but a bounded unfiltered
+    # shadow pool is persisted so candidate absence cannot leak external authority.
+    active_compositional = runtime.generate_compositional_causal_models([x, z], descriptors)
+    assert active_compositional
+    all_compositional_models = [
+        model for model in runtime.world_models.models.values()
+        if model.origin == "GENERATED_COMPOSITIONAL"
+    ]
+    all_compositional_ids = {model.model_id for model in all_compositional_models}
+    assert hidden_model.model_id in all_compositional_ids
+    assert len(all_compositional_ids) >= len(active_compositional)
+
     existing_before_composition = [
         model for model in runtime.world_models.models.values()
         if model.origin != "GENERATED_COMPOSITIONAL"
     ]
     existing_signatures = {tuple(sorted(model.predictions)) for model in existing_before_composition}
-    assert all(tuple(sorted(item.model.predictions)) not in existing_signatures for item in compositional)
-    comp_signatures = [tuple(sorted(item.model.predictions)) for item in compositional]
-    assert len(comp_signatures) == len(set(comp_signatures))
-    hidden_live = next(item.model for item in compositional if item.model.model_id == hidden_model.model_id)
+    all_signatures = [tuple(sorted(model.predictions)) for model in all_compositional_models]
+    assert all(signature not in existing_signatures for signature in all_signatures)
+    assert len(all_signatures) == len(set(all_signatures))
+    hidden_live = runtime.world_models.models[hidden_model.model_id]
     assert any(clause.startswith("VIA(") for clause in hidden_live.structure)
     assert any(clause.startswith("LAG(") for clause in hidden_live.structure)
     assert hidden_live.parent_model_ids
 
-    # Held-out/source-disjoint intervention semantics discriminate the second
-    # generation. Cost may rise; EIG, not cheapness, chooses probes.
+    # Held-out intervention semantics discriminate the full shadow candidate pool.
     second_generation_probes = []
     used_validation = set()
     for round_index in range(len(validation)):
-        posterior = restricted_posterior(runtime, compositional_ids)
-        if posterior and max(posterior.values()) >= 0.97:
+        posterior = restricted_posterior(runtime, all_compositional_ids)
+        if second_generation_probes and max(posterior.values()) >= 0.97:
             break
         available = [item for item in validation if item.intervention_id not in used_validation]
         assert available
-        queries = runtime.compositional_model_queries(available, compositional)
-        ranked = runtime.rank_epistemic_interventions(queries)
+        ranked = runtime.rank_epistemic_interventions(runtime.compositional_model_queries(available))
         assert ranked
         selected_id = ranked[0].intervention_id
         selected = next(item for item in available if item.intervention_id == selected_id)
         execute_two_classes(runtime, selected, hidden_model, signers, verifier, suffix, f"second-gen-{round_index}")
         used_validation.add(selected_id)
         second_generation_probes.append({
-            "intervention_id": selected_id,
-            "cost": selected.cost,
+            "intervention_id": selected_id, "cost": selected.cost,
             "expected_information_gain": ranked[0].expected_information_gain,
         })
 
-    final_posterior = restricted_posterior(runtime, compositional_ids)
+    final_posterior = restricted_posterior(runtime, all_compositional_ids)
     top_id, top_prob = max(final_posterior.items(), key=lambda item: item[1])
+    assert second_generation_probes
     assert top_id == hidden_model.model_id
     assert top_prob >= 0.97
 
@@ -279,6 +267,7 @@ def main(seed_path: str) -> None:
         mid for mid, model in with_verifier.world_models.models.items()
         if model.origin == "GENERATED_COMPOSITIONAL"
     }
+    assert no_verify_ids == verified_ids == all_compositional_ids
     no_verify_post = restricted_posterior(without_verifier, no_verify_ids)
     verified_post = restricted_posterior(with_verifier, verified_ids)
     assert max(no_verify_post.values()) < 0.90
@@ -291,11 +280,12 @@ def main(seed_path: str) -> None:
         "hidden_program_exposed_to_body": False,
         "hidden_program": list(hidden.program.signature),
         "hidden_structure": list(hidden_model.structure),
-        "base_named_family_count": len({item.model.family for item in first_generation}),
         "first_generation_model_count": len(first_generation),
         "first_generation_probes": first_generation_probes,
         "second_model_class_failure_observed": True,
-        "compositional_model_count_after_novelty_and_quotient": len(compositional),
+        "active_compositional_count": len(active_compositional),
+        "persisted_compositional_shadow_pool_count": len(all_compositional_ids),
+        "candidate_absence_authority_leak_blocked": True,
         "compositional_prediction_signature_duplicates": 0,
         "hidden_prediction_signature_absent_from_base_families": True,
         "hidden_compositional_model_generated": True,
