@@ -27,6 +27,13 @@ from .semantic_genesis import (
     SemanticGenesisEngine,
     SemanticQuery,
 )
+from .epistemic_memory import (
+    ConceptRecord,
+    EpistemicMemory,
+    LawRecord,
+    RepresentationMutation,
+)
+from .cognitive_runtime import CognitiveCycle, PersistentCognitiveRuntime
 
 __all__ = [
     "AdaptiveCognitionCompiler",
@@ -50,4 +57,10 @@ __all__ = [
     "ResidualObservation",
     "SemanticGenesisEngine",
     "SemanticQuery",
+    "ConceptRecord",
+    "EpistemicMemory",
+    "LawRecord",
+    "RepresentationMutation",
+    "CognitiveCycle",
+    "PersistentCognitiveRuntime",
 ]
