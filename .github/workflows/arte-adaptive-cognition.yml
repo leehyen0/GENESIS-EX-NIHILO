@@ -31,6 +31,8 @@ jobs:
           python -m py_compile arte_cognition/causal_law.py
           python -m py_compile arte_cognition/causal_model_genesis.py
           python -m py_compile arte_cognition/causal_program_genesis.py
+          python -m py_compile arte_cognition/causal_predicate_genesis.py
+          python -m py_compile arte_cognition/causal_identification.py
           python -m py_compile arte_cognition/representation_genesis.py
           python -m py_compile arte_cognition/representation_value.py
           python -m py_compile arte_cognition/experiment_genesis.py
@@ -54,6 +56,8 @@ jobs:
           python -m py_compile evaluations/run_epistemic_depth_expansion.py
           python -m py_compile evaluations/run_autonomous_causal_model_genesis.py
           python -m py_compile evaluations/run_compositional_causal_grammar_genesis.py
+          python -m py_compile evaluations/run_synthesized_causal_predicate_genesis.py
+          python -m py_compile evaluations/run_autonomous_depth_version_space.py
       - name: Run cognition tests
         run: python -m unittest discover -s arte_cognition -p 'test_*.py' -v
       - name: Generate evaluator-owned hidden world seeds
@@ -71,6 +75,7 @@ jobs:
           Path('/tmp/arte_epistemic_depth_seed').write_text(str(secrets.randbits(128)))
           Path('/tmp/arte_causal_model_genesis_seed').write_text(str(secrets.randbits(128)))
           Path('/tmp/arte_compositional_causal_seed').write_text(str(secrets.randbits(128)))
+          Path('/tmp/arte_causal_predicate_seed').write_text(str(secrets.randbits(128)))
           PY
       - name: Run hidden software-world descendant evaluation
         run: python evaluations/run_hidden_world_coupling.py /tmp/arte_hidden_world_seed
@@ -92,3 +97,5 @@ jobs:
         run: python evaluations/run_autonomous_causal_model_genesis.py /tmp/arte_causal_model_genesis_seed
       - name: Run two-generation compositional causal grammar evaluation
         run: python evaluations/run_compositional_causal_grammar_genesis.py /tmp/arte_compositional_causal_seed
+      - name: Run autonomous depth and exact generation-scoped identification evaluation
+        run: python evaluations/run_autonomous_depth_version_space.py /tmp/arte_causal_predicate_seed
