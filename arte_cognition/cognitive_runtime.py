@@ -5,6 +5,7 @@ from typing import Iterable, List, Optional, Sequence
 
 from .adaptive_cognition import AdaptiveCognitionCompiler, CognitionPlan, ModuleCredit, TaskState
 from .causal_credit import OutcomeAblationCredit, OutcomeAblationCreditEngine
+from .causal_law import CausalLawAssessment, CausalLawEvaluator, InterventionObservation
 from .epistemic_memory import EpistemicMemory, RepresentationMutation
 from .meta_router import OutcomeLearnedCognitionRouter
 from .possibility_space import Fact, OperatorSpec, PossibilityCandidate, PossibilitySpaceGenerator
@@ -16,11 +17,14 @@ from .semantic_genesis import (
     SemanticGenesisEngine,
     SemanticQuery,
 )
+from .topology_learning import CognitionTopologyLearner, MacroCognitionCandidate
 
 
 @dataclass
 class CognitiveCycle:
     plan: CognitionPlan
+    execution_order: List[str]
+    macro_candidates: List[MacroCognitionCandidate]
     possibilities: List[PossibilityCandidate]
     representation_axes: List[RepresentationAxis]
     concepts: List[ConceptCandidate]
@@ -34,29 +38,34 @@ class CognitiveCycle:
 class PersistentCognitiveRuntime:
     """One executable loop from task pressure to self-revising cognition.
 
-    The runtime composes sparse routing, bounded modal generation, measurable
-    representation-axis genesis, residual-driven semantic genesis, reversible
-    epistemic memory, outcome-ablation credit and outcome-learned routing.
-    Generated possibilities/concepts/axes never become evidence merely by existing.
+    The runtime composes sparse routing, bounded topology learning, modal
+    generation, measurable representation-axis genesis, residual-driven semantic
+    genesis, reversible epistemic memory, outcome-ablation credit, causal-law
+    staging and outcome-learned routing. Generated objects never become evidence
+    merely by existing.
     """
 
     def __init__(
         self,
         compiler: Optional[AdaptiveCognitionCompiler] = None,
         router: Optional[OutcomeLearnedCognitionRouter] = None,
+        topology: Optional[CognitionTopologyLearner] = None,
         possibility: Optional[PossibilitySpaceGenerator] = None,
         representation: Optional[RepresentationGenesisEngine] = None,
         semantic: Optional[SemanticGenesisEngine] = None,
         memory: Optional[EpistemicMemory] = None,
         credit_engine: Optional[OutcomeAblationCreditEngine] = None,
+        causal_law: Optional[CausalLawEvaluator] = None,
     ) -> None:
         self.compiler = compiler or AdaptiveCognitionCompiler()
         self.router = router or OutcomeLearnedCognitionRouter(self.compiler)
+        self.topology = topology or CognitionTopologyLearner()
         self.possibility = possibility or PossibilitySpaceGenerator()
         self.representation = representation or RepresentationGenesisEngine()
         self.semantic = semantic or SemanticGenesisEngine()
         self.memory = memory or EpistemicMemory()
         self.credit_engine = credit_engine or OutcomeAblationCreditEngine()
+        self.causal_law = causal_law or CausalLawEvaluator()
 
     def cycle(
         self,
@@ -68,6 +77,8 @@ class PersistentCognitiveRuntime:
         possibility_budget: int = 32,
     ) -> CognitiveCycle:
         plan = self.router.compile(task)
+        execution_order = self.topology.reorder(plan.active_subgraph)
+        macro_candidates = self.topology.propose_macros()
         possibilities = self.possibility.expand(
             facts=facts,
             modal_basis=plan.modal_basis,
@@ -95,6 +106,8 @@ class PersistentCognitiveRuntime:
 
         return CognitiveCycle(
             plan=plan,
+            execution_order=execution_order,
+            macro_candidates=macro_candidates,
             possibilities=possibilities,
             representation_axes=axes,
             concepts=concepts,
@@ -137,7 +150,7 @@ class PersistentCognitiveRuntime:
         ablation_outcomes,
         matched_compute=None,
     ) -> List[OutcomeAblationCredit]:
-        """Preferred learning path: credit from realized module-outcome ablations."""
+        """Preferred module-learning path: realized outcome ablations."""
         credits = self.credit_engine.assign(
             full_outcome=full_outcome,
             ablation_outcomes=ablation_outcomes,
@@ -146,3 +159,14 @@ class PersistentCognitiveRuntime:
         )
         self.router.policy.observe(self.credit_engine.to_router_credits(credits))
         return credits
+
+    def learn_topology(self, sequence, edge_synergy) -> None:
+        """Update routing order only from explicit pair-synergy evidence."""
+        self.topology.observe_sequence(sequence=sequence, edge_synergy=edge_synergy)
+
+    def assess_causal_law(
+        self,
+        law: LawCandidate,
+        observations: Sequence[InterventionObservation],
+    ) -> CausalLawAssessment:
+        return self.causal_law.assess(law, observations)
