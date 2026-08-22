@@ -27,12 +27,11 @@ EPISTEMIC_DEPTH_SCHEMA = "arte.epistemic_depth_same_body/v1"
 class EpistemicallyDeepPersistentCognitiveRuntime(PersistentCognitiveRuntime):
     """Same BODY with staged causal representation expansion.
 
-    Generation 1 searches named structural families, generation 2 composes causal
-    primitives, and generation 3 synthesizes bounded Boolean activation predicates.
-    Each deeper generation is ancestry-gated by independently grounded failure of
-    the current live model class. Evidence-conditioned active candidates are
-    accompanied by unfiltered bounded shadow candidates to avoid authority leakage
-    through candidate-set absence.
+    Candidate *presence* in persistent phenotype is evidence-independent: each
+    generation first builds its unfiltered bounded shadow universe, persists only
+    that universe, and then marks an evidence-compatible subset for immediate
+    reasoning. This prevents evidence-conditioned candidate membership from
+    becoming a covert authority channel across checkpoint/restore.
     """
 
     def __init__(
@@ -56,13 +55,13 @@ class EpistemicallyDeepPersistentCognitiveRuntime(PersistentCognitiveRuntime):
         self.last_epistemic_depth = self.world_models.depth_plan()
 
     @staticmethod
-    def _model_union(*groups) -> List[CausalWorldModel]:
-        by_id = {}
-        for group in groups:
-            for item in group:
-                model = item.model if hasattr(item, "model") else item
-                by_id[model.model_id] = model
-        return list(by_id.values())
+    def _models(items) -> List[CausalWorldModel]:
+        return [item.model if hasattr(item, "model") else item for item in items]
+
+    @staticmethod
+    def _restrict_active_to_shadow(active, shadow):
+        shadow_ids = {item.model.model_id for item in shadow}
+        return [item for item in active if item.model.model_id in shadow_ids]
 
     def generate_replacement_causal_models(
         self,
@@ -71,11 +70,12 @@ class EpistemicallyDeepPersistentCognitiveRuntime(PersistentCognitiveRuntime):
     ) -> List[GeneratedCausalModel]:
         if self.epistemic_depth_plan().mode != "EXPAND_MODEL_CLASS":
             return []
+        shadow = self.model_genesis.generate(variables, descriptors, ())
+        self.world_models.register(self._models(shadow))
         active = self.model_genesis.generate(
             variables, descriptors, self.world_models.authoritative_evidence()
         )
-        shadow = self.model_genesis.generate(variables, descriptors, ())
-        self.world_models.register(self._model_union(shadow, active))
+        active = self._restrict_active_to_shadow(active, shadow)
         self.last_epistemic_depth = self.world_models.depth_plan()
         return active
 
@@ -89,11 +89,12 @@ class EpistemicallyDeepPersistentCognitiveRuntime(PersistentCognitiveRuntime):
         if not any(model.origin == "GENERATED" for model in self.world_models.models.values()):
             return []
         existing = list(self.world_models.models.values())
+        shadow = self.program_genesis.generate_novel(variables, descriptors, (), existing)
+        self.world_models.register(self._models(shadow))
         active = self.program_genesis.generate_novel(
             variables, descriptors, self.world_models.authoritative_evidence(), existing
         )
-        shadow = self.program_genesis.generate_novel(variables, descriptors, (), existing)
-        self.world_models.register(self._model_union(shadow, active))
+        active = self._restrict_active_to_shadow(active, shadow)
         self.last_epistemic_depth = self.world_models.depth_plan()
         return active
 
@@ -102,11 +103,12 @@ class EpistemicallyDeepPersistentCognitiveRuntime(PersistentCognitiveRuntime):
         variables: Sequence[str],
         descriptors: Sequence[InterventionDescriptor],
     ) -> List[GeneratedPredicateModel]:
-        """Open generation 3 only after a compositional lineage is refuted.
+        """Open generation 3 only after compositional lineage failure.
 
-        Predicate synthesis searches bounded DNF over observable intervention atoms.
-        It may express negation/disjunction absent from the fixed causal primitive
-        grammar, but it still does not invent the underlying Boolean metalanguage.
+        The full unfiltered predicate-equivalence universe is built first. If its
+        configured budget truncates that universe, structural promotion fails
+        closed rather than letting an evidence-filtered candidate outside the
+        shadow universe encode authority via checkpoint membership.
         """
         if self.epistemic_depth_plan().mode != "EXPAND_MODEL_CLASS":
             return []
@@ -116,11 +118,16 @@ class EpistemicallyDeepPersistentCognitiveRuntime(PersistentCognitiveRuntime):
         ):
             return []
         existing = list(self.world_models.models.values())
+        shadow = self.predicate_genesis.generate_novel(variables, descriptors, (), existing)
+        shadow_truncated = bool(self.predicate_genesis.last_truncated)
+        self.world_models.register(self._models(shadow))
+        if shadow_truncated:
+            self.last_epistemic_depth = self.world_models.depth_plan()
+            return []
         active = self.predicate_genesis.generate_novel(
             variables, descriptors, self.world_models.authoritative_evidence(), existing
         )
-        shadow = self.predicate_genesis.generate_novel(variables, descriptors, (), existing)
-        self.world_models.register(self._model_union(shadow, active))
+        active = self._restrict_active_to_shadow(active, shadow)
         self.last_epistemic_depth = self.world_models.depth_plan()
         return active
 
