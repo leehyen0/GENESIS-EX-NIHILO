@@ -20,7 +20,8 @@ class GenerationScopedIdentifierTests(unittest.TestCase):
             query_id="q",
             distinguishes={"G3_A": "POSITIVE_EFFECT", "G3_B": "NEGATIVE_EFFECT"},
             cost=1.0,
-            reason="split generation 3",
+            intervention=True,
+            source_class="WORLD",
         )
         ranked = GenerationScopedIdentifier.rank_interventions(
             [candidate], snapshot.compatible_model_ids, cost_exponent=0.0
