@@ -1,11 +1,14 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Dict, Iterable, List, Optional
 
 from .experiment_genesis import InterventionProposal
 from .representation_genesis import RepresentationAxis
 from .semantic_genesis import ConceptCandidate, LawCandidate, ResidualObservation
+
+
+_TRANSFORM_PROGRAM_MARKER = "generator_transform_programs="
 
 
 @dataclass
@@ -47,6 +50,58 @@ class RepresentationMutation:
     target: str
     reason: str
     reversible: bool = True
+
+
+def _transform_program_ids(reason: str) -> tuple[str, ...]:
+    text = str(reason)
+    if _TRANSFORM_PROGRAM_MARKER not in text:
+        return ()
+    tail = text.split(_TRANSFORM_PROGRAM_MARKER, 1)[1].strip().split()[0].rstrip(",;)")
+    return tuple(sorted(set(item for item in tail.split("|") if item)))
+
+
+def _same_exact_intervention_semantics(
+    left: InterventionProposal,
+    right: InterventionProposal,
+) -> bool:
+    """Compare every exact-action field while deliberately excluding provenance text."""
+    return bool(
+        left.experiment_id == right.experiment_id
+        and left.axis_id == right.axis_id
+        and left.manipulated_variable == right.manipulated_variable
+        and left.held_fixed == right.held_fixed
+        and float(left.low_value) == float(right.low_value)
+        and float(left.high_value) == float(right.high_value)
+        and left.predicted_low_side == right.predicted_low_side
+        and left.predicted_high_side == right.predicted_high_side
+        and left.status == right.status
+    )
+
+
+def _merge_transform_provenance(
+    existing: InterventionProposal,
+    incoming: InterventionProposal,
+) -> Optional[InterventionProposal]:
+    """Union generator ancestry when two programs collapse to the same exact intervention.
+
+    Floating-point realization can make distinct nominal generator scales produce the
+    same LOW/HIGH intervention phenotype. Evidence must remain bound to that one exact
+    ExperimentID, but BODY lineage must not lose any generator program that produced
+    the action. This merge is intentionally unavailable when any action-semantic field
+    differs.
+    """
+    if not _same_exact_intervention_semantics(existing, incoming):
+        return None
+    old_ids = _transform_program_ids(existing.reason)
+    new_ids = _transform_program_ids(incoming.reason)
+    if not old_ids or not new_ids:
+        return None
+    merged_ids = tuple(sorted(set(old_ids + new_ids)))
+    if merged_ids == old_ids:
+        return existing
+    prefix = str(existing.reason).split(_TRANSFORM_PROGRAM_MARKER, 1)[0].rstrip()
+    merged_reason = f"{prefix} {_TRANSFORM_PROGRAM_MARKER}{'|'.join(merged_ids)}".strip()
+    return replace(existing, reason=merged_reason)
 
 
 class EpistemicMemory:
@@ -118,6 +173,23 @@ class EpistemicMemory:
                 target=proposal.experiment_id,
                 reason="generated threshold-crossing intervention entered BODY phenotype memory as proposal-only",
             ))
+            return record
+
+        merged = _merge_transform_provenance(record.proposal, proposal)
+        if merged is not None:
+            if merged != record.proposal:
+                record.history.append(record.proposal)
+                record.proposal = merged
+                record.revisions += 1
+                self._append_mutation(RepresentationMutation(
+                    mutation_id=f"MERGE_EXPERIMENT_PROVENANCE::{proposal.experiment_id}::{record.revisions}",
+                    action="EXTEND",
+                    target=proposal.experiment_id,
+                    reason=(
+                        "distinct generated transform programs realized the same exact intervention phenotype; "
+                        "their ancestry was unioned without duplicating world-action authority"
+                    ),
+                ))
             return record
 
         if record.proposal != proposal:
