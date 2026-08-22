@@ -10,6 +10,7 @@ from .causal_model_genesis import CausalModelGenesisEngine, GeneratedCausalModel
 from .causal_predicate_genesis import BooleanCausalPredicateGenesisEngine, GeneratedPredicateModel
 from .causal_program_genesis import CompositionalCausalProgramGenesisEngine, GeneratedCausalProgram
 from .cognitive_runtime import CognitiveCycle, PersistentCognitiveRuntime
+from .intervention_surface_genesis import InterventionSurfaceGenesisEngine
 from .possibility_space import Fact, OperatorSpec
 from .representation_genesis import MeasurementObservation, RepresentationGenesisEngine
 from .semantic_genesis import ResidualObservation
@@ -35,20 +36,34 @@ class CausalExpansionDecision:
     reason: str
 
 
+@dataclass(frozen=True)
+class SynthesizedInterventionDecision:
+    status: str
+    generation: int
+    descriptor: Optional[InterventionDescriptor]
+    expected_information_gain: float
+    version_space_size: int
+    generated_surface_size: int
+    reason: str
+
+
 class EpistemicallyDeepPersistentCognitiveRuntime(PersistentCognitiveRuntime):
-    """Same BODY with staged causal representation expansion.
+    """Same BODY with staged causal representation and intervention expansion.
 
     Candidate *presence* in persistent phenotype is evidence-independent: each
-    generation first builds its unfiltered bounded shadow universe, persists only
-    that universe, and then marks an evidence-compatible subset for immediate
-    reasoning. This prevents evidence-conditioned candidate membership from
-    becoming a covert authority channel across checkpoint/restore.
+    structural generation first builds its unfiltered bounded shadow universe and
+    then marks an evidence-compatible subset for immediate reasoning.
 
     Structural depth is selected by the BODY itself. Independently authenticated
-    failure opens exactly the next generation supported by ancestry: named causal
+    failure opens exactly the next ancestry-supported generation: named causal
     families (G1), compositional causal programs (G2), then synthesized Boolean
     activation predicates (G3). Exact identification is generation-scoped so older
     lineage cannot dilute a current generation's experiment-information gain.
+
+    The BODY can also synthesize concrete intervention semantics from observable
+    variables. External evaluation therefore need not hand-author the decisive
+    target/block/delay/context probe. Search remains bounded by a human-authored
+    intervention capability schema; the concrete intervention surface is generated.
     """
 
     def __init__(
@@ -58,6 +73,7 @@ class EpistemicallyDeepPersistentCognitiveRuntime(PersistentCognitiveRuntime):
         model_genesis: Optional[CausalModelGenesisEngine] = None,
         program_genesis: Optional[CompositionalCausalProgramGenesisEngine] = None,
         predicate_genesis: Optional[BooleanCausalPredicateGenesisEngine] = None,
+        intervention_surface: Optional[InterventionSurfaceGenesisEngine] = None,
         **kwargs,
     ) -> None:
         super().__init__(*args, **kwargs)
@@ -65,6 +81,7 @@ class EpistemicallyDeepPersistentCognitiveRuntime(PersistentCognitiveRuntime):
         self.model_genesis = model_genesis or CausalModelGenesisEngine()
         self.program_genesis = program_genesis or CompositionalCausalProgramGenesisEngine()
         self.predicate_genesis = predicate_genesis or BooleanCausalPredicateGenesisEngine()
+        self.intervention_surface = intervention_surface or InterventionSurfaceGenesisEngine()
         self.identifier = GenerationScopedIdentifier()
         self.last_epistemic_depth = self.world_models.depth_plan()
 
@@ -125,6 +142,52 @@ class EpistemicallyDeepPersistentCognitiveRuntime(PersistentCognitiveRuntime):
             cost_exponent=0.15,
         )
 
+    def synthesize_intervention_surface(
+        self,
+        variables: Sequence[str],
+        observed_intervention_ids: Sequence[str] = (),
+    ) -> List[InterventionDescriptor]:
+        return self.intervention_surface.novel(variables, observed_intervention_ids)
+
+    def select_synthesized_generation_intervention(
+        self,
+        generation: int,
+        variables: Sequence[str],
+        observed_intervention_ids: Sequence[str] = (),
+    ) -> SynthesizedInterventionDecision:
+        """Generate and select a new intervention without evaluator-authored probes."""
+        snapshot = self.generation_version_space(generation)
+        if snapshot.identified:
+            return SynthesizedInterventionDecision(
+                "ALREADY_IDENTIFIED", generation, None, 0.0,
+                len(snapshot.compatible_model_ids), 0,
+                "exact version space already contains one model",
+            )
+        surface = self.synthesize_intervention_surface(variables, observed_intervention_ids)
+        if self.intervention_surface.last_truncated:
+            return SynthesizedInterventionDecision(
+                "FAIL_CLOSED_TRUNCATED_INTERVENTION_SURFACE", generation, None, 0.0,
+                len(snapshot.compatible_model_ids), len(surface),
+                "generated intervention universe exceeded bounded surface budget",
+            )
+        models = self.structural_models(generation)
+        queries = self.model_genesis.query_candidates(surface, models)
+        selected = self.select_generation_intervention(generation, queries)
+        if selected is None or selected.expected_information_gain <= 0.0:
+            return SynthesizedInterventionDecision(
+                "NO_DISCRIMINATING_INTERVENTION", generation, None, 0.0,
+                len(snapshot.compatible_model_ids), len(surface),
+                "generated interventions cannot split the current exact version space",
+            )
+        descriptor = next(
+            row for row in surface if row.intervention_id == selected.intervention_id
+        )
+        return SynthesizedInterventionDecision(
+            "SELECTED", generation, descriptor, selected.expected_information_gain,
+            len(snapshot.compatible_model_ids), len(surface),
+            "BODY-generated intervention maximizes generation-scoped information utility",
+        )
+
     def generate_replacement_causal_models(
         self,
         variables: Sequence[str],
@@ -165,13 +228,7 @@ class EpistemicallyDeepPersistentCognitiveRuntime(PersistentCognitiveRuntime):
         variables: Sequence[str],
         descriptors: Sequence[InterventionDescriptor],
     ) -> List[GeneratedPredicateModel]:
-        """Open generation 3 only after compositional lineage failure.
-
-        The full unfiltered predicate-equivalence universe is built first. If its
-        configured budget truncates that universe, structural promotion fails
-        closed rather than letting an evidence-filtered candidate outside the
-        shadow universe encode authority via checkpoint membership.
-        """
+        """Open generation 3 only after compositional lineage failure."""
         if self.epistemic_depth_plan().mode != "EXPAND_MODEL_CLASS":
             return []
         if not any(
@@ -198,12 +255,7 @@ class EpistemicallyDeepPersistentCognitiveRuntime(PersistentCognitiveRuntime):
         variables: Sequence[str],
         descriptors: Sequence[InterventionDescriptor],
     ) -> CausalExpansionDecision:
-        """Autonomously open exactly the next structural generation.
-
-        The caller supplies observable variables/intervention semantics, but does
-        not choose the generator. The BODY uses authenticated class failure plus
-        inherited structural ancestry to decide how much deeper to search.
-        """
+        """Autonomously open exactly the next structural generation."""
         if self.epistemic_depth_plan().mode != "EXPAND_MODEL_CLASS":
             return CausalExpansionDecision(
                 "NO_EXPANSION_REQUIRED", self.latest_structural_generation(), "NONE", (), (),
