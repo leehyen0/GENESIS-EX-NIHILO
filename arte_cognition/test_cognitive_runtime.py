@@ -18,8 +18,9 @@ class CognitiveRuntimeTests(unittest.TestCase):
         residuals = [
             ResidualObservation("r1", ("startup", "loaded"), "JERK"),
             ResidualObservation("r2", ("startup", "loaded"), "JERK"),
-            ResidualObservation("r3", ("steady",), "OK"),
+            ResidualObservation("r3", ("startup", "loaded"), "JERK"),
             ResidualObservation("r4", ("steady",), "OK"),
+            ResidualObservation("r5", ("steady",), "OK"),
             ResidualObservation("h1", ("startup", "loaded"), "JERK", heldout=True),
         ]
         cycle = runtime.cycle(
