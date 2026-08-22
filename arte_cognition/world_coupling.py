@@ -71,6 +71,15 @@ class AxisWorldSummary:
     routing_score: float
 
 
+@dataclass(frozen=True)
+class WorldTransportAssessment:
+    status: str
+    safe_for_global_transport: bool
+    evidence_ready_contexts: Tuple[str, ...]
+    top_axis_by_context: Tuple[Tuple[str, str], ...]
+    reasons: Tuple[str, ...]
+
+
 class WorldExecutor(Protocol):
     def execute(
         self,
@@ -84,11 +93,11 @@ class WorldExecutor(Protocol):
 class WorldCouplingEngine:
     """Consume external intervention consequences and change future behavior.
 
-    World value is conditioned on context/regime when one is supplied. This avoids
-    transporting a cognition/intervention preference that was useful in one world
-    regime into another merely because the axis name is the same. Evidence is
-    deduplicated by evaluator/challenge identity; unmatched-budget or non-external
-    events remain auditable but cannot steer future experiment order.
+    World value is conditioned on context/regime when one is supplied. When the
+    caller omits context, the BODY first checks whether independently supported
+    regimes agree on the same preferred intervention. If they conflict, learned
+    global transport is blocked and proposal order is left unchanged rather than
+    averaging incompatible worlds into a false universal policy.
     """
 
     def __init__(self, min_independent_classes: int = 2) -> None:
@@ -187,10 +196,10 @@ class WorldCouplingEngine:
             routing_score=routing_score,
         )
 
-    def rank_proposals(
+    def _rank_without_transport_guard(
         self,
         proposals: Sequence[InterventionProposal],
-        context_id: Optional[str] = None,
+        context_id: Optional[str],
     ) -> List[InterventionProposal]:
         indexed = list(enumerate(proposals))
         return [
@@ -203,6 +212,67 @@ class WorldCouplingEngine:
                 ),
             )
         ]
+
+    def assess_transport(
+        self,
+        proposals: Sequence[InterventionProposal],
+    ) -> WorldTransportAssessment:
+        contexts = sorted({
+            pair.context_id for pair in self.pairs
+            if pair.matched_budget and pair.externally_generated
+        })
+        evidence_ready: List[str] = []
+        top_by_context: List[Tuple[str, str]] = []
+
+        for context in contexts:
+            summaries = [self.summary(item.axis_id, context_id=context) for item in proposals]
+            if not summaries or max(s.independent_evidence_classes for s in summaries) < self.min_independent_classes:
+                continue
+            ranked = self._rank_without_transport_guard(proposals, context)
+            if not ranked:
+                continue
+            evidence_ready.append(context)
+            top_by_context.append((context, ranked[0].axis_id))
+
+        reasons: List[str] = []
+        if len(evidence_ready) < 2:
+            return WorldTransportAssessment(
+                status="GLOBAL_TRANSPORT_NOT_CONTRADICTED",
+                safe_for_global_transport=True,
+                evidence_ready_contexts=tuple(evidence_ready),
+                top_axis_by_context=tuple(top_by_context),
+                reasons=("fewer than two independently supported regimes available",),
+            )
+
+        distinct_tops = {axis_id for _, axis_id in top_by_context}
+        if len(distinct_tops) > 1:
+            reasons.append("independently supported regimes prefer different interventions")
+            return WorldTransportAssessment(
+                status="REGIME_CONFLICT_BLOCK_GLOBAL_TRANSPORT",
+                safe_for_global_transport=False,
+                evidence_ready_contexts=tuple(evidence_ready),
+                top_axis_by_context=tuple(top_by_context),
+                reasons=tuple(reasons),
+            )
+
+        return WorldTransportAssessment(
+            status="GLOBAL_TRANSPORT_SUPPORTED_BOUNDED",
+            safe_for_global_transport=True,
+            evidence_ready_contexts=tuple(evidence_ready),
+            top_axis_by_context=tuple(top_by_context),
+            reasons=("supported regimes agree on the same preferred intervention",),
+        )
+
+    def rank_proposals(
+        self,
+        proposals: Sequence[InterventionProposal],
+        context_id: Optional[str] = None,
+    ) -> List[InterventionProposal]:
+        if context_id is None:
+            assessment = self.assess_transport(proposals)
+            if not assessment.safe_for_global_transport:
+                return list(proposals)
+        return self._rank_without_transport_guard(proposals, context_id)
 
     def restore_pairs(self, pairs: Iterable[WorldOutcomePair]) -> None:
         self.pairs = []
