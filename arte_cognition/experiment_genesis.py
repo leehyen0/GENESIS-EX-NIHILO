@@ -148,7 +148,7 @@ class ExperimentGenesisEngine:
             if a in reference_values and abs(float(reference_values[a])) > 1e-12:
                 a0 = float(reference_values[a])
                 low_product, high_product = self._around(threshold)
-                add(b, a0 - high_product, a0 - low_product, {a: a0}, "cross interaction threshold while holding first parent fixed")
+                add(b, low_product / a0, high_product / a0, {a: a0}, "cross interaction threshold while holding first parent fixed")
 
         elif axis.family == "DERIVATIVE" and len(axis.inputs) == 1:
             variable = axis.inputs[0]
