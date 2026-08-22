@@ -16,6 +16,34 @@ DEFAULT_TRANSFORM_SIGNATURE_ANCHORS: Tuple[float, ...] = (1.5, 2.0, 3.0, 4.0, 8.
 DEEP_TRANSFORM_SIGNATURE_ANCHORS: Tuple[float, ...] = (32.0, 64.0, 128.0, 256.0, 512.0, 1024.0)
 
 
+def normalize_transform_primitive(spec: str) -> Optional[str]:
+    """Normalize one bounded unary transform primitive specification.
+
+    LOG and INV remain the default human-authored alphabet. Parameterized POW:p is
+    a bounded meta-language extension: the parameter candidate can be generated
+    without world outcomes while world evidence separately decides whether it earns
+    authority. Identity-like p=1, inverse-duplicate p=-1, zero, non-finite, and
+    extreme exponents are rejected so primitive search does not smuggle old atoms or
+    unbounded numeric programs into the grammar.
+    """
+    text = str(spec).strip().upper().replace(" ", "")
+    if text in {"LOG", "INV"}:
+        return text
+    if not text.startswith("POW:"):
+        return None
+    try:
+        exponent = float(text.split(":", 1)[1])
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(exponent) or abs(exponent) <= 1e-12:
+        return None
+    if abs(exponent) > 4.0:
+        return None
+    if abs(exponent - 1.0) <= 1e-12 or abs(exponent + 1.0) <= 1e-12:
+        return None
+    return f"POW:{exponent:g}"
+
+
 @dataclass(frozen=True)
 class ProjectionTransformProgram:
     program_id: str
@@ -34,6 +62,12 @@ class ProjectionTransformProgram:
                 if abs(value) <= 1e-12:
                     return None
                 result = 1.0 / value
+            elif op.startswith("POW:"):
+                primitive = normalize_transform_primitive(op)
+                if primitive is None or value <= 0.0:
+                    return None
+                exponent = float(primitive.split(":", 1)[1])
+                result = math.pow(value, exponent)
             else:
                 return None
         except (ValueError, OverflowError, ZeroDivisionError):
@@ -51,6 +85,13 @@ class ProjectionTransformProgram:
                 if abs(value) <= 1e-12:
                     return None
                 result = 1.0 / value
+            elif op.startswith("POW:"):
+                primitive = normalize_transform_primitive(op)
+                if primitive is None or value <= 0.0:
+                    return None
+                exponent = float(primitive.split(":", 1)[1])
+                inverse_exponent = 1.0 / exponent
+                result = math.pow(value, inverse_exponent)
             else:
                 return None
         except (ValueError, OverflowError, ZeroDivisionError):
@@ -140,20 +181,22 @@ def generate_projection_transform_programs(
 ) -> Tuple[ProjectionTransformProgram, ...]:
     """Generate and quotient a bounded transform grammar without world outcomes.
 
-    The grammar contains only primitive unary transforms. Named interpolation
-    families are not enumerated: each retained transform sequence is wrapped in the
-    same inverse-transform/weighted-mix construction and identified by its primitive
-    ancestry. Equivalent transform sequences are quotiented by anchor signatures.
+    The grammar contains only normalized unary transform primitives. Named
+    interpolation families are not enumerated: each retained transform sequence is
+    wrapped in the same inverse-transform/weighted-mix construction and identified
+    by its primitive ancestry. Equivalent transform sequences are quotiented by
+    anchor signatures.
 
     `signature_anchors` is a representation-domain parameter, not evidence. Deeper
     nested logarithms require a positive high-magnitude quotient domain; callers may
     therefore use `DEEP_TRANSFORM_SIGNATURE_ANCHORS` without exposing world outcomes.
     """
-    primitive_set = tuple(sorted(set(
-        str(item).upper()
-        for item in primitives
-        if str(item).upper() in {"LOG", "INV"}
-    )))
+    normalized = []
+    for item in primitives:
+        primitive = normalize_transform_primitive(str(item))
+        if primitive is not None:
+            normalized.append(primitive)
+    primitive_set = tuple(sorted(set(normalized)))
     anchors = tuple(float(value) for value in signature_anchors)
     if not anchors:
         anchors = DEFAULT_TRANSFORM_SIGNATURE_ANCHORS
