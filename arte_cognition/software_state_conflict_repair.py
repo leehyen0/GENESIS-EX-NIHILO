@@ -51,7 +51,97 @@ def _generated_override(strategy_id: str) -> str:
     strategy = str(strategy_id)
     if strategy not in STATE_CONFLICT_STRATEGIES:
         raise ValueError(f"unknown state-conflict strategy: {strategy}")
-    return f'''\n\n# ARTE generated bounded state-conflict repair candidate.\nfrom dataclasses import replace as _arte_state_replace\n\n_ARTE_STATE_STRATEGY = {strategy!r}\n_ARTE_TRANSFORM_MARKER = "generator_transform_programs="\n\ndef _arte_transform_ids(reason):\n    text = str(reason)\n    if _ARTE_TRANSFORM_MARKER not in text:\n        return ()\n    tail = text.split(_ARTE_TRANSFORM_MARKER, 1)[1].strip().split()[0].rstrip(",;)")\n    return tuple(sorted(set(item for item in tail.split("|") if item)))\n\ndef _arte_same_exact_action(left, right):\n    return bool(\n        left.experiment_id == right.experiment_id\n        and left.axis_id == right.axis_id\n        and left.manipulated_variable == right.manipulated_variable\n        and left.held_fixed == right.held_fixed\n        and float(left.low_value) == float(right.low_value)\n        and float(left.high_value) == float(right.high_value)\n        and left.predicted_low_side == right.predicted_low_side\n        and left.predicted_high_side == right.predicted_high_side\n        and left.status == right.status\n    )\n\ndef _arte_union_provenance(existing, incoming):\n    old_ids = _arte_transform_ids(existing.reason)\n    new_ids = _arte_transform_ids(incoming.reason)\n    if not old_ids or not new_ids:\n        return None\n    if _ARTE_STATE_STRATEGY == "EXACT_ACTION_PROVENANCE_UNION" and not _arte_same_exact_action(existing, incoming):\n        return None\n    if _ARTE_STATE_STRATEGY not in ("ID_ONLY_PROVENANCE_UNION", "EXACT_ACTION_PROVENANCE_UNION"):\n        return None\n    merged_ids = tuple(sorted(set(old_ids + new_ids)))\n    prefix = str(existing.reason).split(_ARTE_TRANSFORM_MARKER, 1)[0].rstrip()\n    reason = f"{prefix} {_ARTE_TRANSFORM_MARKER}{'|'.join(merged_ids)}".strip()\n    return _arte_state_replace(existing, reason=reason)\n\ndef _arte_state_conflict_remember_experiment(self, proposal):\n    record = self.experiments.get(proposal.experiment_id)\n    if record is None:\n        record = ExperimentRecord(proposal=proposal)\n        self.experiments[proposal.experiment_id] = record\n        self._append_mutation(RepresentationMutation(\n            mutation_id="PERSIST_EXPERIMENT::" + proposal.experiment_id,\n            action="EXTEND",\n            target=proposal.experiment_id,\n            reason="generated threshold-crossing intervention entered BODY phenotype memory as proposal-only",\n        ))\n        return record\n\n    if record.proposal == proposal:\n        return record\n\n    if _ARTE_STATE_STRATEGY == "KEEP_FIRST":\n        return record\n\n    merged = _arte_union_provenance(record.proposal, proposal)\n    if merged is not None:\n        if merged != record.proposal:\n            record.history.append(record.proposal)\n            record.proposal = merged\n            record.revisions += 1\n            record.status = "PROPOSAL_ONLY"\n            self._append_mutation(RepresentationMutation(\n                mutation_id=f"MERGE_EXPERIMENT_PROVENANCE::{proposal.experiment_id}::{record.revisions}",\n                action="EXTEND",\n                target=proposal.experiment_id,\n                reason="generated state-conflict candidate unioned transform ancestry under its bounded conflict semantics",\n            ))\n        return record\n\n    record.history.append(record.proposal)\n    record.proposal = proposal\n    record.revisions += 1\n    record.status = "PROPOSAL_ONLY"\n    self._append_mutation(RepresentationMutation(\n        mutation_id=f"REVISE_EXPERIMENT::{proposal.experiment_id}::{record.revisions}",\n        action="REVISE",\n        target=proposal.experiment_id,\n        reason="representation revision changed the generated intervention definition",\n    ))\n    return record\n\nEpistemicMemory.remember_experiment = _arte_state_conflict_remember_experiment\n'''
+    template = '''
+
+# ARTE generated bounded state-conflict repair candidate.
+from dataclasses import replace as _arte_state_replace
+
+_ARTE_STATE_STRATEGY = __ARTE_STATE_STRATEGY__
+_ARTE_TRANSFORM_MARKER = "generator_transform_programs="
+
+def _arte_transform_ids(reason):
+    text = str(reason)
+    if _ARTE_TRANSFORM_MARKER not in text:
+        return ()
+    tail = text.split(_ARTE_TRANSFORM_MARKER, 1)[1].strip().split()[0].rstrip(",;)")
+    return tuple(sorted(set(item for item in tail.split("|") if item)))
+
+def _arte_same_exact_action(left, right):
+    return bool(
+        left.experiment_id == right.experiment_id
+        and left.axis_id == right.axis_id
+        and left.manipulated_variable == right.manipulated_variable
+        and left.held_fixed == right.held_fixed
+        and float(left.low_value) == float(right.low_value)
+        and float(left.high_value) == float(right.high_value)
+        and left.predicted_low_side == right.predicted_low_side
+        and left.predicted_high_side == right.predicted_high_side
+        and left.status == right.status
+    )
+
+def _arte_union_provenance(existing, incoming):
+    old_ids = _arte_transform_ids(existing.reason)
+    new_ids = _arte_transform_ids(incoming.reason)
+    if not old_ids or not new_ids:
+        return None
+    if _ARTE_STATE_STRATEGY == "EXACT_ACTION_PROVENANCE_UNION" and not _arte_same_exact_action(existing, incoming):
+        return None
+    if _ARTE_STATE_STRATEGY not in ("ID_ONLY_PROVENANCE_UNION", "EXACT_ACTION_PROVENANCE_UNION"):
+        return None
+    merged_ids = tuple(sorted(set(old_ids + new_ids)))
+    prefix = str(existing.reason).split(_ARTE_TRANSFORM_MARKER, 1)[0].rstrip()
+    reason = f"{prefix} {_ARTE_TRANSFORM_MARKER}{'|'.join(merged_ids)}".strip()
+    return _arte_state_replace(existing, reason=reason)
+
+def _arte_state_conflict_remember_experiment(self, proposal):
+    record = self.experiments.get(proposal.experiment_id)
+    if record is None:
+        record = ExperimentRecord(proposal=proposal)
+        self.experiments[proposal.experiment_id] = record
+        self._append_mutation(RepresentationMutation(
+            mutation_id="PERSIST_EXPERIMENT::" + proposal.experiment_id,
+            action="EXTEND",
+            target=proposal.experiment_id,
+            reason="generated threshold-crossing intervention entered BODY phenotype memory as proposal-only",
+        ))
+        return record
+
+    if record.proposal == proposal:
+        return record
+
+    if _ARTE_STATE_STRATEGY == "KEEP_FIRST":
+        return record
+
+    merged = _arte_union_provenance(record.proposal, proposal)
+    if merged is not None:
+        if merged != record.proposal:
+            record.history.append(record.proposal)
+            record.proposal = merged
+            record.revisions += 1
+            record.status = "PROPOSAL_ONLY"
+            self._append_mutation(RepresentationMutation(
+                mutation_id=f"MERGE_EXPERIMENT_PROVENANCE::{proposal.experiment_id}::{record.revisions}",
+                action="EXTEND",
+                target=proposal.experiment_id,
+                reason="generated state-conflict candidate unioned transform ancestry under its bounded conflict semantics",
+            ))
+        return record
+
+    record.history.append(record.proposal)
+    record.proposal = proposal
+    record.revisions += 1
+    record.status = "PROPOSAL_ONLY"
+    self._append_mutation(RepresentationMutation(
+        mutation_id=f"REVISE_EXPERIMENT::{proposal.experiment_id}::{record.revisions}",
+        action="REVISE",
+        target=proposal.experiment_id,
+        reason="representation revision changed the generated intervention definition",
+    ))
+    return record
+
+EpistemicMemory.remember_experiment = _arte_state_conflict_remember_experiment
+'''
+    return template.replace("__ARTE_STATE_STRATEGY__", repr(strategy))
 
 
 def apply_state_conflict_strategy(historical_source: str, strategy_id: str) -> str:
