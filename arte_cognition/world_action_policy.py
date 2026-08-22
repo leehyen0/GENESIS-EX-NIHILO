@@ -20,12 +20,37 @@ class WorldActionDecision:
 class EvidenceBoundWorldActionPolicy:
     """Separate experimental generation from evidence-supported action choice.
 
-    Generated interventions remain exploration candidates. They do not become a
-    learned action preference merely because the BODY can propose them. A proposal
-    is selected for exploitation only after its axis has enough authenticated,
-    matched, independent world-outcome evidence. Contextless action also obeys the
-    transportability guard: conflicting supported regimes force abstention.
+    Authority is bound to the exact generated `experiment_id`, not merely the
+    representation axis. Evidence that one manipulation of an axis works cannot
+    promote another manipulation on the same axis. This closes an action-authority
+    aliasing path while keeping proposal generation cheap and exploratory.
     """
+
+    @staticmethod
+    def _experiment_evidence(
+        proposal: InterventionProposal,
+        world: WorldCouplingEngine,
+        context_id: Optional[str],
+    ) -> tuple[int, float]:
+        valid = [
+            pair for pair in world.pairs
+            if pair.experiment_id == proposal.experiment_id
+            and pair.axis_id == proposal.axis_id
+            and pair.matched_budget
+            and pair.externally_generated
+            and pair.authority_verified
+            and pair.independence_class_id != "UNVERIFIED"
+            and (context_id is None or pair.context_id == context_id)
+        ]
+        by_class = {}
+        for pair in valid:
+            by_class.setdefault(pair.independence_class_id, pair)
+        unique = list(by_class.values())
+        if not unique:
+            return 0, 0.0
+        mean_abs_effect = sum(abs(pair.effect) for pair in unique) / len(unique)
+        independence_factor = min(1.0, len(unique) / world.min_independent_classes)
+        return len(unique), mean_abs_effect * independence_factor
 
     def select(
         self,
@@ -56,13 +81,10 @@ class EvidenceBoundWorldActionPolicy:
                 )
 
         supported = []
-        for proposal in proposals:
-            summary = world.summary(proposal.axis_id, context_id=context_id)
-            if (
-                summary.independent_evidence_classes >= world.min_independent_classes
-                and summary.routing_score > 0.0
-            ):
-                supported.append((proposal, summary))
+        for index, proposal in enumerate(proposals):
+            evidence_classes, score = self._experiment_evidence(proposal, world, context_id)
+            if evidence_classes >= world.min_independent_classes and score > 0.0:
+                supported.append((proposal, evidence_classes, score, index))
 
         if not supported:
             return WorldActionDecision(
@@ -72,22 +94,19 @@ class EvidenceBoundWorldActionPolicy:
                 independent_evidence_classes=0,
                 routing_score=0.0,
                 reasons=(
-                    "generated experiments may be explored, but no action has enough authenticated independent world evidence",
+                    "generated experiments may be explored, but no exact experiment has enough authenticated independent world evidence",
                 ),
             )
 
-        supported_ids = {proposal.experiment_id for proposal, _ in supported}
-        ranked = world.rank_proposals(proposals, context_id=context_id)
-        chosen = next(
-            proposal for proposal in ranked
-            if proposal.experiment_id in supported_ids
-        )
-        summary = world.summary(chosen.axis_id, context_id=context_id)
+        chosen, evidence_classes, score, _ = sorted(
+            supported,
+            key=lambda item: (-item[2], item[3], item[0].experiment_id),
+        )[0]
         return WorldActionDecision(
             status="WORLD_SUPPORTED_ACTION",
             proposal=chosen,
             context_id=context_id,
-            independent_evidence_classes=summary.independent_evidence_classes,
-            routing_score=summary.routing_score,
-            reasons=("authenticated independent world outcomes support this action preference",),
+            independent_evidence_classes=evidence_classes,
+            routing_score=score,
+            reasons=("authenticated independent world outcomes support this exact generated experiment",),
         )
