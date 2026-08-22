@@ -29,7 +29,11 @@ jobs:
           python -m py_compile arte_cognition/causal_credit.py
           python -m py_compile arte_cognition/causal_law.py
           python -m py_compile arte_cognition/representation_genesis.py
+          python -m py_compile arte_cognition/representation_value.py
+          python -m py_compile arte_cognition/experiment_genesis.py
+          python -m py_compile arte_cognition/subgraph_credit.py
           python -m py_compile arte_cognition/topology_learning.py
+          python -m py_compile arte_cognition/validation_matrix.py
           python -m py_compile arte_cognition/cognitive_runtime.py
           python -m py_compile arte_cognition/body_checkpoint.py
       - name: Run cognition tests
