@@ -89,8 +89,6 @@ def main(seed_path: str) -> None:
     assert counterexample_pool
     counterexample = rng.choice(counterexample_pool)
 
-    # BODY's sole identified G3 model predicts no effect everywhere. The actual
-    # hidden world differs at one post-checkout random, unobserved intervention.
     model = CausalWorldModel(
         "IDENTIFIED_G3_MODEL", 1.0,
         tuple((row.intervention_id, "NO_EFFECT") for row in full_surface),
@@ -112,7 +110,6 @@ def main(seed_path: str) -> None:
         f"issuer-b-{suffix}": "independent-B",
     })
 
-    # Establish that the sole model has at least one independently confirmed test.
     execute_two(runtime, confirm, counterexample.intervention_id, signers, verifier, suffix, "confirm")
     initial = runtime.generation_version_space(3)
     assert initial.identified and initial.identified_model_id == model.model_id
@@ -145,9 +142,19 @@ def main(seed_path: str) -> None:
     final_space = runtime.generation_version_space(3)
     assert len(final_space.compatible_model_ids) == 0
     assert runtime.epistemic_depth_plan().mode == "EXPAND_MODEL_CLASS"
+
+    # Reopening a frontier is distinct from proving that the *next* bounded grammar
+    # can explain an arbitrary random counterexample. BODY must attempt G4 rather
+    # than remain falsely confident or report the old G3 maximum. The dedicated G4
+    # hidden evaluation separately requires an expressible G4 world to be recovered.
     frontier = runtime.expand_causal_model_class(variables, full_surface)
-    assert frontier.status == "MAX_GENERATION_REACHED"
-    assert frontier.generation == 3
+    assert frontier.generation == 4
+    assert frontier.status != "MAX_GENERATION_REACHED"
+    assert frontier.status in {
+        "EXPANDED",
+        "NO_EVIDENCE_COMPATIBLE_CANDIDATES",
+        "NO_STRUCTURAL_CANDIDATES",
+    }
 
     payload = epistemic_checkpoint_dict(runtime)
     no_verify = restore_epistemic_runtime(payload, world_verifier=None)
@@ -167,14 +174,17 @@ def main(seed_path: str) -> None:
         "challenge_count_until_counterexample": len(challenge_trace),
         "challenge_trace": challenge_trace,
         "final_generation_3_version_space": len(final_space.compatible_model_ids),
-        "model_class_reopened": runtime.epistemic_depth_plan().mode == "EXPAND_MODEL_CLASS",
+        "model_class_reopened": True,
         "next_structural_frontier_status": frontier.status,
+        "next_structural_frontier_generation": frontier.generation,
+        "next_structural_frontier_origin": frontier.origin,
+        "next_grammar_adequacy_not_assumed": True,
         "verifierless_descendant_identified_model": no_verify_space.identified_model_id,
         "reverified_descendant_generation_falsified": reverified.generation_falsified(3),
         "identified_equals_true_assumption": False,
         "bounded_surface_exhaustive_if_needed": True,
         "intervention_capability_schema_human_authored": True,
-        "generation_beyond_3": False,
+        "generation_beyond_4": False,
         "physical_world": False,
         "global_recursive_acceleration": False,
         "foundation_weight_change": False,

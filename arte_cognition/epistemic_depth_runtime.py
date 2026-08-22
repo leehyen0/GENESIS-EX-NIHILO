@@ -15,6 +15,7 @@ from .model_falsification import ModelFalsificationPolicy
 from .possibility_space import Fact, OperatorSpec
 from .representation_genesis import MeasurementObservation, RepresentationGenesisEngine
 from .semantic_genesis import ResidualObservation
+from .sparse_minterm_genesis import GeneratedSparseMintermModel, SparseMintermCausalGenesisEngine
 from .world_coupling import WorldExecutor, WorldOutcomePair, WorldReceiptVerifier
 from .world_model_ecology import (
     CausalWorldModel,
@@ -60,18 +61,17 @@ class FalsificationDecision:
 
 
 class EpistemicallyDeepPersistentCognitiveRuntime(PersistentCognitiveRuntime):
-    """Same BODY with staged causal representation, intervention, and falsification.
+    """Same BODY with causal representation, intervention and falsification growth.
 
-    Structural depth is selected by the BODY itself. Independently authenticated
-    failure opens exactly the next ancestry-supported generation: named causal
-    families (G1), compositional causal programs (G2), then synthesized Boolean
-    activation predicates (G3). Exact identification is generation-scoped.
+    Structural depth is selected by the BODY from authenticated class failure plus
+    inherited ancestry: named families (G1), primitive composition (G2), bounded
+    Boolean predicates (G3), then falsification-driven sparse exact-minterm gates
+    (G4). G4 is not a new logical metalanguage: it expands Boolean complexity only
+    after G3 has failed in the world.
 
-    Concrete intervention semantics are synthesized from observable variables, so
-    external evaluation need not hand-author the decisive probe. Importantly,
-    exact identification is not treated as truth: when one model remains, a
-    separate falsification objective searches unobserved semantic regimes for
-    counterexamples. Thus `identified != true` is represented operationally.
+    Concrete intervention semantics are synthesized from observable variables.
+    Exact identification is not treated as truth; a separate falsification policy
+    continues challenging a sole model in untested semantic regimes.
     """
 
     def __init__(
@@ -81,6 +81,7 @@ class EpistemicallyDeepPersistentCognitiveRuntime(PersistentCognitiveRuntime):
         model_genesis: Optional[CausalModelGenesisEngine] = None,
         program_genesis: Optional[CompositionalCausalProgramGenesisEngine] = None,
         predicate_genesis: Optional[BooleanCausalPredicateGenesisEngine] = None,
+        minterm_genesis: Optional[SparseMintermCausalGenesisEngine] = None,
         intervention_surface: Optional[InterventionSurfaceGenesisEngine] = None,
         falsification_policy: Optional[ModelFalsificationPolicy] = None,
         **kwargs,
@@ -90,6 +91,7 @@ class EpistemicallyDeepPersistentCognitiveRuntime(PersistentCognitiveRuntime):
         self.model_genesis = model_genesis or CausalModelGenesisEngine()
         self.program_genesis = program_genesis or CompositionalCausalProgramGenesisEngine()
         self.predicate_genesis = predicate_genesis or BooleanCausalPredicateGenesisEngine()
+        self.minterm_genesis = minterm_genesis or SparseMintermCausalGenesisEngine()
         self.intervention_surface = intervention_surface or InterventionSurfaceGenesisEngine()
         self.falsification_policy = falsification_policy or ModelFalsificationPolicy()
         self.identifier = GenerationScopedIdentifier()
@@ -178,8 +180,7 @@ class EpistemicallyDeepPersistentCognitiveRuntime(PersistentCognitiveRuntime):
                 len(snapshot.compatible_model_ids), len(surface),
                 "generated intervention universe exceeded bounded surface budget",
             )
-        models = self.structural_models(generation)
-        queries = self.model_genesis.query_candidates(surface, models)
+        queries = self.model_genesis.query_candidates(surface, self.structural_models(generation))
         selected = self.select_generation_intervention(generation, queries)
         if selected is None or selected.expected_information_gain <= 0.0:
             return SynthesizedInterventionDecision(
@@ -200,7 +201,6 @@ class EpistemicallyDeepPersistentCognitiveRuntime(PersistentCognitiveRuntime):
         variables: Sequence[str],
         observed_intervention_ids: Sequence[str] = (),
     ) -> FalsificationDecision:
-        """Challenge a single identified model using generated coverage gaps."""
         snapshot = self.generation_version_space(generation)
         if not snapshot.identified:
             status = "GENERATION_ALREADY_FALSIFIED" if not snapshot.compatible_model_ids else "NOT_YET_IDENTIFIED"
@@ -291,6 +291,30 @@ class EpistemicallyDeepPersistentCognitiveRuntime(PersistentCognitiveRuntime):
         self.last_epistemic_depth = self.world_models.depth_plan()
         return active
 
+    def generate_sparse_minterm_causal_models(
+        self,
+        variables: Sequence[str],
+        descriptors: Sequence[InterventionDescriptor],
+    ) -> List[GeneratedSparseMintermModel]:
+        """Open G4 only after externally grounded failure of the G3 model class."""
+        if self.epistemic_depth_plan().mode != "EXPAND_MODEL_CLASS":
+            return []
+        if not self.generation_falsified(3):
+            return []
+        existing = list(self.world_models.models.values())
+        shadow = self.minterm_genesis.generate_novel(variables, descriptors, (), existing)
+        shadow_truncated = bool(self.minterm_genesis.last_truncated)
+        self.world_models.register(self._models(shadow))
+        if shadow_truncated:
+            self.last_epistemic_depth = self.world_models.depth_plan()
+            return []
+        active = self.minterm_genesis.generate_novel(
+            variables, descriptors, self.world_models.authoritative_evidence(), existing
+        )
+        active = self._restrict_active_to_shadow(active, shadow)
+        self.last_epistemic_depth = self.world_models.depth_plan()
+        return active
+
     def expand_causal_model_class(
         self,
         variables: Sequence[str],
@@ -311,20 +335,28 @@ class EpistemicallyDeepPersistentCognitiveRuntime(PersistentCognitiveRuntime):
         elif current == 2:
             generation, origin = 3, "GENERATED_PREDICATE"
             active = self.generate_predicate_causal_models(variables, descriptors)
+        elif current == 3:
+            generation, origin = 4, "GENERATED_SPARSE_MINTERM"
+            active = self.generate_sparse_minterm_causal_models(variables, descriptors)
         else:
             return CausalExpansionDecision(
                 "MAX_GENERATION_REACHED", current, "NONE", (), (),
-                "current bounded structural metalanguage has no generation beyond G3",
+                "current bounded structural metalanguage has no generation beyond G4",
             )
         shadow = tuple(sorted(
             model.model_id for model in self.world_models.models.values()
             if int(model.generation) == generation and model.origin == origin
         ))
         active_ids = tuple(sorted(item.model.model_id for item in active))
-        if generation == 3 and self.predicate_genesis.last_truncated:
+        truncated = (
+            generation == 3 and self.predicate_genesis.last_truncated
+        ) or (
+            generation == 4 and self.minterm_genesis.last_truncated
+        )
+        if truncated:
             status, reason = (
                 "FAIL_CLOSED_TRUNCATED_SHADOW_UNIVERSE",
-                "predicate-equivalence universe exceeded the bounded search budget",
+                "next structural candidate universe exceeded the bounded search budget",
             )
         elif not shadow:
             status, reason = "NO_STRUCTURAL_CANDIDATES", "next structural generator produced no prediction-novel candidates"
