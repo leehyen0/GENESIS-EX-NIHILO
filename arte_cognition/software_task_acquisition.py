@@ -9,11 +9,7 @@ import sys
 from typing import Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 
 from .experiment_genesis import InterventionProposal
-from .world_coupling import (
-    WorldOutcomePair,
-    WorldOutcomeReceipt,
-    WorldReceiptSigner,
-)
+from .world_coupling import WorldOutcomePair, WorldOutcomeReceipt
 
 
 SOFTWARE_REPAIR_MARKER = "software_repair_operator="
@@ -309,7 +305,7 @@ except Exception:
         patched_source: str,
         function_name: str,
         hidden_cases: Sequence[Mapping[str, object]],
-        signer: WorldReceiptSigner,
+        signer,
         source_id: str,
         context_id: str,
         challenge_id: str,
