@@ -59,7 +59,7 @@ def main(seed_path: str) -> None:
         signer=signers[issuer_ids[0]],
     )
     measurements, residuals = build_observations(discovery_world, label_flip)
-    reference_values = {name: 0.0 for name in feature_names}
+    zero_reference = {name: 0.0 for name in feature_names}
 
     runtime = PersistentCognitiveRuntime()
     cycle = runtime.cycle(
@@ -72,7 +72,7 @@ def main(seed_path: str) -> None:
         ),
         residuals=residuals,
         measurements=measurements,
-        experiment_reference_values=reference_values,
+        experiment_reference_values=zero_reference,
         world_context_id=discovery_world.context_id,
     )
 
@@ -87,44 +87,61 @@ def main(seed_path: str) -> None:
         raise AssertionError("no validated projection phenotype was generated")
     selected_axis = max(eligible, key=lambda axis: assessment_by_axis[axis.axis_id].incremental_gain)
 
+    for row in [item for item in measurements if not item.heldout][:6]:
+        for generated in runtime.experiment.propose(selected_axis, row.values):
+            runtime.memory.remember_experiment(generated)
+
     parent_axes = runtime.persisted_representation_axes()
-    parent_proposals = runtime.persisted_intervention_proposals()
+    parent_proposals = [
+        p for p in runtime.persisted_intervention_proposals()
+        if p.axis_id == selected_axis.axis_id
+    ]
     if selected_axis not in parent_axes:
         raise AssertionError("validated generated axis was not written into BODY phenotype memory")
-    selected_proposals = [p for p in parent_proposals if p.axis_id == selected_axis.axis_id]
-    if not selected_proposals:
-        raise AssertionError("generated intervention definition was not written into BODY phenotype memory")
-    selected_proposal = selected_proposals[0]
+    if not parent_proposals:
+        raise AssertionError("generated intervention definitions were not written into BODY phenotype memory")
+    if len({p.experiment_id for p in parent_proposals}) != len(parent_proposals):
+        raise AssertionError("distinct intervention phenotypes aliased to one experiment id")
 
     policy = EvidenceBoundWorldActionPolicy()
     before = policy.select(parent_proposals, runtime.world_coupling, context_id=discovery_world.context_id)
     if before.status != "EXPLORE_ONLY_NO_WORLD_SUPPORTED_ACTION":
         raise AssertionError("persisted phenotype self-promoted before world evidence")
 
-    for index, issuer_id in enumerate(issuer_ids, start=1):
-        world = HiddenAffineWorld(
-            scale=scale,
-            swap=swap,
-            feature_names=feature_names,
-            source_id=f"phenotype-source-{index}",
-            challenge_id=f"phenotype-challenge-{index}",
-            epoch=index,
-            signer=signers[issuer_id],
-        )
-        pair = runtime.execute_world_intervention(selected_proposal, world, verifier=verifier)
-        if not pair.authority_verified:
-            raise AssertionError("phenotype world outcome failed authority verification")
+    effects_by_experiment = {}
+    for proposal_index, proposal in enumerate(parent_proposals, start=1):
+        effects = []
+        suffix = proposal.experiment_id.rsplit("::", 1)[-1]
+        for issuer_index, issuer_id in enumerate(issuer_ids, start=1):
+            world = HiddenAffineWorld(
+                scale=scale,
+                swap=swap,
+                feature_names=feature_names,
+                source_id=f"phenotype-source-{proposal_index}-{issuer_index}-{suffix}",
+                challenge_id=f"phenotype-challenge-{proposal_index}-{issuer_index}-{suffix}",
+                epoch=proposal_index * 10 + issuer_index,
+                signer=signers[issuer_id],
+            )
+            pair = runtime.execute_world_intervention(proposal, world, verifier=verifier)
+            if not pair.authority_verified:
+                raise AssertionError("phenotype world outcome failed authority verification")
+            effects.append(abs(pair.effect))
+        effects_by_experiment[proposal.experiment_id] = effects
 
     after = policy.select(parent_proposals, runtime.world_coupling, context_id=discovery_world.context_id)
     if after.status != "WORLD_SUPPORTED_ACTION" or after.proposal is None:
-        raise AssertionError("persisted phenotype did not become a world-supported action")
+        raise AssertionError("no persisted generated experiment became a world-supported action")
+    chosen = after.proposal
+    if min(effects_by_experiment[chosen.experiment_id]) < 0.5:
+        raise AssertionError("chosen phenotype experiment did not reproduce a consequence twice")
 
     selected_axis_id = selected_axis.axis_id
     selected_coefficients = tuple(selected_axis.coefficients)
     selected_threshold = float(selected_axis.threshold)
-    selected_experiment_id = selected_proposal.experiment_id
-    selected_low = float(selected_proposal.low_value)
-    selected_high = float(selected_proposal.high_value)
+    selected_experiment_id = chosen.experiment_id
+    selected_low = float(chosen.low_value)
+    selected_high = float(chosen.high_value)
+    selected_fixed = tuple(chosen.held_fixed)
     encoded = checkpoint_json(runtime)
     payload = json.loads(encoded)
     if payload.get("schema") != "arte.cognition_body_checkpoint/v3":
@@ -134,13 +151,13 @@ def main(seed_path: str) -> None:
     if selected_axis_id not in payload.get("memory", {}).get("representations", {}):
         raise AssertionError("checkpoint omitted exact generated representation phenotype")
     if selected_experiment_id not in payload.get("memory", {}).get("experiments", {}):
-        raise AssertionError("checkpoint omitted generated experiment definition")
+        raise AssertionError("checkpoint omitted exact world-supported experiment definition")
     if any(secret.hex() in encoded for secret in secrets_by_issuer.values()):
         raise AssertionError("external verifier secret leaked into phenotype checkpoint")
 
-    # From this point the parent cycle/proposal collections are deliberately not
-    # used. The descendant must recover its own phenotype from BODY state.
-    del cycle, parent_axes, parent_proposals, selected_axis, selected_proposal
+    # Parent-side generated Python objects are now explicitly discarded. Everything
+    # below must come from the descendant's own checkpoint reconstruction.
+    del cycle, parent_axes, parent_proposals, selected_axis, chosen
 
     unverified_descendant = restore_json(encoded)
     unverified_axes = unverified_descendant.persisted_representation_axes()
@@ -151,8 +168,12 @@ def main(seed_path: str) -> None:
         raise AssertionError("descendant could not reconstruct generated phenotype from checkpoint")
     if tuple(reconstructed_axis.coefficients) != selected_coefficients or float(reconstructed_axis.threshold) != selected_threshold:
         raise AssertionError("descendant reconstructed different latent coefficients or threshold")
-    if float(reconstructed_proposal.low_value) != selected_low or float(reconstructed_proposal.high_value) != selected_high:
-        raise AssertionError("descendant reconstructed different intervention values")
+    if (
+        float(reconstructed_proposal.low_value) != selected_low
+        or float(reconstructed_proposal.high_value) != selected_high
+        or tuple(reconstructed_proposal.held_fixed) != selected_fixed
+    ):
+        raise AssertionError("descendant reconstructed a different exact intervention phenotype")
     unverified_action = policy.select(
         unverified_proposals,
         unverified_descendant.world_coupling,
@@ -176,26 +197,26 @@ def main(seed_path: str) -> None:
     if descendant_action.status != "WORLD_SUPPORTED_ACTION" or descendant_action.proposal is None:
         raise AssertionError("descendant did not recover world-supported action from its own phenotype")
     if descendant_action.proposal.experiment_id != selected_experiment_id:
-        raise AssertionError("descendant selected an action other than its inherited generated experiment")
+        raise AssertionError("descendant selected an action other than its inherited exact experiment")
 
     print(json.dumps({
-        "status": "PASS_BOUNDED_DESCENDANT_RECONSTRUCTS_GENERATED_PHENOTYPE_FROM_BODY",
+        "status": "PASS_BOUNDED_DESCENDANT_RECONSTRUCTS_EXACT_GENERATED_PHENOTYPE_FROM_BODY",
         "checkpoint_schema": payload["schema"],
         "phenotype_schema": payload["phenotype_schema"],
         "axis_id": selected_axis_id,
         "axis_coefficients": list(selected_coefficients),
         "axis_threshold": selected_threshold,
+        "generated_experiment_count": len(effects_by_experiment),
+        "world_effects_by_experiment": effects_by_experiment,
         "experiment_id": selected_experiment_id,
         "experiment_low": selected_low,
         "experiment_high": selected_high,
+        "experiment_held_fixed": list(selected_fixed),
+        "exact_experiment_evidence_binding": True,
         "parent_objects_reused_after_restore": False,
         "unverified_descendant_action_status": unverified_action.status,
         "reverified_descendant_action_status": descendant_action.status,
         "reverified_descendant_experiment_id": descendant_action.proposal.experiment_id,
-        "independent_world_evidence_classes": descendant.world_axis_summary(
-            selected_axis_id,
-            context_id=discovery_world.context_id,
-        ).independent_evidence_classes,
         "external_verifier_secret_persisted": False,
         "independent_organizational_custody": False,
         "physical_world": False,
