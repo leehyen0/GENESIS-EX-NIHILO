@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-from dataclasses import asdict
-from typing import List, Mapping, Optional, Sequence
+from dataclasses import asdict, dataclass
+from typing import List, Mapping, Optional, Sequence, Tuple
 
 from .adaptive_cognition import QueryCandidate, TaskState
 from .body_checkpoint import checkpoint_dict, restore_runtime
+from .causal_identification import GenerationScopedIdentifier, VersionSpaceSnapshot
 from .causal_model_genesis import CausalModelGenesisEngine, GeneratedCausalModel, InterventionDescriptor
 from .causal_predicate_genesis import BooleanCausalPredicateGenesisEngine, GeneratedPredicateModel
 from .causal_program_genesis import CompositionalCausalProgramGenesisEngine, GeneratedCausalProgram
@@ -24,6 +25,16 @@ from .world_model_ecology import (
 EPISTEMIC_DEPTH_SCHEMA = "arte.epistemic_depth_same_body/v1"
 
 
+@dataclass(frozen=True)
+class CausalExpansionDecision:
+    status: str
+    generation: int
+    origin: str
+    active_model_ids: Tuple[str, ...]
+    shadow_model_ids: Tuple[str, ...]
+    reason: str
+
+
 class EpistemicallyDeepPersistentCognitiveRuntime(PersistentCognitiveRuntime):
     """Same BODY with staged causal representation expansion.
 
@@ -32,6 +43,12 @@ class EpistemicallyDeepPersistentCognitiveRuntime(PersistentCognitiveRuntime):
     that universe, and then marks an evidence-compatible subset for immediate
     reasoning. This prevents evidence-conditioned candidate membership from
     becoming a covert authority channel across checkpoint/restore.
+
+    Structural depth is selected by the BODY itself. Independently authenticated
+    failure opens exactly the next generation supported by ancestry: named causal
+    families (G1), compositional causal programs (G2), then synthesized Boolean
+    activation predicates (G3). Exact identification is generation-scoped so older
+    lineage cannot dilute a current generation's experiment-information gain.
     """
 
     def __init__(
@@ -48,6 +65,7 @@ class EpistemicallyDeepPersistentCognitiveRuntime(PersistentCognitiveRuntime):
         self.model_genesis = model_genesis or CausalModelGenesisEngine()
         self.program_genesis = program_genesis or CompositionalCausalProgramGenesisEngine()
         self.predicate_genesis = predicate_genesis or BooleanCausalPredicateGenesisEngine()
+        self.identifier = GenerationScopedIdentifier()
         self.last_epistemic_depth = self.world_models.depth_plan()
 
     def register_causal_world_models(self, models: Sequence[CausalWorldModel]) -> None:
@@ -62,6 +80,50 @@ class EpistemicallyDeepPersistentCognitiveRuntime(PersistentCognitiveRuntime):
     def _restrict_active_to_shadow(active, shadow):
         shadow_ids = {item.model.model_id for item in shadow}
         return [item for item in active if item.model.model_id in shadow_ids]
+
+    def structural_models(self, generation: int) -> List[CausalWorldModel]:
+        return [
+            model for model in self.world_models.models.values()
+            if int(model.generation) == int(generation)
+        ]
+
+    def latest_structural_generation(self) -> int:
+        generated = [
+            int(model.generation) for model in self.world_models.models.values()
+            if model.origin.startswith("GENERATED") and int(model.generation) > 0
+        ]
+        return max(generated) if generated else 0
+
+    def generation_version_space(self, generation: int) -> VersionSpaceSnapshot:
+        return self.identifier.snapshot(
+            generation,
+            list(self.world_models.models.values()),
+            self.world_models.authoritative_evidence(),
+        )
+
+    def rank_generation_interventions(
+        self,
+        generation: int,
+        candidates: Sequence[QueryCandidate],
+    ) -> Sequence[EpistemicInterventionScore]:
+        snapshot = self.generation_version_space(generation)
+        return self.identifier.rank_interventions(
+            candidates,
+            snapshot.compatible_model_ids,
+            cost_exponent=0.15,
+        )
+
+    def select_generation_intervention(
+        self,
+        generation: int,
+        candidates: Sequence[QueryCandidate],
+    ) -> Optional[EpistemicInterventionScore]:
+        snapshot = self.generation_version_space(generation)
+        return self.identifier.select_next(
+            candidates,
+            snapshot.compatible_model_ids,
+            cost_exponent=0.15,
+        )
 
     def generate_replacement_causal_models(
         self,
@@ -130,6 +192,61 @@ class EpistemicallyDeepPersistentCognitiveRuntime(PersistentCognitiveRuntime):
         active = self._restrict_active_to_shadow(active, shadow)
         self.last_epistemic_depth = self.world_models.depth_plan()
         return active
+
+    def expand_causal_model_class(
+        self,
+        variables: Sequence[str],
+        descriptors: Sequence[InterventionDescriptor],
+    ) -> CausalExpansionDecision:
+        """Autonomously open exactly the next structural generation.
+
+        The caller supplies observable variables/intervention semantics, but does
+        not choose the generator. The BODY uses authenticated class failure plus
+        inherited structural ancestry to decide how much deeper to search.
+        """
+        if self.epistemic_depth_plan().mode != "EXPAND_MODEL_CLASS":
+            return CausalExpansionDecision(
+                "NO_EXPANSION_REQUIRED", self.latest_structural_generation(), "NONE", (), (),
+                "current live model ecology retains at least one jointly compatible model",
+            )
+
+        current = self.latest_structural_generation()
+        if current <= 0:
+            generation = 1
+            origin = "GENERATED"
+            active = self.generate_replacement_causal_models(variables, descriptors)
+        elif current == 1:
+            generation = 2
+            origin = "GENERATED_COMPOSITIONAL"
+            active = self.generate_compositional_causal_models(variables, descriptors)
+        elif current == 2:
+            generation = 3
+            origin = "GENERATED_PREDICATE"
+            active = self.generate_predicate_causal_models(variables, descriptors)
+        else:
+            return CausalExpansionDecision(
+                "MAX_GENERATION_REACHED", current, "NONE", (), (),
+                "current bounded structural metalanguage has no generation beyond G3",
+            )
+
+        shadow = tuple(sorted(
+            model.model_id for model in self.world_models.models.values()
+            if int(model.generation) == generation and model.origin == origin
+        ))
+        active_ids = tuple(sorted(item.model.model_id for item in active))
+        if generation == 3 and self.predicate_genesis.last_truncated:
+            status = "FAIL_CLOSED_TRUNCATED_SHADOW_UNIVERSE"
+            reason = "predicate-equivalence universe exceeded the bounded search budget"
+        elif not shadow:
+            status = "NO_STRUCTURAL_CANDIDATES"
+            reason = "next structural generator produced no prediction-novel candidates"
+        elif not active_ids:
+            status = "NO_EVIDENCE_COMPATIBLE_CANDIDATES"
+            reason = "shadow hypotheses persist but none satisfy current authoritative evidence"
+        else:
+            status = "EXPANDED"
+            reason = "authenticated class failure opened the next ancestry-supported structural generation"
+        return CausalExpansionDecision(status, generation, origin, active_ids, shadow, reason)
 
     def generated_model_queries(
         self,
