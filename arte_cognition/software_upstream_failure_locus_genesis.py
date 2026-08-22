@@ -47,7 +47,7 @@ class UpstreamPatchCandidate:
     candidate_id: str
     patched_source: str
     operation_count: int
-    oracle_suffix_sha256: str
+    oracle_fingerprint_sha256: str
 
 
 @dataclass(frozen=True)
@@ -66,12 +66,7 @@ class UpstreamFailureProgramPolicy:
 
 
 def generate_upstream_failure_programs() -> Tuple[UpstreamFailureProgram, ...]:
-    """Outcome-independent bounded programs over a newly reachable upstream locus.
-
-    These programs do not encode file names, observation labels, literal values,
-    human fixes, or candidate success. They differ only in a small authored edit
-    alphabet. External execution decides whether any program deserves authority.
-    """
+    """Generate a bounded, outcome-independent upstream repair-program shadow language."""
     return (
         UpstreamFailureProgram(_LOCUS_ASSERTION_BACKSLICE_LIST, _EDIT_REWRITE_PEER),
         UpstreamFailureProgram(_LOCUS_ASSERTION_BACKSLICE_LIST, _EDIT_DUPLICATE_PEER),
@@ -114,18 +109,45 @@ def target_frame_line(stderr: str, target_path: str) -> Optional[int]:
     return lines[-1] if lines else None
 
 
-def oracle_suffix(source: str, failure_line: int) -> str:
-    lines = str(source).splitlines(keepends=True)
-    start = max(0, int(failure_line) - 1)
-    return "".join(lines[start:])
+def _is_unittest_assert_call(node: ast.AST) -> bool:
+    if not isinstance(node, ast.Expr) or not isinstance(node.value, ast.Call):
+        return False
+    func = node.value.func
+    return bool(
+        isinstance(func, ast.Attribute)
+        and isinstance(func.value, ast.Name)
+        and func.value.id == "self"
+        and str(func.attr).startswith("assert")
+    )
 
 
-def oracle_suffix_sha256(source: str, failure_line: int) -> str:
-    return hashlib.sha256(oracle_suffix(source, failure_line).encode("utf-8")).hexdigest()
+def oracle_ast_fingerprint(source: str) -> Tuple[str, ...]:
+    """Fingerprint every test oracle structurally, ignoring source formatting and line drift.
+
+    Upstream mutations may reformat the file through ``ast.unparse`` but may not
+    change Python ``assert`` statements or unittest ``self.assert*`` calls anywhere
+    in the source. This prevents a repair language from satisfying a benchmark by
+    weakening its acceptance criterion.
+    """
+    tree = ast.parse(str(source))
+    rows = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Assert) or _is_unittest_assert_call(node):
+            rows.append(ast.dump(node, include_attributes=False))
+    return tuple(rows)
 
 
-def oracle_preserved(original: str, candidate: str, failure_line: int) -> bool:
-    return oracle_suffix(original, failure_line) == oracle_suffix(candidate, failure_line)
+def oracle_fingerprint_sha256(source: str) -> str:
+    payload = json.dumps(oracle_ast_fingerprint(source), separators=(",", ":"))
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def oracle_preserved(original: str, candidate: str, failure_line: Optional[int] = None) -> bool:
+    del failure_line
+    try:
+        return oracle_ast_fingerprint(original) == oracle_ast_fingerprint(candidate)
+    except SyntaxError:
+        return False
 
 
 def _names_in_node(node: ast.AST) -> Tuple[str, ...]:
@@ -155,11 +177,10 @@ def _statement_covering_line(tree: ast.AST, line: int) -> Optional[ast.stmt]:
 
 
 def locate_upstream_list_assignment(source: str, failure_line: int) -> Optional[Tuple[int, int, str]]:
-    """Backslice failed statement -> producer assignment -> named list input.
+    """Backslice failed statement -> producer assignment -> one named list input.
 
-    The algorithm is syntax/dataflow based. It never inspects expected outcomes or
-    later fixes. It deliberately stops at one assignment hop to keep the language
-    bounded and auditable.
+    This is deliberately one-hop and syntax/dataflow driven. It never consumes
+    expected outcomes, hidden tests, or a later human fix.
     """
     try:
         tree = ast.parse(str(source))
@@ -173,7 +194,11 @@ def locate_upstream_list_assignment(source: str, failure_line: int) -> Optional[
     producers = []
     for node in assignments:
         name = _assigned_name(node)
-        if name in failed_names and int(node.lineno) < int(failure_line) and isinstance(node.value, ast.Call):
+        if (
+            name in failed_names
+            and int(node.lineno) < int(failure_line)
+            and isinstance(node.value, ast.Call)
+        ):
             producers.append(node)
     producers.sort(key=lambda node: int(node.lineno), reverse=True)
     for producer in producers:
@@ -256,7 +281,11 @@ def _mutated_source(
         if not isinstance(original, ast.Call):
             return None
         duplicate = copy.deepcopy(original)
-        if duplicate.args and isinstance(duplicate.args[0], ast.Constant) and isinstance(duplicate.args[0].value, str):
+        if (
+            duplicate.args
+            and isinstance(duplicate.args[0], ast.Constant)
+            and isinstance(duplicate.args[0].value, str)
+        ):
             duplicate.args[0] = ast.Constant(
                 value=_fresh_id(program_id, source, duplicate_index, len(elements))
             )
@@ -284,13 +313,15 @@ def generate_upstream_patch_candidates(
     assignment = _find_list_assignment(tree, locus[0], locus[1])
     if assignment is None:
         return ()
-    calls = [isinstance(item, ast.Call) for item in assignment.value.elts]
-    call_indices = [index for index, is_call in enumerate(calls) if is_call]
+    call_indices = [
+        index for index, item in enumerate(assignment.value.elts)
+        if isinstance(item, ast.Call)
+    ]
     signatures = {
         index: _call_signature(assignment.value.elts[index])  # type: ignore[arg-type]
         for index in call_indices
     }
-    edits = []
+    rewrites = []
     if program.edit_operator in {_EDIT_REWRITE_PEER, _EDIT_REWRITE_AND_DUPLICATE}:
         rewrites = [
             (target, peer)
@@ -298,8 +329,6 @@ def generate_upstream_patch_candidates(
             for peer in call_indices
             if target != peer and signatures[target] != signatures[peer]
         ]
-    else:
-        rewrites = []
     if program.edit_operator == _EDIT_REWRITE_PEER:
         edits = [(rewrite, None) for rewrite in rewrites]
     elif program.edit_operator == _EDIT_DUPLICATE_PEER:
@@ -309,12 +338,15 @@ def generate_upstream_patch_candidates(
     else:
         return ()
 
-    original_oracle = oracle_suffix_sha256(source, failure_line)
+    original_oracle = oracle_fingerprint_sha256(source)
     seen = set()
     candidates = []
     for rewrite, duplicate in edits:
         patched = _mutated_source(
-            source, locus, rewrite=rewrite, duplicate_index=duplicate,
+            source,
+            locus,
+            rewrite=rewrite,
+            duplicate_index=duplicate,
             program_id=program.program_id,
         )
         if patched is None or not oracle_preserved(source, patched, failure_line):
@@ -330,7 +362,7 @@ def generate_upstream_patch_candidates(
             candidate_id=candidate_id,
             patched_source=patched,
             operation_count=int(rewrite is not None) + int(duplicate is not None),
-            oracle_suffix_sha256=original_oracle,
+            oracle_fingerprint_sha256=original_oracle,
         ))
         if len(candidates) >= max(1, int(max_candidates)):
             break
