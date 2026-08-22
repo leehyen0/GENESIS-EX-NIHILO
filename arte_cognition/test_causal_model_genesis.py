@@ -38,15 +38,27 @@ class CausalModelGenesisTests(unittest.TestCase):
         self.assertNotEqual(runtime.epistemic_depth_plan().mode, "EXPAND_MODEL_CLASS")
         self.assertEqual(runtime.generate_replacement_causal_models(["x", "z"], self.descriptors), [])
 
-    def test_generated_model_can_resolve_previous_model_class_failure(self):
+    def test_one_independence_class_cannot_open_structural_genesis(self):
         runtime = EpistemicallyDeepPersistentCognitiveRuntime()
         runtime.register_causal_world_models([
             CausalWorldModel("OLD_A", 1.0, (("do-x-block-z", "POSITIVE_EFFECT"),)),
             CausalWorldModel("OLD_B", 1.0, (("do-x-block-z", "NEGATIVE_EFFECT"),)),
         ])
         runtime.world_models.observe(ModelEvidence(
-            "surprise", "do-x-block-z", "NO_EFFECT", "ind-A", "ctx", True
+            "surprise-a", "do-x-block-z", "NO_EFFECT", "ind-A", "ctx", True
         ))
+        self.assertNotEqual(runtime.epistemic_depth_plan().mode, "EXPAND_MODEL_CLASS")
+
+    def test_generated_model_can_resolve_previous_model_class_failure(self):
+        runtime = EpistemicallyDeepPersistentCognitiveRuntime()
+        runtime.register_causal_world_models([
+            CausalWorldModel("OLD_A", 1.0, (("do-x-block-z", "POSITIVE_EFFECT"),)),
+            CausalWorldModel("OLD_B", 1.0, (("do-x-block-z", "NEGATIVE_EFFECT"),)),
+        ])
+        for source in ("ind-A", "ind-B"):
+            runtime.world_models.observe(ModelEvidence(
+                f"surprise-{source}", "do-x-block-z", "NO_EFFECT", source, "ctx", True
+            ))
         self.assertEqual(runtime.epistemic_depth_plan().mode, "EXPAND_MODEL_CLASS")
         generated = runtime.generate_replacement_causal_models(["x", "z"], self.descriptors)
         self.assertTrue(generated)
