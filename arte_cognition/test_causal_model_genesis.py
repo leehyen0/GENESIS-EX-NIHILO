@@ -1,8 +1,8 @@
 import unittest
 
-from causal_model_genesis import CausalModelGenesisEngine, InterventionDescriptor
-from epistemic_depth_runtime import EpistemicallyDeepPersistentCognitiveRuntime
-from world_model_ecology import CausalWorldModel, ModelEvidence
+from arte_cognition.causal_model_genesis import CausalModelGenesisEngine, InterventionDescriptor
+from arte_cognition.epistemic_depth_runtime import EpistemicallyDeepPersistentCognitiveRuntime
+from arte_cognition.world_model_ecology import CausalWorldModel, ModelEvidence
 
 
 class CausalModelGenesisTests(unittest.TestCase):
