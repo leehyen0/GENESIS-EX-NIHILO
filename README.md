@@ -2,7 +2,7 @@
 
 ## Adaptive cognition BODY
 
-The repository now includes an executable adaptive cognition runtime under `arte_cognition/`.
+The repository includes an executable adaptive cognition runtime under `arte_cognition/`.
 
 Core properties:
 - sparse task-pressure routing rather than all-active cognition;
@@ -14,4 +14,6 @@ Core properties:
 - predictive/intervention-supported/causal-law authority separation;
 - checkpoint/restore of routing policy, topology, concepts, laws, refutations, and mutation history.
 
-The code intentionally separates generation from evidence and authority. Generated concepts, axes, macros, and laws are proposals until their respective validation gates close. No AGI/ASI claim is implied by these components or tests.
+Generated concepts, axes, macros, and laws remain proposals until their respective validation gates close. The checkpoint is a persistent adaptive-cognition state packet; direct integration with any separate `PersistentActualIntelligenceRuntime` implementation is not claimed unless that implementation is present and wired in this repository.
+
+No AGI/ASI claim is implied by these components or tests.
