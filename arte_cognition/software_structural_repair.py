@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import ast
-from dataclasses import dataclass
 import hashlib
 import json
 from typing import List, Tuple
@@ -22,9 +21,7 @@ TRAVERSAL_STRATEGIES: Tuple[str, ...] = (
 )
 
 
-def _method_body_for_strategy(strategy_id: str) -> List[ast.stmt]:
-    if strategy_id == "BFS":
-        body = '''
+_BFS_BODY = '''
 tree = ast.parse(source)
 operator_ids = []
 for node in ast.walk(tree):
@@ -38,9 +35,11 @@ for node in ast.walk(tree):
             operator_ids.append(mutation[1])
 return tuple(operator_ids)
 '''
-    elif strategy_id in {"DFS_PRE", "DFS_POST"}:
-        pre = strategy_id == "DFS_PRE"
-        before = '''
+
+_DFS_PRE_BODY = '''
+tree = ast.parse(source)
+operator_ids = []
+def collect(node):
     if isinstance(node, ast.Compare) and len(node.ops) == 1:
         mutation = _COMPARE_MUTATIONS.get(type(node.ops[0]))
         if mutation is not None:
@@ -49,19 +48,31 @@ return tuple(operator_ids)
         mutation = _BOOL_MUTATIONS.get(type(node.op))
         if mutation is not None:
             operator_ids.append(mutation[1])
-''' if pre else ""
-        after = before if not pre else ""
-        body = f'''
+    for child in ast.iter_child_nodes(node):
+        collect(child)
+collect(tree)
+return tuple(operator_ids)
+'''
+
+_DFS_POST_BODY = '''
 tree = ast.parse(source)
 operator_ids = []
 def collect(node):
-{before if before else ''}    for child in ast.iter_child_nodes(node):
+    for child in ast.iter_child_nodes(node):
         collect(child)
-{after if after else ''}collect(tree)
+    if isinstance(node, ast.Compare) and len(node.ops) == 1:
+        mutation = _COMPARE_MUTATIONS.get(type(node.ops[0]))
+        if mutation is not None:
+            operator_ids.append(mutation[1])
+    elif isinstance(node, ast.BoolOp):
+        mutation = _BOOL_MUTATIONS.get(type(node.op))
+        if mutation is not None:
+            operator_ids.append(mutation[1])
+collect(tree)
 return tuple(operator_ids)
 '''
-    elif strategy_id == "REVERSED_BFS":
-        body = '''
+
+_REVERSED_BFS_BODY = '''
 tree = ast.parse(source)
 operator_ids = []
 for node in reversed(tuple(ast.walk(tree))):
@@ -75,9 +86,19 @@ for node in reversed(tuple(ast.walk(tree))):
             operator_ids.append(mutation[1])
 return tuple(operator_ids)
 '''
-    else:
-        raise ValueError(f"unknown traversal strategy: {strategy_id}")
 
+
+def _method_body_for_strategy(strategy_id: str) -> List[ast.stmt]:
+    bodies = {
+        "BFS": _BFS_BODY,
+        "DFS_PRE": _DFS_PRE_BODY,
+        "DFS_POST": _DFS_POST_BODY,
+        "REVERSED_BFS": _REVERSED_BFS_BODY,
+    }
+    try:
+        body = bodies[str(strategy_id)]
+    except KeyError as exc:
+        raise ValueError(f"unknown traversal strategy: {strategy_id}") from exc
     wrapper = "def _generated(source):\n" + "\n".join(
         "    " + line if line else "" for line in body.strip("\n").splitlines()
     ) + "\n"
@@ -125,11 +146,11 @@ def apply_traversal_strategy(source: str, strategy_id: str) -> str:
 class PythonTraversalStrategyRepairGenerator:
     """Outcome-independent structural repair grammar for AST-site traversal identity.
 
-    This generator is intentionally bounded. World evidence may open this structural
-    repair class after the previously available content-mutation alphabet is fully
-    falsified, but hidden outcomes never choose a strategy or synthesize candidate
-    source. The current four-strategy metalanguage is human-authored and therefore
-    does not establish unrestricted software-operator invention.
+    World evidence may open this structural repair class only after the previously
+    available content-mutation alphabet is fully falsified. Hidden outcomes never
+    choose a strategy or synthesize candidate source. The four-strategy metalanguage
+    is human-authored, so success remains bounded structural software repair rather
+    than unrestricted operator invention.
     """
 
     def generate(
