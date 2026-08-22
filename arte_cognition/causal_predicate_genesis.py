@@ -50,17 +50,24 @@ class BooleanCausalPredicateGenesisEngine:
     predicate is searched as bounded DNF. This can discover negation/disjunction
     such as `(DELAY & !CONTEXT) | (!DELAY & CONTEXT)` without a hardcoded XOR
     causal operator. The Boolean metalanguage is still human-authored and bounded.
+
+    The default budget deliberately covers the full prediction-equivalence surface
+    of the current two-variable hidden evaluation (1269 unique signatures). Depth
+    is preferred over cheap truncation. `last_truncated` remains visible so a
+    caller can refuse to treat an incomplete candidate universe as exhaustive.
     """
 
     def __init__(
         self,
-        model_budget: int = 512,
+        model_budget: int = 2048,
         max_literals_per_term: int = 3,
         max_terms: int = 2,
     ) -> None:
         self.model_budget = max(1, int(model_budget))
         self.max_literals_per_term = max(1, int(max_literals_per_term))
         self.max_terms = max(1, int(max_terms))
+        self.last_unique_signature_count = 0
+        self.last_truncated = False
 
     @staticmethod
     def _atoms(variables: Sequence[str], cause: str) -> Tuple[str, ...]:
@@ -126,12 +133,10 @@ class BooleanCausalPredicateGenesisEngine:
 
     def _predicates(self, atoms: Sequence[str]) -> Iterable[ActivationPredicate]:
         terms = self._terms(atoms)
-        # Single conjunctions plus disjunctions of bounded conjunctions.
         for term in terms:
             yield ActivationPredicate((term,))
         if self.max_terms >= 2:
             for left, right in itertools.combinations(terms, 2):
-                # Remove trivially absorbed disjuncts, e.g. A | (A & B).
                 lset = set(left.literals)
                 rset = set(right.literals)
                 if lset.issubset(rset) or rset.issubset(lset):
@@ -197,8 +202,8 @@ class BooleanCausalPredicateGenesisEngine:
                         ),
                         generation=3,
                         parent_model_ids=tuple(sorted(
-                            model.model_id for model in existing_models
-                            if model.origin == "GENERATED_COMPOSITIONAL"
+                            parent.model_id for parent in existing_models
+                            if parent.origin == "GENERATED_COMPOSITIONAL"
                         )),
                     )
                     signature = self._signature(model)
@@ -211,6 +216,9 @@ class BooleanCausalPredicateGenesisEngine:
         by_signature: Dict[Tuple[Tuple[str, str], ...], List[Tuple[str, str, ActivationPredicate, CausalWorldModel]]] = {}
         for item in raw:
             by_signature.setdefault(self._signature(item[3]), []).append(item)
+
+        self.last_unique_signature_count = len(by_signature)
+        self.last_truncated = self.last_unique_signature_count > self.model_budget
 
         out: List[GeneratedPredicateModel] = []
         for signature, group in sorted(by_signature.items(), key=lambda item: item[0]):
