@@ -38,10 +38,20 @@ from .causal_credit import (
     OutcomeAblationCreditEngine,
     PairSynergyCredit,
 )
+from .causal_law import (
+    CausalLawAssessment,
+    CausalLawEvaluator,
+    InterventionObservation,
+)
 from .representation_genesis import (
     MeasurementObservation,
     RepresentationAxis,
     RepresentationGenesisEngine,
+)
+from .topology_learning import (
+    CognitionTopologyLearner,
+    EdgeExperience,
+    MacroCognitionCandidate,
 )
 from .cognitive_runtime import CognitiveCycle, PersistentCognitiveRuntime
 from .body_checkpoint import (
@@ -80,9 +90,15 @@ __all__ = [
     "OutcomeAblationCredit",
     "OutcomeAblationCreditEngine",
     "PairSynergyCredit",
+    "CausalLawAssessment",
+    "CausalLawEvaluator",
+    "InterventionObservation",
     "MeasurementObservation",
     "RepresentationAxis",
     "RepresentationGenesisEngine",
+    "CognitionTopologyLearner",
+    "EdgeExperience",
+    "MacroCognitionCandidate",
     "CognitiveCycle",
     "PersistentCognitiveRuntime",
     "checkpoint_dict",
