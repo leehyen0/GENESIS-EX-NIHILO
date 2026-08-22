@@ -46,6 +46,7 @@ jobs:
           python -m py_compile arte_cognition/topology_learning.py
           python -m py_compile arte_cognition/validation_matrix.py
           python -m py_compile arte_cognition/world_coupling.py
+          python -m py_compile arte_cognition/raw_observation_authority.py
           python -m py_compile arte_cognition/world_action_policy.py
           python -m py_compile arte_cognition/world_revision.py
           python -m py_compile arte_cognition/world_model_ecology.py
@@ -126,11 +127,11 @@ jobs:
         run: python evaluations/run_autonomous_model_falsification.py /tmp/arte_model_falsification_seed
       - name: Run falsification-driven G4 grammar expansion evaluation
         run: python evaluations/run_falsification_driven_g4_grammar.py /tmp/arte_g4_grammar_seed
-      - name: Run world-driven raw primitive genesis evaluation
+      - name: Run authenticated world-driven raw primitive genesis evaluation
         run: python evaluations/run_world_driven_primitive_genesis.py /tmp/arte_primitive_genesis_seed
-      - name: Run falsification-driven multi-channel linear primitive evaluation
+      - name: Run authenticated multi-channel linear primitive evaluation
         run: python evaluations/run_falsification_driven_linear_primitive_genesis.py /tmp/arte_linear_primitive_seed
-      - name: Run generic symbolic primitive search evaluation
+      - name: Run authenticated generic symbolic primitive search evaluation
         run: python evaluations/run_generic_symbolic_primitive_search.py /tmp/arte_symbolic_primitive_seed
-      - name: Run checkpoint-resumed primitive developmental state evaluation
+      - name: Run authenticated checkpoint-resumed primitive developmental state evaluation
         run: python evaluations/run_persistent_primitive_developmental_resume.py /tmp/arte_primitive_resume_seed
