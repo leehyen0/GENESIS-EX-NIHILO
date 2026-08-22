@@ -249,19 +249,25 @@ def main() -> None:
     )
     treatment_capability = 1.0 if min(treatment_effects) >= 0.9 else 0.0
 
-    # Same external-execution budget controls. Removing the learned extractor program
-    # yields no patch candidates, so the budget is spent replaying the unchanged
-    # failing source rather than silently receiving a different repair language.
-    budget = max(1, len(interpretation.patch_candidates))
+    # Match all externally executed subprocesses used to establish heldout capability:
+    # one run per generated patch during search plus LOW/HIGH for each independent
+    # issuer during authority confirmation. REMOVE and WRONG receive the same number
+    # of external executions but no learned extractor policy.
+    search_executions = len(interpretation.patch_candidates)
+    authority_executions = 2 * len(signers)
+    matched_external_budget = max(1, search_executions + authority_executions)
     remove = restore_runtime(checkpoint, world_verifier=verifier)
-    remove_results = tuple(heldout_environment.run()[0] for _ in range(budget))
+    remove_results = tuple(heldout_environment.run()[0] for _ in range(matched_external_budget))
     remove_capability = max(remove_results)
     wrong_program = next(program for program in programs if program.program_id != learned_program.program_id)
     wrong_patches = apply_failure_extractor_program(wrong_program, heldout_stderr, g7_source, G7_PATH)
-    wrong_results = tuple(heldout_environment.run()[0] for _ in range(budget)) if not wrong_patches else tuple(
-        heldout_environment.run(patch.patched_source)[0] for patch in wrong_patches
-    )
-    wrong_capability = max(wrong_results) if wrong_results else 0.0
+    wrong_trial_results = [
+        heldout_environment.run(patch.patched_source)[0]
+        for patch in wrong_patches[:matched_external_budget]
+    ]
+    while len(wrong_trial_results) < matched_external_budget:
+        wrong_trial_results.append(heldout_environment.run()[0])
+    wrong_capability = max(wrong_trial_results) if wrong_trial_results else 0.0
 
     if treatment_capability != 1.0 or remove_capability != 0.0 or wrong_capability != 0.0:
         raise AssertionError("Treatment/REMOVE/WRONG extractor-program causal isolation failed")
@@ -320,13 +326,15 @@ def main() -> None:
         "heldout_patch_candidate_count": len(interpretation.patch_candidates),
         "heldout_successful_patch_count": len(heldout_successes),
         "treatment_candidate_count": len(interpretation.patch_candidates),
-        "treatment_external_execution_budget": budget,
+        "treatment_external_execution_budget": matched_external_budget,
+        "treatment_search_external_executions": search_executions,
+        "treatment_authority_external_executions": authority_executions,
         "treatment_capability": treatment_capability,
         "remove_same_checkpoint_candidate_count": 0,
-        "remove_same_checkpoint_external_execution_budget": budget,
+        "remove_same_checkpoint_external_execution_budget": matched_external_budget,
         "remove_same_checkpoint_capability": remove_capability,
         "wrong_program_candidate_count": len(wrong_patches),
-        "wrong_program_external_execution_budget": budget,
+        "wrong_program_external_execution_budget": matched_external_budget,
         "wrong_program_capability": wrong_capability,
         "fresh_heldout_entered_program_lineage_after_transfer": True,
         "candidate_generation_uses_hidden_success_outcomes": False,
