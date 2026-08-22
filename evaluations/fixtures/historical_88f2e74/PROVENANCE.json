@@ -1,0 +1,10 @@
+{
+  "repository": "leehyen0/GENESIS-EX-NIHILO",
+  "commit_sha": "88f2e74f5164731b1370f74d76f8c58b584a959c",
+  "path": "arte_cognition/software_task_acquisition.py",
+  "blob_sha": "cbc73d77b34380d19f3540a52c1f77e4e90f9fbf",
+  "defect": "PythonASTRepairGenerator enumerated site operator IDs with ast.walk breadth-first order while _SingleMutationTransformer consumed sites in NodeTransformer child-first traversal order, causing site identity drift on complex nested ASTs.",
+  "natural_historical_bug": true,
+  "fixture_bytes_are_original_git_blob": true,
+  "later_fixed_source_in_fixture": false
+}
