@@ -129,8 +129,22 @@ class TransformPrimitiveAlphabetTests(unittest.TestCase):
         )
         return float(scores.get(round(float(target), 12), 0.0) >= 0.9)
 
+    def assert_outside_old_depth4(self, hidden, left, right):
+        target = hidden.apply(left, right)
+        old_depth4 = generate_projection_transform_programs(
+            max_transform_depth=4,
+            signature_anchors=DEEP_TRANSFORM_SIGNATURE_ANCHORS,
+        )
+        values = {
+            program.apply(left, right)
+            for program in old_depth4
+            if program.apply(left, right) is not None
+        }
+        self.assertTrue(all(abs(float(value) - target) > 1e-9 for value in values))
+
     def falsify_old_alphabet(self, body, brackets, hidden, epoch_base=1000):
         for index, (context, (left, right)) in enumerate(brackets.items()):
+            self.assert_outside_old_depth4(hidden, left, right)
             ax = self.axis(context)
             body.memory.remember_representation(ax)
             target = hidden.apply(left, right)
@@ -161,6 +175,7 @@ class TransformPrimitiveAlphabetTests(unittest.TestCase):
     def train_primitive(self, body, failure_brackets, hidden, contexts, epoch_base):
         organ = TransformPrimitiveAlphabetOrgan(body)
         for index, (context, left, right) in enumerate(contexts):
+            self.assert_outside_old_depth4(hidden, left, right)
             ax = self.axis(context)
             body.memory.remember_representation(ax)
             target = hidden.apply(left, right)
@@ -182,11 +197,13 @@ class TransformPrimitiveAlphabetTests(unittest.TestCase):
         return organ.policy()
 
     def test_world_failure_opens_new_power_primitive_and_descendant_needs_it(self):
-        failure_brackets = {"alphabet-f1": (2.0, 32.0), "alphabet-f2": (3.0, 243.0)}
+        # These geometries are chosen without outcome evidence and are explicitly
+        # checked to keep the generated POWER target outside old LOG/INV depth 4.
+        failure_brackets = {"alphabet-f1": (1.7, 5.61), "alphabet-f2": (2.3, 7.59)}
         body = PersistentCognitiveRuntime()
         self.falsify_old_alphabet(body, failure_brackets, self.hidden)
 
-        training = (("primitive-t1", 4.0, 256.0), ("primitive-t2", 5.0, 625.0))
+        training = (("primitive-t1", 3.7, 12.21), ("primitive-t2", 5.2, 17.16))
         learned = self.train_primitive(body, failure_brackets, self.hidden, training, 30000)
         self.assertEqual(learned.status, "REPRODUCED_TRANSFORM_PRIMITIVE")
         self.assertEqual(learned.exponent, 0.5)
@@ -198,29 +215,17 @@ class TransformPrimitiveAlphabetTests(unittest.TestCase):
         verifierless_organ = TransformPrimitiveAlphabetOrgan(verifierless)
         self.assertIsNone(verifierless_organ.policy().primitive_id)
         blocked = verifierless_organ.frontier(
-            "verifierless", 7.0, 2401.0, failure_brackets, current_depth=3
+            "verifierless", 7.1, 23.43, failure_brackets, current_depth=3
         )
         self.assertEqual(blocked.status, "CURRENT_TRANSFORM_ALPHABET_NOT_EXHAUSTIVELY_FALSIFIED")
 
         treatment = restore_runtime(checkpoint, world_verifier=self.verifier)
         remove = restore_runtime(checkpoint, world_verifier=self.verifier)
         heldout_context = "primitive-heldout"
-        heldout_left, heldout_right = 7.0, 2401.0
+        heldout_left, heldout_right = 7.1, 23.43
         heldout_target = self.hidden.apply(heldout_left, heldout_right)
         heldout_axis = self.axis(heldout_context)
-
-        # Stronger control: even one additional layer of the old LOG/INV alphabet
-        # cannot express this exact heldout primitive behavior.
-        old_depth4 = generate_projection_transform_programs(
-            max_transform_depth=4,
-            signature_anchors=DEEP_TRANSFORM_SIGNATURE_ANCHORS,
-        )
-        old_depth4_values = {
-            program.apply(heldout_left, heldout_right)
-            for program in old_depth4
-            if program.apply(heldout_left, heldout_right) is not None
-        }
-        self.assertTrue(all(abs(float(value) - heldout_target) > 1e-9 for value in old_depth4_values))
+        self.assert_outside_old_depth4(self.hidden, heldout_left, heldout_right)
 
         for candidate_body in (treatment, remove):
             candidate_body.memory.remember_representation(heldout_axis)
@@ -271,11 +276,11 @@ class TransformPrimitiveAlphabetTests(unittest.TestCase):
             item for item in self.programs if item.exponent == 2.0 and item.alpha == 0.25
         )
         wrong = PersistentCognitiveRuntime()
-        wrong_failure = {"wrong-f1": (2.0, 32.0), "wrong-f2": (3.0, 243.0)}
+        wrong_failure = {"wrong-f1": (1.7, 5.61), "wrong-f2": (2.3, 7.59)}
         self.falsify_old_alphabet(wrong, wrong_failure, wrong_hidden, epoch_base=100000)
         wrong_policy = self.train_primitive(
             wrong, wrong_failure, wrong_hidden,
-            (("wrong-t1", 4.0, 256.0), ("wrong-t2", 5.0, 625.0)),
+            (("wrong-t1", 3.7, 12.21), ("wrong-t2", 5.2, 17.16)),
             130000,
         )
         self.assertEqual(wrong_policy.exponent, 2.0)
