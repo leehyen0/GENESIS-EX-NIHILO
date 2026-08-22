@@ -29,16 +29,18 @@ class RepresentationAxis:
     train_support: int
     positive_partition: Tuple[str, ...]
     formula: str
+    coefficients: Tuple[Tuple[str, float], ...] = ()
+    bias: float = 0.0
     status: str = "PROPOSAL_ONLY"
 
 
 class RepresentationGenesisEngine:
     """Generate measurable candidate axes from raw numeric observations.
 
-    This moves beyond supplied categorical features by constructing new axes such
-    as differences, ratios, interactions and temporal derivatives. Axes remain
-    proposals until downstream held-out/causal validation promotes the concepts
-    that use them.
+    Fixed operator families (difference/ratio/interaction/derivative) are joined by
+    a learned latent projection family. Projection weights are derived only from
+    training outcomes and remain proposals until downstream incremental-value and
+    held-out/causal gates close.
     """
 
     def __init__(
@@ -46,10 +48,12 @@ class RepresentationGenesisEngine:
         min_information_gain: float = 0.05,
         min_partition_support: int = 2,
         axis_budget: int = 16,
+        enable_projection: bool = True,
     ) -> None:
         self.min_information_gain = max(0.0, float(min_information_gain))
         self.min_partition_support = max(1, int(min_partition_support))
         self.axis_budget = max(1, int(axis_budget))
+        self.enable_projection = bool(enable_projection)
 
     @staticmethod
     def _entropy(labels: Sequence[str]) -> float:
@@ -139,6 +143,82 @@ class RepresentationGenesisEngine:
                 ) / dt
         return out
 
+    def _projection_axis(
+        self,
+        train: Sequence[MeasurementObservation],
+        variables: Sequence[str],
+    ) -> Optional[RepresentationAxis]:
+        if len(variables) < 2:
+            return None
+        complete = [row for row in train if all(v in row.values for v in variables)]
+        labels = sorted({row.outcome for row in complete})
+        if len(labels) != 2 or len(complete) < 2 * self.min_partition_support:
+            return None
+
+        means: Dict[str, float] = {}
+        scales: Dict[str, float] = {}
+        for variable in variables:
+            xs = [float(row.values[variable]) for row in complete]
+            mean = sum(xs) / len(xs)
+            variance = sum((x - mean) ** 2 for x in xs) / len(xs)
+            means[variable] = mean
+            scales[variable] = math.sqrt(variance) if variance > 1e-12 else 1.0
+
+        class_means: Dict[str, Dict[str, float]] = {label: {} for label in labels}
+        for label in labels:
+            rows = [row for row in complete if row.outcome == label]
+            if len(rows) < self.min_partition_support:
+                return None
+            for variable in variables:
+                class_means[label][variable] = sum(
+                    (float(row.values[variable]) - means[variable]) / scales[variable]
+                    for row in rows
+                ) / len(rows)
+
+        lo, hi = labels
+        standardized_weights = {
+            variable: class_means[hi][variable] - class_means[lo][variable]
+            for variable in variables
+        }
+        norm = math.sqrt(sum(weight * weight for weight in standardized_weights.values()))
+        if norm <= 1e-12:
+            return None
+        standardized_weights = {k: v / norm for k, v in standardized_weights.items()}
+
+        raw_weights = {
+            variable: standardized_weights[variable] / scales[variable]
+            for variable in variables
+        }
+        bias = -sum(raw_weights[v] * means[v] for v in variables)
+        scores = {
+            row.observation_id: bias + sum(raw_weights[v] * float(row.values[v]) for v in variables)
+            for row in complete
+        }
+        split = self._best_split(complete, scores)
+        if split is None:
+            return None
+        threshold, direction, gain, signature = split
+        if gain < self.min_information_gain:
+            return None
+
+        coefficients = tuple(sorted((v, float(raw_weights[v])) for v in variables))
+        formula = " + ".join(f"({weight:.12g})*{name}" for name, weight in coefficients)
+        if abs(bias) > 1e-12:
+            formula += f" + ({bias:.12g})"
+        return RepresentationAxis(
+            axis_id="AXIS::PROJECTION::" + "|".join(variables),
+            family="PROJECTION",
+            inputs=tuple(variables),
+            threshold=threshold,
+            direction=direction,
+            information_gain=gain,
+            train_support=len(scores),
+            positive_partition=signature,
+            formula=formula,
+            coefficients=coefficients,
+            bias=float(bias),
+        )
+
     def propose_axes(
         self,
         observations: Sequence[MeasurementObservation],
@@ -176,8 +256,15 @@ class RepresentationGenesisEngine:
         for variable in variables:
             consider("DERIVATIVE", (variable,), self._derivative_values(train, variable), f"d({variable})/dt")
 
+        if self.enable_projection:
+            projection = self._projection_axis(train, variables)
+            if projection is not None:
+                raw.append(projection)
+
         raw.sort(key=lambda axis: (-axis.information_gain, len(axis.inputs), axis.axis_id))
-        # Quotient axes that induce the same discriminating partition.
+        # Quotient axes that induce the same discriminating partition. A latent
+        # projection survives only if it creates a distinct partition or wins by
+        # ordering before an equivalent lower-value candidate.
         out: List[RepresentationAxis] = []
         seen_partitions = set()
         for axis in raw:
@@ -208,6 +295,8 @@ class RepresentationGenesisEngine:
                 if abs(dt) <= 1e-12:
                     return None
                 return (float(row.values[axis.inputs[0]]) - float(previous.values[axis.inputs[0]])) / dt
+            if axis.family == "PROJECTION":
+                return float(axis.bias) + sum(float(weight) * float(row.values[name]) for name, weight in axis.coefficients)
         except (KeyError, TypeError, ValueError):
             return None
         return None
