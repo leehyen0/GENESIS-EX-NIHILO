@@ -112,11 +112,7 @@ def build_observations(world: HiddenAffineWorld, label_flip: bool):
     residuals = []
     for heldout, rows in ((False, BASE_TRAIN), (True, BASE_HELDOUT)):
         for observation_id, base_x, base_y, base_label in rows:
-            label = (
-                ("B" if base_label == "A" else "A")
-                if label_flip
-                else base_label
-            )
+            label = ("B" if base_label == "A" else "A") if label_flip else base_label
             values = world.encode(base_x, base_y)
             measurements.append(MeasurementObservation(
                 observation_id=observation_id,
@@ -139,8 +135,6 @@ def main(seed_path: str) -> None:
     seed = int(Path(seed_path).read_text().strip())
     rng = random.Random(seed)
 
-    # The transform, feature names, label orientation and receipt trust surface are
-    # chosen after checkout from evaluator-owned randomness.
     scale = rng.choice((-1.0, 1.0)) * rng.uniform(0.55, 3.25)
     swap = bool(rng.getrandbits(1))
     feature_names = (
@@ -177,7 +171,7 @@ def main(seed_path: str) -> None:
     measurements, residuals = build_observations(discovery_world, label_flip)
 
     runtime = PersistentCognitiveRuntime()
-    reference_values = {name: 0.0 for name in feature_names}
+    zero_reference = {name: 0.0 for name in feature_names}
     cycle = runtime.cycle(
         TaskState(
             goal="discover a representation that explains the unseen residual structure",
@@ -188,7 +182,7 @@ def main(seed_path: str) -> None:
         ),
         residuals=residuals,
         measurements=measurements,
-        experiment_reference_values=reference_values,
+        experiment_reference_values=zero_reference,
         world_context_id=discovery_world.context_id,
     )
 
@@ -223,16 +217,23 @@ def main(seed_path: str) -> None:
     if not bounded_laws:
         raise AssertionError("latent-axis concept did not survive predictive held-out law gate")
 
+    # Expand the BODY's own experiment generator over several already observed
+    # reference states. Exact intervention fingerprints make each numerical
+    # experiment a distinct evidence target rather than aliasing them by axis.
+    train_measurements = [row for row in measurements if not row.heldout]
+    for row in train_measurements[:6]:
+        for generated in runtime.experiment.propose(selected_axis, row.values):
+            runtime.memory.remember_experiment(generated)
+
     selected_proposals = [
-        proposal for proposal in cycle.intervention_proposals
+        proposal for proposal in runtime.persisted_intervention_proposals()
         if proposal.axis_id == selected_axis.axis_id
     ]
     if not selected_proposals:
-        raise AssertionError("generated latent representation did not create an actionable experiment")
-    selected_proposal = selected_proposals[0]
+        raise AssertionError("generated latent representation did not create any persistent experiment candidates")
+    if len({p.experiment_id for p in selected_proposals}) != len(selected_proposals):
+        raise AssertionError("numerically distinct generated experiments aliased to one experiment identity")
 
-    # Explicit REMOVE-PROJECTION control: the same raw observations are compiled
-    # with latent projection disabled. It must not recreate the treatment axis.
     remove_runtime = PersistentCognitiveRuntime(
         representation=RepresentationGenesisEngine(enable_projection=False)
     )
@@ -246,7 +247,7 @@ def main(seed_path: str) -> None:
         ),
         residuals=residuals,
         measurements=measurements,
-        experiment_reference_values=reference_values,
+        experiment_reference_values=zero_reference,
         world_context_id=discovery_world.context_id,
     )
     if any(axis.family == "PROJECTION" for axis in remove_cycle.representation_axes):
@@ -256,61 +257,58 @@ def main(seed_path: str) -> None:
 
     action_policy = EvidenceBoundWorldActionPolicy()
     before_action = action_policy.select(
-        cycle.intervention_proposals,
+        selected_proposals,
         runtime.world_coupling,
         context_id=discovery_world.context_id,
     )
     if before_action.status != "EXPLORE_ONLY_NO_WORLD_SUPPORTED_ACTION" or before_action.proposal is not None:
-        raise AssertionError("generated proposal self-promoted to action before world evidence")
+        raise AssertionError("generated experiments self-promoted to action before world evidence")
 
-    # Two cryptographically distinct issuers are also two verifier-bound evidence
-    # classes. Source/challenge strings alone are not allowed to create independence.
-    observed_effects = []
-    for index in (1, 2):
-        world = HiddenAffineWorld(
-            scale=scale,
-            swap=swap,
-            feature_names=feature_names,
-            source_id=f"e2e-source-{index}",
-            challenge_id=f"e2e-challenge-{index}",
-            epoch=index,
-            signer=signers[index - 1],
-        )
-        pair = runtime.execute_world_intervention(
-            selected_proposal,
-            world,
-            verifier=verifier,
-        )
-        if not pair.authority_verified:
-            raise AssertionError("generated experiment outcome failed external receipt authentication")
-        observed_effects.append(abs(pair.effect))
-
-    summary = runtime.world_axis_summary(
-        selected_axis.axis_id,
-        context_id=discovery_world.context_id,
-    )
-    if summary.independent_evidence_classes != 2:
-        raise AssertionError("generated representation did not receive two verifier-bound independent world classes")
-    if min(observed_effects) < 0.5 or summary.routing_score <= 0.0:
-        raise AssertionError("generated experiment did not causally distinguish the hidden world")
+    effects_by_experiment = {}
+    for proposal_index, proposal in enumerate(selected_proposals, start=1):
+        effects = []
+        suffix = proposal.experiment_id.rsplit("::", 1)[-1]
+        for issuer_index, signer in enumerate(signers, start=1):
+            world = HiddenAffineWorld(
+                scale=scale,
+                swap=swap,
+                feature_names=feature_names,
+                source_id=f"e2e-source-{proposal_index}-{issuer_index}-{suffix}",
+                challenge_id=f"e2e-challenge-{proposal_index}-{issuer_index}-{suffix}",
+                epoch=proposal_index * 10 + issuer_index,
+                signer=signer,
+            )
+            pair = runtime.execute_world_intervention(proposal, world, verifier=verifier)
+            if not pair.authority_verified:
+                raise AssertionError("generated experiment outcome failed external receipt authentication")
+            effects.append(abs(pair.effect))
+        effects_by_experiment[proposal.experiment_id] = effects
 
     after_action = action_policy.select(
-        cycle.intervention_proposals,
+        selected_proposals,
         runtime.world_coupling,
         context_id=discovery_world.context_id,
     )
     if after_action.status != "WORLD_SUPPORTED_ACTION" or after_action.proposal is None:
-        raise AssertionError("authenticated world consequences did not create a supported future action")
-    if after_action.proposal.axis_id != selected_axis.axis_id:
-        raise AssertionError("world-supported action did not select the generated latent representation")
+        raise AssertionError("none of the BODY-generated exact experiments produced reproducible world consequence")
+    chosen_proposal = after_action.proposal
+    chosen_effects = effects_by_experiment[chosen_proposal.experiment_id]
+    if min(chosen_effects) < 0.5:
+        raise AssertionError("selected exact experiment did not reproduce its consequence in both verifier classes")
+    if after_action.independent_evidence_classes != 2 or after_action.routing_score <= 0.0:
+        raise AssertionError("selected exact experiment lacked two verifier-bound evidence classes")
 
     encoded = checkpoint_json(runtime)
     if any(secret.hex() in encoded for secret in receipt_secrets) or "trusted_keys" in encoded:
         raise AssertionError("external verifier secret leaked into persistent BODY checkpoint")
 
+    chosen_experiment_id = chosen_proposal.experiment_id
     unverified_descendant = restore_json(encoded)
+    unverified_proposals = unverified_descendant.persisted_intervention_proposals()
+    if chosen_experiment_id not in {p.experiment_id for p in unverified_proposals}:
+        raise AssertionError("descendant BODY lost the exact world-tested generated experiment")
     unverified_action = action_policy.select(
-        cycle.intervention_proposals,
+        unverified_proposals,
         unverified_descendant.world_coupling,
         context_id=discovery_world.context_id,
     )
@@ -318,24 +316,19 @@ def main(seed_path: str) -> None:
         raise AssertionError("descendant used external evidence without re-verification")
 
     descendant = restore_json(encoded, world_verifier=verifier)
+    descendant_proposals = descendant.persisted_intervention_proposals()
     descendant_action = action_policy.select(
-        cycle.intervention_proposals,
+        descendant_proposals,
         descendant.world_coupling,
         context_id=discovery_world.context_id,
     )
     if descendant_action.status != "WORLD_SUPPORTED_ACTION" or descendant_action.proposal is None:
-        raise AssertionError("reverified descendant did not recover world-supported action authority")
-    if descendant_action.proposal.axis_id != selected_axis.axis_id:
-        raise AssertionError("reverified descendant did not inherit generated-representation action preference")
-    descendant_summary = descendant.world_axis_summary(
-        selected_axis.axis_id,
-        context_id=discovery_world.context_id,
-    )
-    if descendant_summary != summary:
-        raise AssertionError("world-caused representation evidence changed across descendant reconstruction")
+        raise AssertionError("reverified descendant did not recover exact world-supported experiment")
+    if descendant_action.proposal.experiment_id != chosen_experiment_id:
+        raise AssertionError("descendant selected a different experiment than the exact world-supported parent phenotype")
 
     print(json.dumps({
-        "status": "PASS_BOUNDED_VERIFIER_BOUND_RAW_RESIDUAL_TO_REVERIFIED_DESCENDANT_ACTION",
+        "status": "PASS_BOUNDED_EXACT_EXPERIMENT_RAW_RESIDUAL_TO_REVERIFIED_DESCENDANT_ACTION",
         "generated_axis_family": selected_axis.family,
         "generated_axis_id": selected_axis.axis_id,
         "generated_axis_coefficients": list(selected_axis.coefficients),
@@ -344,19 +337,23 @@ def main(seed_path: str) -> None:
         "heldout_accuracy": selected_assessment.heldout_accuracy,
         "generated_concept_count": len(generated_concepts),
         "bounded_predictive_law_count": len(bounded_laws),
-        "generated_experiment_id": selected_proposal.experiment_id,
-        "generated_experiment_manipulated_variable": selected_proposal.manipulated_variable,
+        "generated_experiment_count": len(selected_proposals),
+        "world_effects_by_experiment": effects_by_experiment,
+        "selected_experiment_id": chosen_experiment_id,
+        "selected_manipulated_variable": chosen_proposal.manipulated_variable,
+        "selected_world_effects": chosen_effects,
         "remove_projection_intervention_count": len(remove_cycle.intervention_proposals),
         "before_world_action_status": before_action.status,
         "after_world_action_status": after_action.status,
-        "after_world_action_axis": after_action.proposal.axis_id,
-        "world_effects": observed_effects,
+        "after_world_action_experiment_id": chosen_experiment_id,
+        "exact_experiment_evidence_binding": True,
         "cryptographic_world_issuers": 2,
         "verifier_independence_classes": 2,
-        "independent_world_evidence_classes": summary.independent_evidence_classes,
+        "independent_world_evidence_classes": after_action.independent_evidence_classes,
         "unverified_descendant_action_status": unverified_action.status,
         "reverified_descendant_action_status": descendant_action.status,
-        "reverified_descendant_action_axis": descendant_action.proposal.axis_id,
+        "reverified_descendant_experiment_id": descendant_action.proposal.experiment_id,
+        "descendant_parent_proposal_reuse": False,
         "authority_reverification_required_after_restart": True,
         "hidden_rule_exposed_to_body": False,
         "post_checkout_random_transform": True,
