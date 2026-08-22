@@ -9,6 +9,7 @@ from .cognitive_runtime import PersistentCognitiveRuntime
 from .epistemic_memory import ConceptRecord, EpistemicMemory, LawRecord, RepresentationMutation
 from .meta_router import CognitionPolicyState, ModuleExperience, OutcomeLearnedCognitionRouter
 from .semantic_genesis import ConceptCandidate, LawCandidate
+from .topology_learning import CognitionTopologyLearner, EdgeExperience
 
 
 SCHEMA = "arte.cognition_body_checkpoint/v1"
@@ -16,6 +17,7 @@ SCHEMA = "arte.cognition_body_checkpoint/v1"
 
 def checkpoint_dict(runtime: PersistentCognitiveRuntime) -> Dict[str, Any]:
     policy = runtime.router.policy
+    topology = runtime.topology
     return {
         "schema": SCHEMA,
         "policy": {
@@ -26,6 +28,20 @@ def checkpoint_dict(runtime: PersistentCognitiveRuntime) -> Dict[str, Any]:
                 module: asdict(exp)
                 for module, exp in sorted(policy.modules.items())
             },
+        },
+        "topology": {
+            "learning_rate": topology.learning_rate,
+            "min_evidence": topology.min_evidence,
+            "max_edge_shift": topology.max_edge_shift,
+            "macro_min_edge_value": topology.macro_min_edge_value,
+            "edges": [
+                {"a": a, "b": b, **asdict(exp)}
+                for (a, b), exp in sorted(topology.edges.items())
+            ],
+            "sequence_counts": [
+                {"sequence": list(sequence), "count": count}
+                for sequence, count in sorted(topology.sequence_counts.items())
+            ],
         },
         "memory": {
             "concepts": {
@@ -71,6 +87,23 @@ def restore_runtime(payload: Dict[str, Any]) -> PersistentCognitiveRuntime:
             positive_count=int(exp.get("positive_count", 0)),
             negative_count=int(exp.get("negative_count", 0)),
         )
+
+    topology_data = payload.get("topology", {})
+    topology = CognitionTopologyLearner(
+        learning_rate=float(topology_data.get("learning_rate", 0.25)),
+        min_evidence=int(topology_data.get("min_evidence", 3)),
+        max_edge_shift=float(topology_data.get("max_edge_shift", 0.15)),
+        macro_min_edge_value=float(topology_data.get("macro_min_edge_value", 0.05)),
+    )
+    for edge in topology_data.get("edges", []):
+        topology.edges[(edge["a"], edge["b"])] = EdgeExperience(
+            evidence_count=int(edge.get("evidence_count", 0)),
+            signed_synergy=float(edge.get("signed_synergy", 0.0)),
+            positive_count=int(edge.get("positive_count", 0)),
+            negative_count=int(edge.get("negative_count", 0)),
+        )
+    for item in topology_data.get("sequence_counts", []):
+        topology.sequence_counts[tuple(item.get("sequence", []))] = int(item.get("count", 0))
 
     compiler = AdaptiveCognitionCompiler()
     router = OutcomeLearnedCognitionRouter(compiler=compiler, policy=policy)
@@ -127,6 +160,7 @@ def restore_runtime(payload: Dict[str, Any]) -> PersistentCognitiveRuntime:
     return PersistentCognitiveRuntime(
         compiler=compiler,
         router=router,
+        topology=topology,
         memory=memory,
     )
 
