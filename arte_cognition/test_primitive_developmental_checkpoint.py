@@ -13,7 +13,7 @@ from arte_cognition.primitive_genesis_runtime import (
 
 
 class PrimitiveDevelopmentalCheckpointTests(unittest.TestCase):
-    def test_raw_observation_memory_and_search_policy_roundtrip(self):
+    def test_search_policy_roundtrip_without_restoring_raw_authority(self):
         runtime = WorldDrivenPrimitiveRuntime(
             primitive_genesis=RawThresholdPrimitiveGenesisEngine(
                 model_budget=321,
@@ -32,14 +32,15 @@ class PrimitiveDevelopmentalCheckpointTests(unittest.TestCase):
                 min_active_channels=2,
             ),
         )
-        runtime.ingest_raw_observations({
-            "probe-a": {"opaque-1": 1.25, "opaque-2": -3.5},
-            "probe-b": {"opaque-1": 2.25, "opaque-2": 7.5},
-        })
         payload = primitive_checkpoint_dict(runtime)
+        # The cache is audit-only and must never self-authorize after restore.
+        payload["raw_observation_memory_cache"] = {
+            "probe-a": {"opaque-1": 1.25, "opaque-2": -3.5},
+        }
         restored = restore_world_driven_primitive_runtime(payload)
 
-        self.assertEqual(restored.raw_observation_memory, runtime.raw_observation_memory)
+        self.assertEqual(restored.raw_observation_memory, {})
+        self.assertEqual(restored.raw_observation_receipts, [])
         self.assertEqual(restored.primitive_genesis.model_budget, 321)
         self.assertEqual(restored.primitive_genesis.min_distinct_values, 4)
         self.assertEqual(restored.linear_primitive_genesis.model_budget, 654)
@@ -49,14 +50,30 @@ class PrimitiveDevelopmentalCheckpointTests(unittest.TestCase):
         self.assertEqual(restored.symbolic_primitive_genesis.max_depth, 1)
         self.assertEqual(restored.symbolic_primitive_genesis.operators, ("MUL", "ABS"))
 
+    def test_legacy_v1_plain_raw_memory_is_deauthorized(self):
+        runtime = WorldDrivenPrimitiveRuntime()
+        payload = primitive_checkpoint_dict(runtime)
+        payload["primitive_development_schema"] = "arte.primitive_development_same_body/v1"
+        payload.pop("raw_observation_receipts", None)
+        payload.pop("raw_observation_memory_cache", None)
+        payload["raw_observation_memory"] = {
+            "legacy-probe": {"opaque": 9.0},
+        }
+        restored = restore_world_driven_primitive_runtime(payload)
+        self.assertEqual(restored.raw_observation_memory, {})
+        self.assertEqual(restored.raw_observation_receipts, [])
+        self.assertEqual(restored.symbolic_primitive_genesis.max_depth, 2)
+
     def test_legacy_epistemic_checkpoint_restores_with_empty_raw_memory(self):
         runtime = WorldDrivenPrimitiveRuntime()
         payload = primitive_checkpoint_dict(runtime)
-        payload.pop("primitive_development_schema")
-        payload.pop("raw_observation_memory")
-        payload.pop("primitive_genesis_policy")
+        payload.pop("primitive_development_schema", None)
+        payload.pop("raw_observation_receipts", None)
+        payload.pop("raw_observation_memory_cache", None)
+        payload.pop("primitive_genesis_policy", None)
         restored = restore_world_driven_primitive_runtime(payload)
         self.assertEqual(restored.raw_observation_memory, {})
+        self.assertEqual(restored.raw_observation_receipts, [])
         self.assertEqual(restored.symbolic_primitive_genesis.max_depth, 2)
 
 
