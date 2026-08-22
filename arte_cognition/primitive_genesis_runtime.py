@@ -18,19 +18,31 @@ from .epistemic_depth_runtime import (
     epistemic_checkpoint_dict,
     restore_epistemic_runtime,
 )
+from .raw_observation_authority import (
+    RawObservationReceipt,
+    RawObservationVerifier,
+    corroborated_raw_observations,
+)
 from .world_coupling import WorldReceiptVerifier
 
 
-PRIMITIVE_DEVELOPMENT_SCHEMA = "arte.primitive_development_same_body/v1"
+PRIMITIVE_DEVELOPMENT_SCHEMA = "arte.primitive_development_same_body/v2"
+LEGACY_PRIMITIVE_DEVELOPMENT_SCHEMAS = {"arte.primitive_development_same_body/v1"}
 
 
 class WorldDrivenPrimitiveRuntime(EpistemicallyDeepPersistentCognitiveRuntime):
     """Same persistent BODY with falsification-driven primitive growth.
 
-    Raw observations used to create G5-G7 cognition are BODY state, not transient
-    evaluator arguments. Search-policy parameters are also checkpointed so a
-    descendant reconstructs the same bounded hypothesis generator rather than a
-    fresh default generator with merely copied generated models.
+    G5-G7 raw observations are representation evidence, so their values cannot be
+    accepted as transient evaluator arguments. The BODY stores signed raw receipts
+    and derives its usable raw-observation memory only when two conditions hold:
+    the exact raw payload is externally authenticated, and that receipt is bound to
+    an already authoritative world outcome pair from the same execution identity.
+    Independent authority classes must corroborate the exact raw channel map.
+
+    Search-policy parameters and signed raw receipts are checkpointed. Cached raw
+    values are never restored as authority: a descendant must reverify both world
+    outcome receipts and raw observation receipts before primitive genesis resumes.
     """
 
     def __init__(
@@ -39,25 +51,59 @@ class WorldDrivenPrimitiveRuntime(EpistemicallyDeepPersistentCognitiveRuntime):
         primitive_genesis: Optional[RawThresholdPrimitiveGenesisEngine] = None,
         linear_primitive_genesis: Optional[LinearFormPrimitiveGenesisEngine] = None,
         symbolic_primitive_genesis: Optional[SymbolicPrimitiveGenesisEngine] = None,
-        raw_observation_memory: Optional[Mapping[str, Mapping[str, float]]] = None,
+        raw_observation_receipts: Optional[Sequence[RawObservationReceipt]] = None,
+        raw_observation_verifier: Optional[RawObservationVerifier] = None,
         **kwargs,
     ) -> None:
         super().__init__(*args, **kwargs)
         self.primitive_genesis = primitive_genesis or RawThresholdPrimitiveGenesisEngine()
         self.linear_primitive_genesis = linear_primitive_genesis or LinearFormPrimitiveGenesisEngine()
         self.symbolic_primitive_genesis = symbolic_primitive_genesis or SymbolicPrimitiveGenesisEngine()
+        self.raw_observation_receipts: list[RawObservationReceipt] = []
         self.raw_observation_memory: Dict[str, Dict[str, float]] = {}
-        self.ingest_raw_observations(raw_observation_memory or {})
+        if raw_observation_receipts:
+            self.ingest_raw_observation_receipts(raw_observation_receipts, raw_observation_verifier)
 
-    def ingest_raw_observations(
+    def _rebuild_raw_observation_memory(
         self,
-        observations: Mapping[str, Mapping[str, float]],
+        verifier: Optional[RawObservationVerifier],
     ) -> None:
-        for intervention_id, row in observations.items():
-            iid = str(intervention_id)
-            target = self.raw_observation_memory.setdefault(iid, {})
-            for channel, value in row.items():
-                target[str(channel)] = float(value)
+        self.raw_observation_memory = corroborated_raw_observations(
+            self.raw_observation_receipts,
+            self.world_coupling.pairs,
+            verifier,
+            min_independent_classes=self.world_coupling.min_independent_classes,
+        )
+
+    def ingest_raw_observation_receipt(
+        self,
+        receipt: RawObservationReceipt,
+        verifier: Optional[RawObservationVerifier],
+    ) -> bool:
+        if receipt.observation_id in {item.observation_id for item in self.raw_observation_receipts}:
+            return False
+        self.raw_observation_receipts.append(receipt)
+        self._rebuild_raw_observation_memory(verifier)
+        return receipt.intervention_id in self.raw_observation_memory
+
+    def ingest_raw_observation_receipts(
+        self,
+        receipts: Sequence[RawObservationReceipt],
+        verifier: Optional[RawObservationVerifier],
+    ) -> None:
+        seen = {item.observation_id for item in self.raw_observation_receipts}
+        for receipt in receipts:
+            if receipt.observation_id in seen:
+                continue
+            seen.add(receipt.observation_id)
+            self.raw_observation_receipts.append(receipt)
+        self._rebuild_raw_observation_memory(verifier)
+
+    def reverify_raw_observation_authority(
+        self,
+        verifier: Optional[RawObservationVerifier],
+    ) -> None:
+        self._rebuild_raw_observation_memory(verifier)
 
     def raw_observations_for(
         self,
@@ -69,14 +115,14 @@ class WorldDrivenPrimitiveRuntime(EpistemicallyDeepPersistentCognitiveRuntime):
             if descriptor.intervention_id in self.raw_observation_memory
         }
 
-    def _owned_raw(
-        self,
-        descriptors: Sequence[InterventionDescriptor],
-        observations: Optional[Mapping[str, Mapping[str, float]]] = None,
-    ) -> Dict[str, Dict[str, float]]:
-        if observations:
-            self.ingest_raw_observations(observations)
-        return self.raw_observations_for(descriptors)
+    @staticmethod
+    def _reject_unverified_raw_argument(
+        raw_observations: Optional[Mapping[str, Mapping[str, float]]],
+    ) -> None:
+        if raw_observations is not None:
+            raise ValueError(
+                "direct raw observations are non-authoritative; ingest signed RawObservationReceipt objects instead"
+            )
 
     def generate_world_driven_primitive_models(
         self,
@@ -84,11 +130,14 @@ class WorldDrivenPrimitiveRuntime(EpistemicallyDeepPersistentCognitiveRuntime):
         descriptors: Sequence[InterventionDescriptor],
         raw_observations: Optional[Mapping[str, Mapping[str, float]]] = None,
     ) -> list[GeneratedPrimitiveModel]:
+        self._reject_unverified_raw_argument(raw_observations)
         if self.epistemic_depth_plan().mode != "EXPAND_MODEL_CLASS":
             return []
         if not self.generation_falsified(4):
             return []
-        owned_raw = self._owned_raw(descriptors, raw_observations)
+        owned_raw = self.raw_observations_for(descriptors)
+        if len(owned_raw) != len(descriptors):
+            return []
         existing = list(self.world_models.models.values())
         shadow = self.primitive_genesis.generate_novel(
             variables, descriptors, owned_raw, (), existing
@@ -115,11 +164,14 @@ class WorldDrivenPrimitiveRuntime(EpistemicallyDeepPersistentCognitiveRuntime):
         descriptors: Sequence[InterventionDescriptor],
         raw_observations: Optional[Mapping[str, Mapping[str, float]]] = None,
     ) -> list[GeneratedLinearPrimitiveModel]:
+        self._reject_unverified_raw_argument(raw_observations)
         if self.epistemic_depth_plan().mode != "EXPAND_MODEL_CLASS":
             return []
         if not self.generation_falsified(5):
             return []
-        owned_raw = self._owned_raw(descriptors, raw_observations)
+        owned_raw = self.raw_observations_for(descriptors)
+        if len(owned_raw) != len(descriptors):
+            return []
         existing = list(self.world_models.models.values())
         shadow = self.linear_primitive_genesis.generate_novel(
             variables, descriptors, owned_raw, (), existing
@@ -146,11 +198,14 @@ class WorldDrivenPrimitiveRuntime(EpistemicallyDeepPersistentCognitiveRuntime):
         descriptors: Sequence[InterventionDescriptor],
         raw_observations: Optional[Mapping[str, Mapping[str, float]]] = None,
     ) -> list[GeneratedSymbolicPrimitiveModel]:
+        self._reject_unverified_raw_argument(raw_observations)
         if self.epistemic_depth_plan().mode != "EXPAND_MODEL_CLASS":
             return []
         if not self.generation_falsified(6):
             return []
-        owned_raw = self._owned_raw(descriptors, raw_observations)
+        owned_raw = self.raw_observations_for(descriptors)
+        if len(owned_raw) != len(descriptors):
+            return []
         existing = list(self.world_models.models.values())
         shadow = self.symbolic_primitive_genesis.generate_novel(
             variables, descriptors, owned_raw, (), existing
@@ -207,9 +262,7 @@ class WorldDrivenPrimitiveRuntime(EpistemicallyDeepPersistentCognitiveRuntime):
         descriptors: Sequence[InterventionDescriptor],
         raw_observations: Optional[Mapping[str, Mapping[str, float]]] = None,
     ) -> CausalExpansionDecision:
-        # Ingest once at the BODY boundary. Subsequent descendant calls may omit
-        # raw_observations and continue from persistent developmental memory.
-        self._owned_raw(descriptors, raw_observations)
+        self._reject_unverified_raw_argument(raw_observations)
         current = self.latest_structural_generation()
         if current <= 3:
             return super().expand_causal_model_class(variables, descriptors)
@@ -217,6 +270,11 @@ class WorldDrivenPrimitiveRuntime(EpistemicallyDeepPersistentCognitiveRuntime):
             return CausalExpansionDecision(
                 "NO_EXPANSION_REQUIRED", current, "NONE", (), (),
                 "current live model ecology retains at least one jointly compatible model",
+            )
+        if len(self.raw_observations_for(descriptors)) != len(descriptors):
+            return CausalExpansionDecision(
+                "RAW_OBSERVATION_AUTHORITY_INCOMPLETE", current, "NONE", (), (),
+                "primitive expansion requires independently corroborated raw observations bound to authoritative world pairs",
             )
         if current == 4:
             active = self.generate_world_driven_primitive_models(variables, descriptors)
@@ -226,9 +284,9 @@ class WorldDrivenPrimitiveRuntime(EpistemicallyDeepPersistentCognitiveRuntime):
                 active,
                 self.world_models,
                 self.primitive_genesis.last_truncated,
-                "no prediction-novel threshold primitive was generated from raw observations",
+                "no prediction-novel threshold primitive was generated from authenticated raw observations",
                 "primitive shadow hypotheses persist but none satisfy current authoritative evidence",
-                "externally falsified G4 opened raw-observation primitive synthesis",
+                "externally falsified G4 plus authenticated raw observations opened primitive synthesis",
             )
         if current == 5:
             active = self.generate_world_driven_linear_primitive_models(variables, descriptors)
@@ -240,7 +298,7 @@ class WorldDrivenPrimitiveRuntime(EpistemicallyDeepPersistentCognitiveRuntime):
                 self.linear_primitive_genesis.last_truncated,
                 "no prediction-novel multi-channel linear primitive was generated",
                 "linear primitive shadow hypotheses persist but none satisfy current authoritative evidence",
-                "externally falsified single-channel primitive class opened multi-channel relation synthesis",
+                "externally falsified single-channel class plus authenticated raw observations opened relation synthesis",
             )
         if current == 6:
             active = self.generate_world_driven_symbolic_primitive_models(variables, descriptors)
@@ -252,7 +310,7 @@ class WorldDrivenPrimitiveRuntime(EpistemicallyDeepPersistentCognitiveRuntime):
                 self.symbolic_primitive_genesis.last_truncated,
                 "no prediction-novel symbolic expression primitive was generated",
                 "symbolic shadow hypotheses persist but none satisfy current authoritative evidence",
-                "externally falsified linear class opened generic symbolic expression search",
+                "externally falsified linear class plus authenticated raw observations opened symbolic search",
             )
         return CausalExpansionDecision(
             "MAX_GENERATION_REACHED",
@@ -264,10 +322,46 @@ class WorldDrivenPrimitiveRuntime(EpistemicallyDeepPersistentCognitiveRuntime):
         )
 
 
+def _raw_receipt_dict(receipt: RawObservationReceipt):
+    return {
+        "observation_id": receipt.observation_id,
+        "intervention_id": receipt.intervention_id,
+        "channel_values": [[name, float(value)] for name, value in receipt.normalized_values],
+        "source_id": receipt.source_id,
+        "context_id": receipt.context_id,
+        "challenge_id": receipt.challenge_id,
+        "epoch": int(receipt.epoch),
+        "externally_generated": bool(receipt.externally_generated),
+        "issuer_id": receipt.issuer_id,
+        "signature": receipt.signature,
+    }
+
+
+def _restore_raw_receipt(item) -> RawObservationReceipt:
+    return RawObservationReceipt(
+        observation_id=str(item["observation_id"]),
+        intervention_id=str(item["intervention_id"]),
+        channel_values=tuple((str(name), float(value)) for name, value in item.get("channel_values", ())),
+        source_id=str(item["source_id"]),
+        context_id=str(item["context_id"]),
+        challenge_id=str(item["challenge_id"]),
+        epoch=int(item["epoch"]),
+        externally_generated=bool(item.get("externally_generated", False)),
+        issuer_id=str(item.get("issuer_id", "UNSIGNED")),
+        signature=str(item.get("signature", "")),
+    )
+
+
 def primitive_checkpoint_dict(runtime: WorldDrivenPrimitiveRuntime):
     payload = epistemic_checkpoint_dict(runtime)
     payload["primitive_development_schema"] = PRIMITIVE_DEVELOPMENT_SCHEMA
-    payload["raw_observation_memory"] = {
+    payload["raw_observation_receipts"] = [
+        _raw_receipt_dict(receipt)
+        for receipt in runtime.raw_observation_receipts
+    ]
+    # Audit-only cache. Restore never trusts this field; authority is re-derived
+    # exclusively from signed raw receipts plus reverified world pairs.
+    payload["raw_observation_memory_cache"] = {
         intervention_id: {
             channel: float(value)
             for channel, value in sorted(row.items())
@@ -298,15 +392,21 @@ def primitive_checkpoint_dict(runtime: WorldDrivenPrimitiveRuntime):
 def restore_world_driven_primitive_runtime(
     payload,
     world_verifier: Optional[WorldReceiptVerifier] = None,
+    raw_observation_verifier: Optional[RawObservationVerifier] = None,
 ) -> WorldDrivenPrimitiveRuntime:
     schema = payload.get("primitive_development_schema")
-    if schema not in (None, PRIMITIVE_DEVELOPMENT_SCHEMA):
+    if schema not in (None, PRIMITIVE_DEVELOPMENT_SCHEMA) and schema not in LEGACY_PRIMITIVE_DEVELOPMENT_SCHEMAS:
         raise ValueError("unsupported primitive development schema")
     base = restore_epistemic_runtime(payload, world_verifier=world_verifier)
     policy = payload.get("primitive_genesis_policy", {})
     threshold_policy = policy.get("threshold", {})
     linear_policy = policy.get("linear", {})
     symbolic_policy = policy.get("symbolic", {})
+    raw_receipts = (
+        [_restore_raw_receipt(item) for item in payload.get("raw_observation_receipts", [])]
+        if schema == PRIMITIVE_DEVELOPMENT_SCHEMA
+        else []
+    )
     return WorldDrivenPrimitiveRuntime(
         compiler=base.compiler,
         router=base.router,
@@ -340,5 +440,6 @@ def restore_world_driven_primitive_runtime(
             operators=tuple(symbolic_policy.get("operators", ("ADD", "SUB", "MUL", "ABS"))),
             min_active_channels=int(symbolic_policy.get("min_active_channels", 2)),
         ),
-        raw_observation_memory=payload.get("raw_observation_memory", {}),
+        raw_observation_receipts=raw_receipts,
+        raw_observation_verifier=raw_observation_verifier,
     )
