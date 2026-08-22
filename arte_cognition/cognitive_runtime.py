@@ -25,12 +25,17 @@ from .projection_generator_program_genesis import (
     generate_projection_generator_programs,
 )
 from .projection_generator_transform_grammar import (
+    DEEP_TRANSFORM_SIGNATURE_ANCHORS,
     TRANSFORM_PROGRAM_MARKER,
     ProjectionTransformFrontier,
     ProjectionTransformPolicy,
     derive_projection_transform_frontier,
     derive_projection_transform_policy,
     generate_projection_transform_programs,
+)
+from .projection_transform_depth_genesis import (
+    ProjectionTransformDepthAssessment,
+    derive_projection_transform_depth_assessment,
 )
 from .projection_scale_genesis import (
     ProjectionScaleFrontier,
@@ -91,9 +96,10 @@ class PersistentCognitiveRuntime:
     a bounded policy space for the smallest cross-context sufficient probe subset.
     When the authored numeric probe vocabulary itself leaves a strong-effect world
     residual, the BODY can generate off-grid scale atoms. Repeated authenticated
-    success of generated atoms can induce reusable interpolation parameters, bounded
-    generator programs, and compositional transform ASTs built from primitive unary
-    operators. Search subsets, generated atoms, and generator policies are always
+    success can induce interpolation parameters, generator programs, and compositional
+    transform ASTs. If every applicable AST at the current transform depth is
+    independently evaluated and repeatedly falsified, the BODY may open exactly one
+    deeper composition layer. Search policies, AST policies, and depth authority are
     reconstructed from reverified BODY evidence after restart rather than trusted as
     serialized authority scalars.
     """
@@ -414,6 +420,165 @@ class PersistentCognitiveRuntime:
             left=left,
             right=right,
             max_candidates=max_candidates,
+            apply_learned_program=apply_learned_program,
+        )
+        if not frontier.candidates:
+            return []
+        generated: List[InterventionProposal] = []
+        for candidate in frontier.candidates:
+            engine = ExperimentGenesisEngine(
+                relative_margin=self.experiment.relative_margin,
+                max_proposals=max(self.experiment.max_proposals, len(axis.coefficients)),
+                projection_margin_multipliers=(candidate.scale,),
+            )
+            for proposal in engine.propose(axis, reference_values):
+                reason = (
+                    f"{proposal.reason} {TRANSFORM_PROGRAM_MARKER}"
+                    f"{'|'.join(candidate.program_ids)}"
+                )
+                bound = replace(proposal, reason=reason)
+                self.memory.remember_experiment(bound)
+                generated.append(bound)
+        return generated
+
+    def projection_transform_depth_assessment(
+        self,
+        context_brackets: Mapping[str, Tuple[float, float]],
+        current_depth: int = 2,
+        next_depth: int = 3,
+    ) -> ProjectionTransformDepthAssessment:
+        """Re-derive whether exhaustive world failure authorizes one deeper AST layer."""
+        return derive_projection_transform_depth_assessment(
+            proposals=self._persisted_proposals(),
+            world_pairs=self.world_coupling.pairs,
+            min_independent_classes=self.world_coupling.min_independent_classes,
+            context_brackets=context_brackets,
+            current_depth=current_depth,
+            next_depth=next_depth,
+            strong_effect_threshold=0.9,
+            min_falsified_contexts=2,
+        )
+
+    def _adaptive_transform_programs(
+        self,
+        context_brackets: Mapping[str, Tuple[float, float]],
+        current_depth: int = 2,
+        next_depth: int = 3,
+        allow_depth_expansion: bool = True,
+    ):
+        depth = max(0, int(current_depth))
+        if allow_depth_expansion and self.adaptive_projection_search:
+            assessment = self.projection_transform_depth_assessment(
+                context_brackets=context_brackets,
+                current_depth=current_depth,
+                next_depth=next_depth,
+            )
+            depth = assessment.authorized_depth
+        return generate_projection_transform_programs(
+            max_transform_depth=depth,
+            signature_anchors=DEEP_TRANSFORM_SIGNATURE_ANCHORS,
+        )
+
+    def projection_transform_adaptive_policy(
+        self,
+        context_brackets: Mapping[str, Tuple[float, float]],
+        current_depth: int = 2,
+        next_depth: int = 3,
+        allow_depth_expansion: bool = True,
+    ) -> ProjectionTransformPolicy:
+        """Learn an AST only inside the world-authorized transform-depth vocabulary."""
+        if not self.adaptive_projection_search:
+            return ProjectionTransformPolicy(
+                status="TRANSFORM_PROGRAM_POLICY_DISABLED",
+                program_id=None,
+                operations=(),
+                alpha=None,
+                supporting_contexts=(),
+                candidate_program_count=0,
+                reason="adaptive projection search is disabled",
+            )
+        programs = self._adaptive_transform_programs(
+            context_brackets=context_brackets,
+            current_depth=current_depth,
+            next_depth=next_depth,
+            allow_depth_expansion=allow_depth_expansion,
+        )
+        return derive_projection_transform_policy(
+            proposals=self._persisted_proposals(),
+            world_pairs=self.world_coupling.pairs,
+            min_independent_classes=self.world_coupling.min_independent_classes,
+            programs=programs,
+            strong_effect_threshold=0.9,
+            min_contexts=2,
+        )
+
+    def projection_transform_adaptive_frontier(
+        self,
+        context_id: str,
+        left: float,
+        right: float,
+        depth_evidence_brackets: Mapping[str, Tuple[float, float]],
+        current_depth: int = 2,
+        next_depth: int = 3,
+        max_candidates: int = 64,
+        allow_depth_expansion: bool = True,
+        apply_learned_program: bool = True,
+    ) -> ProjectionTransformFrontier:
+        """Generate within the deepest grammar level authorized by reverified world failure."""
+        programs = self._adaptive_transform_programs(
+            context_brackets=depth_evidence_brackets,
+            current_depth=current_depth,
+            next_depth=next_depth,
+            allow_depth_expansion=allow_depth_expansion,
+        )
+        policy = None
+        if apply_learned_program:
+            policy = self.projection_transform_adaptive_policy(
+                context_brackets=depth_evidence_brackets,
+                current_depth=current_depth,
+                next_depth=next_depth,
+                allow_depth_expansion=allow_depth_expansion,
+            )
+        return derive_projection_transform_frontier(
+            proposals=self._persisted_proposals(),
+            world_pairs=self.world_coupling.pairs,
+            min_independent_classes=self.world_coupling.min_independent_classes,
+            probe_scale=self._proposal_probe_scale,
+            context_id=context_id,
+            left=left,
+            right=right,
+            policy=policy,
+            programs=programs,
+            strong_effect_threshold=0.9,
+            max_candidates=max_candidates,
+        )
+
+    def generate_projection_transform_adaptive_interventions(
+        self,
+        axis: RepresentationAxis,
+        reference_values: Mapping[str, float],
+        context_id: str,
+        left: float,
+        right: float,
+        depth_evidence_brackets: Mapping[str, Tuple[float, float]],
+        current_depth: int = 2,
+        next_depth: int = 3,
+        max_candidates: int = 64,
+        allow_depth_expansion: bool = True,
+        apply_learned_program: bool = True,
+    ) -> List[InterventionProposal]:
+        """Instantiate exact proposals from the world-authorized adaptive-depth frontier."""
+        if axis.family != "PROJECTION":
+            return []
+        frontier = self.projection_transform_adaptive_frontier(
+            context_id=context_id,
+            left=left,
+            right=right,
+            depth_evidence_brackets=depth_evidence_brackets,
+            current_depth=current_depth,
+            next_depth=next_depth,
+            max_candidates=max_candidates,
+            allow_depth_expansion=allow_depth_expansion,
             apply_learned_program=apply_learned_program,
         )
         if not frontier.candidates:
