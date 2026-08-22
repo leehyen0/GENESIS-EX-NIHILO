@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 import json
 
 from .adaptive_cognition import AdaptiveCognitionCompiler
@@ -10,7 +10,12 @@ from .epistemic_memory import ConceptRecord, EpistemicMemory, LawRecord, Represe
 from .meta_router import CognitionPolicyState, ModuleExperience, OutcomeLearnedCognitionRouter
 from .semantic_genesis import ConceptCandidate, LawCandidate
 from .topology_learning import CognitionTopologyLearner, EdgeExperience
-from .world_coupling import WorldCouplingEngine, WorldOutcomePair
+from .world_coupling import (
+    WorldCouplingEngine,
+    WorldOutcomePair,
+    WorldOutcomeReceipt,
+    WorldReceiptVerifier,
+)
 
 
 SCHEMA = "arte.cognition_body_checkpoint/v3"
@@ -80,7 +85,31 @@ def checkpoint_json(runtime: PersistentCognitiveRuntime) -> str:
     return json.dumps(checkpoint_dict(runtime), sort_keys=True, separators=(",", ":"))
 
 
-def restore_runtime(payload: Dict[str, Any]) -> PersistentCognitiveRuntime:
+def _restore_receipt(item: Optional[Dict[str, Any]]) -> Optional[WorldOutcomeReceipt]:
+    if not item:
+        return None
+    return WorldOutcomeReceipt(
+        receipt_id=item["receipt_id"],
+        experiment_id=item["experiment_id"],
+        axis_id=item["axis_id"],
+        arm=item["arm"],
+        intervention_value=float(item["intervention_value"]),
+        outcome=float(item["outcome"]),
+        source_id=item["source_id"],
+        context_id=item["context_id"],
+        challenge_id=item["challenge_id"],
+        epoch=int(item["epoch"]),
+        budget_token=item["budget_token"],
+        externally_generated=bool(item.get("externally_generated", False)),
+        issuer_id=str(item.get("issuer_id", "UNSIGNED")),
+        signature=str(item.get("signature", "")),
+    )
+
+
+def restore_runtime(
+    payload: Dict[str, Any],
+    world_verifier: Optional[WorldReceiptVerifier] = None,
+) -> PersistentCognitiveRuntime:
     schema = payload.get("schema")
     if schema != SCHEMA and schema not in LEGACY_SCHEMAS:
         raise ValueError("unsupported cognition checkpoint schema")
@@ -121,8 +150,9 @@ def restore_runtime(payload: Dict[str, Any]) -> PersistentCognitiveRuntime:
         min_independent_classes=int(world_data.get("min_independent_classes", 2))
     )
     is_authenticated_schema = schema == SCHEMA
-    world.restore_pairs([
-        WorldOutcomePair(
+    restored_pairs = []
+    for item in world_data.get("pairs", []):
+        restored_pairs.append(WorldOutcomePair(
             pair_id=item["pair_id"],
             experiment_id=item["experiment_id"],
             axis_id=item["axis_id"],
@@ -141,19 +171,24 @@ def restore_runtime(payload: Dict[str, Any]) -> PersistentCognitiveRuntime:
                 if is_authenticated_schema
                 else "LEGACY_UNVERIFIED"
             ),
-            authority_verified=(
-                bool(item.get("authority_verified", False))
+            # Never trust a serialized authority flag. It is re-derived below.
+            authority_verified=False,
+            low_receipt=(
+                _restore_receipt(item.get("low_receipt"))
                 if is_authenticated_schema
-                else False
+                else None
             ),
-        )
-        for item in world_data.get("pairs", [])
-    ])
+            high_receipt=(
+                _restore_receipt(item.get("high_receipt"))
+                if is_authenticated_schema
+                else None
+            ),
+        ))
+    world.restore_pairs(restored_pairs, verifier=world_verifier)
 
     compiler = AdaptiveCognitionCompiler()
     router = OutcomeLearnedCognitionRouter(compiler=compiler, policy=policy)
     memory = EpistemicMemory()
-
     memory_data = payload.get("memory", {})
     for concept_id, item in memory_data.get("concepts", {}).items():
         c = item["concept"]
@@ -211,5 +246,8 @@ def restore_runtime(payload: Dict[str, Any]) -> PersistentCognitiveRuntime:
     )
 
 
-def restore_json(text: str) -> PersistentCognitiveRuntime:
-    return restore_runtime(json.loads(text))
+def restore_json(
+    text: str,
+    world_verifier: Optional[WorldReceiptVerifier] = None,
+) -> PersistentCognitiveRuntime:
+    return restore_runtime(json.loads(text), world_verifier=world_verifier)
