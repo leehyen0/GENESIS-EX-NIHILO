@@ -5,6 +5,10 @@ import random
 import sys
 from pathlib import Path
 
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
 from arte_cognition.adaptive_cognition import Hypothesis, QueryCandidate, TaskState
 from arte_cognition.epistemic_depth_runtime import (
     EpistemicallyDeepPersistentCognitiveRuntime,
