@@ -1,7 +1,10 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Dict, Iterable, List, Optional, Protocol, Sequence, Tuple
+from dataclasses import dataclass, replace
+from typing import Dict, Iterable, List, Mapping, Optional, Protocol, Sequence, Tuple
+import hashlib
+import hmac
+import json
 
 from .experiment_genesis import InterventionProposal
 
@@ -10,9 +13,9 @@ from .experiment_genesis import InterventionProposal
 class WorldOutcomeReceipt:
     """Outcome returned by an executor that owns the world/evaluation surface.
 
-    The BODY receives the enacted value and realized outcome, but not the hidden
-    mechanism used by the executor. `budget_token` identifies matched execution
-    conditions for the two intervention arms.
+    `externally_generated` is descriptive metadata only; it is never sufficient
+    for learning authority. A receipt can steer the BODY only when a separately
+    supplied verifier authenticates its issuer and payload.
     """
 
     receipt_id: str
@@ -27,6 +30,74 @@ class WorldOutcomeReceipt:
     epoch: int
     budget_token: str
     externally_generated: bool = True
+    issuer_id: str = "UNSIGNED"
+    signature: str = ""
+
+
+def receipt_payload(receipt: WorldOutcomeReceipt) -> bytes:
+    """Canonical authenticated payload; signature itself is excluded."""
+    data = {
+        "receipt_id": receipt.receipt_id,
+        "experiment_id": receipt.experiment_id,
+        "axis_id": receipt.axis_id,
+        "arm": receipt.arm,
+        "intervention_value": float(receipt.intervention_value),
+        "outcome": float(receipt.outcome),
+        "source_id": receipt.source_id,
+        "context_id": receipt.context_id,
+        "challenge_id": receipt.challenge_id,
+        "epoch": int(receipt.epoch),
+        "budget_token": receipt.budget_token,
+        "externally_generated": bool(receipt.externally_generated),
+        "issuer_id": receipt.issuer_id,
+    }
+    return json.dumps(data, sort_keys=True, separators=(",", ":")).encode("utf-8")
+
+
+class WorldReceiptVerifier(Protocol):
+    def verify(self, receipt: WorldOutcomeReceipt) -> bool:
+        ...
+
+
+class HMACWorldReceiptSigner:
+    """Reference source-side signer for authenticated evaluator receipts.
+
+    The signing secret belongs to the evaluator/source side and is not part of the
+    persistent BODY checkpoint. HMAC gives payload integrity/authentication under
+    the configured trust key; it does not establish independent organization
+    custody by itself.
+    """
+
+    def __init__(self, issuer_id: str, secret: bytes) -> None:
+        if not issuer_id:
+            raise ValueError("issuer_id is required")
+        if not secret:
+            raise ValueError("signing secret is required")
+        self.issuer_id = issuer_id
+        self._secret = bytes(secret)
+
+    def sign(self, receipt: WorldOutcomeReceipt) -> WorldOutcomeReceipt:
+        unsigned = replace(receipt, issuer_id=self.issuer_id, signature="")
+        signature = hmac.new(self._secret, receipt_payload(unsigned), hashlib.sha256).hexdigest()
+        return replace(unsigned, signature=signature)
+
+
+class HMACWorldReceiptVerifier:
+    """LAB-side verifier with a frozen issuer->key trust map."""
+
+    def __init__(self, trusted_keys: Mapping[str, bytes]) -> None:
+        self._trusted_keys = {
+            str(issuer): bytes(secret)
+            for issuer, secret in trusted_keys.items()
+            if issuer and secret
+        }
+
+    def verify(self, receipt: WorldOutcomeReceipt) -> bool:
+        secret = self._trusted_keys.get(receipt.issuer_id)
+        if secret is None or not receipt.signature:
+            return False
+        expected = hmac.new(secret, receipt_payload(replace(receipt, signature="")), hashlib.sha256).hexdigest()
+        return hmac.compare_digest(expected, receipt.signature)
 
 
 @dataclass(frozen=True)
@@ -44,21 +115,24 @@ class WorldOutcomePair:
     high_value: float
     matched_budget: bool
     externally_generated: bool
+    issuer_id: str = "UNVERIFIED"
+    authority_verified: bool = False
 
     @property
     def effect(self) -> float:
         return float(self.high_outcome) - float(self.low_outcome)
 
     @property
-    def independence_key(self) -> Tuple[str, str]:
+    def independence_key(self) -> Tuple[str, str, str]:
         # Context is deliberately excluded. Replaying one evaluator/challenge in
-        # several regimes can teach regime-specific behavior, but must not be
-        # miscounted as several independent evidence sources globally.
-        return (self.source_id, self.challenge_id)
+        # several regimes can teach regime-specific behavior, but cannot become
+        # several globally independent sources. Issuer identity is included so two
+        # separately trusted issuers do not collide merely on source labels.
+        return (self.issuer_id, self.source_id, self.challenge_id)
 
     @property
-    def contextual_evidence_key(self) -> Tuple[str, str, str]:
-        return (self.context_id, self.source_id, self.challenge_id)
+    def contextual_evidence_key(self) -> Tuple[str, str, str, str]:
+        return (self.context_id, self.issuer_id, self.source_id, self.challenge_id)
 
 
 @dataclass(frozen=True)
@@ -91,38 +165,41 @@ class WorldExecutor(Protocol):
 
 
 class WorldCouplingEngine:
-    """Consume external intervention consequences and change future behavior.
+    """Consume authenticated external consequences and change future behavior.
 
-    World value is conditioned on context/regime when one is supplied. When the
-    caller omits context, the BODY first checks whether independently supported
-    regimes agree on the same preferred intervention. If they conflict, learned
-    global transport is blocked and proposal order is left unchanged rather than
-    averaging incompatible worlds into a false universal policy.
+    A raw receipt is not evidence merely because it says it is external. Only
+    matched-budget pairs whose LOW and HIGH receipts authenticate under a supplied
+    LAB verifier can influence world summaries, transport decisions or future
+    intervention ranking. Unverified pairs remain in the audit lineage but have
+    zero learning authority.
     """
 
     def __init__(self, min_independent_classes: int = 2) -> None:
         self.min_independent_classes = max(1, int(min_independent_classes))
         self.pairs: List[WorldOutcomePair] = []
 
-    def _contextual_evidence_keys(self, axis_id: str, context_id: str) -> set[Tuple[str, str, str]]:
+    @staticmethod
+    def _authoritative(pair: WorldOutcomePair) -> bool:
+        return bool(pair.matched_budget and pair.externally_generated and pair.authority_verified)
+
+    def _contextual_evidence_keys(self, axis_id: str, context_id: str) -> set[Tuple[str, str, str, str]]:
         return {
             pair.contextual_evidence_key
             for pair in self.pairs
             if pair.axis_id == axis_id
             and pair.context_id == context_id
-            and pair.matched_budget
-            and pair.externally_generated
+            and self._authoritative(pair)
         }
 
     def record_pair(self, pair: WorldOutcomePair) -> bool:
         if pair.pair_id in {item.pair_id for item in self.pairs}:
             return False
 
-        if pair.matched_budget and pair.externally_generated:
+        if self._authoritative(pair):
             if pair.contextual_evidence_key in self._contextual_evidence_keys(pair.axis_id, pair.context_id):
                 return False
 
-        # Invalid-for-routing receipts are still retained once for audit.
+        # Invalid-for-routing receipts are retained once for audit/failure memory.
         self.pairs.append(pair)
         return True
 
@@ -130,6 +207,7 @@ class WorldCouplingEngine:
         self,
         proposal: InterventionProposal,
         executor: WorldExecutor,
+        verifier: Optional[WorldReceiptVerifier] = None,
     ) -> WorldOutcomePair:
         low = executor.execute(proposal, "LOW", float(proposal.low_value))
         high = executor.execute(proposal, "HIGH", float(proposal.high_value))
@@ -142,13 +220,33 @@ class WorldCouplingEngine:
             if receipt.axis_id != proposal.axis_id:
                 raise ValueError("executor receipt axis_id mismatch")
 
-        identity_low = (low.source_id, low.context_id, low.challenge_id, low.epoch)
-        identity_high = (high.source_id, high.context_id, high.challenge_id, high.epoch)
+        identity_low = (
+            low.issuer_id,
+            low.source_id,
+            low.context_id,
+            low.challenge_id,
+            low.epoch,
+        )
+        identity_high = (
+            high.issuer_id,
+            high.source_id,
+            high.context_id,
+            high.challenge_id,
+            high.epoch,
+        )
         if identity_low != identity_high:
-            raise ValueError("LOW/HIGH receipts must belong to one world challenge")
+            raise ValueError("LOW/HIGH receipts must belong to one authenticated world challenge")
 
+        authority_verified = bool(
+            verifier is not None
+            and verifier.verify(low)
+            and verifier.verify(high)
+        )
         pair = WorldOutcomePair(
-            pair_id=f"PAIR::{proposal.experiment_id}::{low.context_id}::{low.source_id}::{low.challenge_id}",
+            pair_id=(
+                f"PAIR::{proposal.experiment_id}::{low.context_id}::"
+                f"{low.issuer_id}::{low.source_id}::{low.challenge_id}"
+            ),
             experiment_id=proposal.experiment_id,
             axis_id=proposal.axis_id,
             source_id=low.source_id,
@@ -161,6 +259,8 @@ class WorldCouplingEngine:
             high_value=float(high.intervention_value),
             matched_budget=bool(low.budget_token and low.budget_token == high.budget_token),
             externally_generated=bool(low.externally_generated and high.externally_generated),
+            issuer_id=low.issuer_id,
+            authority_verified=authority_verified,
         )
         self.record_pair(pair)
         return pair
@@ -169,14 +269,10 @@ class WorldCouplingEngine:
         valid = [
             pair for pair in self.pairs
             if pair.axis_id == axis_id
-            and pair.matched_budget
-            and pair.externally_generated
+            and self._authoritative(pair)
             and (context_id is None or pair.context_id == context_id)
         ]
-        # Within a regime and globally, one evaluator/challenge contributes at most
-        # one independent evidence class. Context-specific pairs are still retained
-        # so the BODY can learn opposite values in distinct regimes.
-        by_key: Dict[Tuple[str, str], WorldOutcomePair] = {}
+        by_key: Dict[Tuple[str, str, str], WorldOutcomePair] = {}
         for pair in valid:
             by_key.setdefault(pair.independence_key, pair)
         unique = list(by_key.values())
@@ -219,7 +315,7 @@ class WorldCouplingEngine:
     ) -> WorldTransportAssessment:
         contexts = sorted({
             pair.context_id for pair in self.pairs
-            if pair.matched_budget and pair.externally_generated
+            if self._authoritative(pair)
         })
         evidence_ready: List[str] = []
         top_by_context: List[Tuple[str, str]] = []
@@ -234,7 +330,6 @@ class WorldCouplingEngine:
             evidence_ready.append(context)
             top_by_context.append((context, ranked[0].axis_id))
 
-        reasons: List[str] = []
         if len(evidence_ready) < 2:
             return WorldTransportAssessment(
                 status="GLOBAL_TRANSPORT_NOT_CONTRADICTED",
@@ -246,13 +341,12 @@ class WorldCouplingEngine:
 
         distinct_tops = {axis_id for _, axis_id in top_by_context}
         if len(distinct_tops) > 1:
-            reasons.append("independently supported regimes prefer different interventions")
             return WorldTransportAssessment(
                 status="REGIME_CONFLICT_BLOCK_GLOBAL_TRANSPORT",
                 safe_for_global_transport=False,
                 evidence_ready_contexts=tuple(evidence_ready),
                 top_axis_by_context=tuple(top_by_context),
-                reasons=tuple(reasons),
+                reasons=("independently supported regimes prefer different interventions",),
             )
 
         return WorldTransportAssessment(
