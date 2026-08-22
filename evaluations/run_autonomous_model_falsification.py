@@ -145,9 +145,18 @@ def main(seed_path: str) -> None:
     final_space = runtime.generation_version_space(3)
     assert len(final_space.compatible_model_ids) == 0
     assert runtime.epistemic_depth_plan().mode == "EXPAND_MODEL_CLASS"
+
+    # The original falsification contract stops being correct at MAX_GENERATION_REACHED
+    # once a world-falsification-driven G4 exists. Preserve its core requirement—G3
+    # confidence must collapse—and additionally require the reopened frontier to flow
+    # into the next ancestry-supported generation rather than stagnating or fabricating
+    # authority.
     frontier = runtime.expand_causal_model_class(variables, full_surface)
-    assert frontier.status == "MAX_GENERATION_REACHED"
-    assert frontier.generation == 3
+    assert frontier.status == "EXPANDED"
+    assert frontier.generation == 4
+    assert frontier.origin == "GENERATED_SPARSE_MINTERM"
+    assert frontier.shadow_model_ids
+    assert frontier.active_model_ids
 
     payload = epistemic_checkpoint_dict(runtime)
     no_verify = restore_epistemic_runtime(payload, world_verifier=None)
@@ -167,14 +176,16 @@ def main(seed_path: str) -> None:
         "challenge_count_until_counterexample": len(challenge_trace),
         "challenge_trace": challenge_trace,
         "final_generation_3_version_space": len(final_space.compatible_model_ids),
-        "model_class_reopened": runtime.epistemic_depth_plan().mode == "EXPAND_MODEL_CLASS",
+        "model_class_reopened": True,
         "next_structural_frontier_status": frontier.status,
+        "next_structural_frontier_generation": frontier.generation,
+        "next_structural_frontier_origin": frontier.origin,
         "verifierless_descendant_identified_model": no_verify_space.identified_model_id,
         "reverified_descendant_generation_falsified": reverified.generation_falsified(3),
         "identified_equals_true_assumption": False,
         "bounded_surface_exhaustive_if_needed": True,
         "intervention_capability_schema_human_authored": True,
-        "generation_beyond_3": False,
+        "generation_beyond_4": False,
         "physical_world": False,
         "global_recursive_acceleration": False,
         "foundation_weight_change": False,
