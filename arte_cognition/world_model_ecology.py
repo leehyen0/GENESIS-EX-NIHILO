@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
+from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 import math
 
 from .adaptive_cognition import QueryCandidate
@@ -22,6 +22,12 @@ class CausalWorldModel:
     model_id: str
     prior: float
     predictions: Tuple[Tuple[str, str], ...]
+    origin: str = "AUTHORED"
+    family: str = "UNSPECIFIED"
+    structure: Tuple[str, ...] = ()
+    generation: int = 0
+    parent_model_ids: Tuple[str, ...] = ()
+    equivalent_structures: Tuple[str, ...] = ()
 
     def prediction_for(self, intervention_id: str) -> Optional[str]:
         return dict(self.predictions).get(intervention_id)
@@ -60,11 +66,10 @@ class EpistemicInterventionScore:
 class WorldModelEcology:
     """Maintain competing causal models and spend more when epistemic depth demands it.
 
-    Cost is a soft penalty, not the optimization target. When competing models
-    remain unresolved or authenticated world evidence contradicts every live model,
-    the BODY expands possibility/representation/intervention budgets and discounts
-    cost more weakly so high-information interventions can dominate cheap but
-    uninformative probes.
+    Cost is a soft penalty, not the optimization target. Model-class inadequacy is
+    recomputed against the *current* model class rather than frozen forever: a new
+    generated structure may explain an old authenticated surprise, while the old
+    inadequacy event remains in lineage history.
     """
 
     def __init__(self) -> None:
@@ -77,6 +82,29 @@ class WorldModelEcology:
             if not model.model_id:
                 continue
             self.models[model.model_id] = model
+
+    def authoritative_evidence(self) -> List[ModelEvidence]:
+        return [item for item in self.evidence if item.authoritative]
+
+    def jointly_compatible_model_ids(self) -> Tuple[str, ...]:
+        evidence = self.authoritative_evidence()
+        if not evidence:
+            return tuple(sorted(self.models))
+        compatible: List[str] = []
+        for model_id, model in self.models.items():
+            contradicted = False
+            made_known_prediction = False
+            for item in evidence:
+                prediction = model.prediction_for(item.intervention_id)
+                if prediction is None:
+                    continue
+                made_known_prediction = True
+                if prediction != item.observed_outcome:
+                    contradicted = True
+                    break
+            if not contradicted and made_known_prediction:
+                compatible.append(model_id)
+        return tuple(sorted(compatible))
 
     def posterior(self) -> Dict[str, float]:
         if not self.models:
@@ -143,13 +171,15 @@ class WorldModelEcology:
 
     @property
     def model_class_inadequate(self) -> bool:
-        return bool(self.inadequacy_events)
+        if not self.models or not self.authoritative_evidence():
+            return False
+        return not bool(self.jointly_compatible_model_ids())
 
     def depth_plan(self) -> EpistemicDepthPlan:
         entropy = self.normalized_entropy()
         reasons: List[str] = []
         if self.model_class_inadequate:
-            reasons.append("authenticated outcome contradicted every live causal model")
+            reasons.append("authenticated evidence has no jointly compatible live causal model")
             return EpistemicDepthPlan(
                 mode="EXPAND_MODEL_CLASS",
                 normalized_model_entropy=entropy,
