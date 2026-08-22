@@ -33,6 +33,7 @@ jobs:
           python -m py_compile arte_cognition/causal_program_genesis.py
           python -m py_compile arte_cognition/causal_predicate_genesis.py
           python -m py_compile arte_cognition/causal_primitive_genesis.py
+          python -m py_compile arte_cognition/causal_linear_primitive_genesis.py
           python -m py_compile arte_cognition/causal_identification.py
           python -m py_compile arte_cognition/intervention_surface_genesis.py
           python -m py_compile arte_cognition/model_falsification.py
@@ -67,6 +68,7 @@ jobs:
           python -m py_compile evaluations/run_autonomous_model_falsification.py
           python -m py_compile evaluations/run_falsification_driven_g4_grammar.py
           python -m py_compile evaluations/run_world_driven_primitive_genesis.py
+          python -m py_compile evaluations/run_falsification_driven_linear_primitive_genesis.py
       - name: Run cognition tests
         run: python -m unittest discover -s arte_cognition -p 'test_*.py' -v
       - name: Generate evaluator-owned hidden world seeds
@@ -89,6 +91,7 @@ jobs:
           Path('/tmp/arte_model_falsification_seed').write_text(str(secrets.randbits(128)))
           Path('/tmp/arte_g4_grammar_seed').write_text(str(secrets.randbits(128)))
           Path('/tmp/arte_primitive_genesis_seed').write_text(str(secrets.randbits(128)))
+          Path('/tmp/arte_linear_primitive_seed').write_text(str(secrets.randbits(128)))
           PY
       - name: Run hidden software-world descendant evaluation
         run: python evaluations/run_hidden_world_coupling.py /tmp/arte_hidden_world_seed
@@ -120,3 +123,5 @@ jobs:
         run: python evaluations/run_falsification_driven_g4_grammar.py /tmp/arte_g4_grammar_seed
       - name: Run world-driven raw primitive genesis evaluation
         run: python evaluations/run_world_driven_primitive_genesis.py /tmp/arte_primitive_genesis_seed
+      - name: Run falsification-driven multi-channel linear primitive evaluation
+        run: python evaluations/run_falsification_driven_linear_primitive_genesis.py /tmp/arte_linear_primitive_seed
