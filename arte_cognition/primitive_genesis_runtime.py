@@ -2,6 +2,10 @@ from __future__ import annotations
 
 from typing import Mapping, Optional, Sequence
 
+from .causal_linear_primitive_genesis import (
+    GeneratedLinearPrimitiveModel,
+    LinearFormPrimitiveGenesisEngine,
+)
 from .causal_model_genesis import InterventionDescriptor
 from .causal_primitive_genesis import GeneratedPrimitiveModel, RawThresholdPrimitiveGenesisEngine
 from .epistemic_depth_runtime import (
@@ -13,22 +17,25 @@ from .world_coupling import WorldReceiptVerifier
 
 
 class WorldDrivenPrimitiveRuntime(EpistemicallyDeepPersistentCognitiveRuntime):
-    """Same persistent BODY with one additional falsification-driven G5 route.
+    """Same persistent BODY with falsification-driven primitive growth.
 
     The parent runtime remains the state owner. This extension does not create a
-    parallel memory, authority system or world-model store. It only adds a new
-    structural response when the complete G4 class has been externally falsified:
-    synthesize threshold primitives from uninterpreted numeric raw observations.
+    parallel memory, authority system or world-model store. After complete G4
+    failure it can synthesize single-channel threshold primitives (G5). If that
+    complete primitive class is itself externally falsified, the same BODY can
+    synthesize bounded multi-channel integer linear forms and threshold them (G6).
     """
 
     def __init__(
         self,
         *args,
         primitive_genesis: Optional[RawThresholdPrimitiveGenesisEngine] = None,
+        linear_primitive_genesis: Optional[LinearFormPrimitiveGenesisEngine] = None,
         **kwargs,
     ) -> None:
         super().__init__(*args, **kwargs)
         self.primitive_genesis = primitive_genesis or RawThresholdPrimitiveGenesisEngine()
+        self.linear_primitive_genesis = linear_primitive_genesis or LinearFormPrimitiveGenesisEngine()
 
     def generate_world_driven_primitive_models(
         self,
@@ -54,6 +61,40 @@ class WorldDrivenPrimitiveRuntime(EpistemicallyDeepPersistentCognitiveRuntime):
             self.last_epistemic_depth = self.world_models.depth_plan()
             return []
         active = self.primitive_genesis.generate_novel(
+            variables,
+            descriptors,
+            raw_observations,
+            self.world_models.authoritative_evidence(),
+            existing,
+        )
+        active = self._restrict_active_to_shadow(active, shadow)
+        self.last_epistemic_depth = self.world_models.depth_plan()
+        return active
+
+    def generate_world_driven_linear_primitive_models(
+        self,
+        variables: Sequence[str],
+        descriptors: Sequence[InterventionDescriptor],
+        raw_observations: Mapping[str, Mapping[str, float]],
+    ) -> list[GeneratedLinearPrimitiveModel]:
+        if self.epistemic_depth_plan().mode != "EXPAND_MODEL_CLASS":
+            return []
+        if not self.generation_falsified(5):
+            return []
+        existing = list(self.world_models.models.values())
+        shadow = self.linear_primitive_genesis.generate_novel(
+            variables,
+            descriptors,
+            raw_observations,
+            (),
+            existing,
+        )
+        shadow_truncated = bool(self.linear_primitive_genesis.last_truncated)
+        self.world_models.register(self._models(shadow))
+        if shadow_truncated:
+            self.last_epistemic_depth = self.world_models.depth_plan()
+            return []
+        active = self.linear_primitive_genesis.generate_novel(
             variables,
             descriptors,
             raw_observations,
@@ -124,13 +165,55 @@ class WorldDrivenPrimitiveRuntime(EpistemicallyDeepPersistentCognitiveRuntime):
                 shadow,
                 reason,
             )
+        if current == 5:
+            generation = 6
+            origin = "GENERATED_LINEAR_PRIMITIVE"
+            active = self.generate_world_driven_linear_primitive_models(
+                variables,
+                descriptors,
+                raw_observations,
+            )
+            shadow = tuple(sorted(
+                model.model_id
+                for model in self.world_models.models.values()
+                if int(model.generation) == generation and model.origin == origin
+            ))
+            active_ids = tuple(sorted(item.model.model_id for item in active))
+            if self.linear_primitive_genesis.last_truncated:
+                status, reason = (
+                    "FAIL_CLOSED_TRUNCATED_SHADOW_UNIVERSE",
+                    "linear primitive candidate universe exceeded bounded search budget",
+                )
+            elif not shadow:
+                status, reason = (
+                    "NO_STRUCTURAL_CANDIDATES",
+                    "no prediction-novel multi-channel linear primitive was generated",
+                )
+            elif not active_ids:
+                status, reason = (
+                    "NO_EVIDENCE_COMPATIBLE_CANDIDATES",
+                    "linear primitive shadow hypotheses persist but none satisfy current authoritative evidence",
+                )
+            else:
+                status, reason = (
+                    "EXPANDED",
+                    "externally falsified single-channel primitive class opened multi-channel relation synthesis",
+                )
+            return CausalExpansionDecision(
+                status,
+                generation,
+                origin,
+                active_ids,
+                shadow,
+                reason,
+            )
         return CausalExpansionDecision(
             "MAX_GENERATION_REACHED",
             current,
             "NONE",
             (),
             (),
-            "current bounded structural metalanguage has no generation beyond raw-threshold G5",
+            "current bounded primitive metalanguage has no generation beyond linear-form G6",
         )
 
 
