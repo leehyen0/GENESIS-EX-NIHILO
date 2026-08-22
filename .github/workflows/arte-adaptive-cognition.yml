@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - 'arte_cognition/**'
+      - 'evaluations/**'
       - '.github/workflows/arte-adaptive-cognition.yml'
   workflow_dispatch:
 
@@ -34,7 +35,18 @@ jobs:
           python -m py_compile arte_cognition/subgraph_credit.py
           python -m py_compile arte_cognition/topology_learning.py
           python -m py_compile arte_cognition/validation_matrix.py
+          python -m py_compile arte_cognition/world_coupling.py
           python -m py_compile arte_cognition/cognitive_runtime.py
           python -m py_compile arte_cognition/body_checkpoint.py
+          python -m py_compile evaluations/run_hidden_world_coupling.py
       - name: Run cognition tests
         run: python -m unittest discover -s arte_cognition -p 'test_*.py' -v
+      - name: Generate evaluator-owned hidden world seed
+        run: |
+          python - <<'PY'
+          import secrets
+          from pathlib import Path
+          Path('/tmp/arte_hidden_world_seed').write_text(str(secrets.randbits(128)))
+          PY
+      - name: Run hidden software-world descendant evaluation
+        run: python evaluations/run_hidden_world_coupling.py /tmp/arte_hidden_world_seed
