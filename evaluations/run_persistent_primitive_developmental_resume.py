@@ -18,6 +18,11 @@ from arte_cognition.primitive_genesis_runtime import (
     primitive_checkpoint_dict,
     restore_world_driven_primitive_runtime,
 )
+from arte_cognition.raw_observation_authority import (
+    HMACRawObservationSigner,
+    HMACRawObservationVerifier,
+    RawObservationReceipt,
+)
 from arte_cognition.world_coupling import (
     HMACWorldReceiptSigner,
     HMACWorldReceiptVerifier,
@@ -35,7 +40,7 @@ def proposal(descriptor: InterventionDescriptor) -> InterventionProposal:
         high_value=1.0,
         predicted_low_side="LOW",
         predicted_high_side="HIGH",
-        reason="checkpoint-before-symbolic-expansion developmental continuity probe",
+        reason="checkpoint-before-symbolic-expansion authenticated developmental continuity probe",
     )
 
 
@@ -48,11 +53,7 @@ class HiddenDevelopmentWorld:
 
     def execute(self, p, arm: str, value: float):
         label = self.model.prediction_for(p.experiment_id) or "NO_EFFECT"
-        effect = {
-            "POSITIVE_EFFECT": 1.0,
-            "NEGATIVE_EFFECT": -1.0,
-            "NO_EFFECT": 0.0,
-        }[label]
+        effect = {"POSITIVE_EFFECT": 1.0, "NEGATIVE_EFFECT": -1.0, "NO_EFFECT": 0.0}[label]
         return self.signer.sign(WorldOutcomeReceipt(
             receipt_id=f"{self.challenge_id}::{p.experiment_id}::{arm}",
             experiment_id=p.experiment_id,
@@ -69,9 +70,22 @@ class HiddenDevelopmentWorld:
         ))
 
 
-def execute_two(runtime, descriptor, hidden_model, signers, verifier, suffix, trial_index):
-    for issuer_index, (_issuer, signer) in enumerate(signers.items()):
-        runtime.execute_world_intervention(
+def raw_receipt(pair, row):
+    return RawObservationReceipt(
+        observation_id=f"RAWOBS::{pair.pair_id}",
+        intervention_id=pair.experiment_id,
+        channel_values=tuple(sorted((str(k), float(v)) for k, v in row.items())),
+        source_id=pair.source_id,
+        context_id=pair.context_id,
+        challenge_id=pair.challenge_id,
+        epoch=pair.epoch,
+        externally_generated=True,
+    )
+
+
+def execute_two(runtime, descriptor, row, hidden_model, world_signers, world_verifier, raw_signers, raw_verifier, suffix, trial_index):
+    for issuer_index, (issuer, signer) in enumerate(world_signers.items()):
+        pair = runtime.execute_world_intervention(
             proposal(descriptor),
             HiddenDevelopmentWorld(
                 hidden_model,
@@ -79,7 +93,11 @@ def execute_two(runtime, descriptor, hidden_model, signers, verifier, suffix, tr
                 source_id=f"source-{issuer_index}-{trial_index}-{suffix}",
                 challenge_id=f"challenge-{issuer_index}-{trial_index}-{suffix}",
             ),
-            verifier=verifier,
+            verifier=world_verifier,
+        )
+        runtime.ingest_raw_observation_receipt(
+            raw_signers[issuer].sign(raw_receipt(pair, row)),
+            raw_verifier,
         )
 
 
@@ -92,11 +110,7 @@ def main(seed_path: str) -> None:
     descriptors = [
         InterventionDescriptor(
             intervention_id=f"RESUMETRIAL::{suffix}::{index:02d}",
-            targets=(x,),
-            blocked=(),
-            delay_steps=0,
-            context_shift=False,
-            cost=1.0,
+            targets=(x,), blocked=(), delay_steps=0, context_shift=False, cost=1.0,
         )
         for index in range(trial_count)
     ]
@@ -110,11 +124,11 @@ def main(seed_path: str) -> None:
     rng.shuffle(values_a)
     rng.shuffle(values_b)
     raw_observations = {
-        descriptor.intervention_id: {
-            channel_a: float(values_a[index] - trial_count // 2),
-            channel_b: float(values_b[index] - trial_count // 2),
+        d.intervention_id: {
+            channel_a: float(values_a[i] - trial_count // 2),
+            channel_b: float(values_b[i] - trial_count // 2),
         }
-        for index, descriptor in enumerate(descriptors)
+        for i, d in enumerate(descriptors)
     }
 
     g6_engine = LinearFormPrimitiveGenesisEngine(model_budget=8192, max_coefficient_abs=2)
@@ -128,17 +142,12 @@ def main(seed_path: str) -> None:
         max_depth=1,
         operators=("ADD", "SUB", "MUL", "ABS"),
     )
-    symbolic_shadow = symbolic_policy.generate_novel(
-        variables, descriptors, raw_observations, (), g6_models
-    )
+    symbolic_shadow = symbolic_policy.generate_novel(variables, descriptors, raw_observations, (), g6_models)
     assert symbolic_shadow and not symbolic_policy.last_truncated
     nonlinear = []
     for item in symbolic_shadow:
         expression = item.primitive.expression.render()
-        effect_count = sum(
-            1 for _intervention_id, outcome in item.model.predictions
-            if outcome != "NO_EFFECT"
-        )
+        effect_count = sum(1 for _iid, outcome in item.model.predictions if outcome != "NO_EFFECT")
         if " * " in expression and 5 <= effect_count <= trial_count - 5:
             nonlinear.append(item)
     assert nonlinear
@@ -153,82 +162,107 @@ def main(seed_path: str) -> None:
         )
     )
     runtime.register_causal_world_models(g6_models)
-    # Raw observation is ingested before structural failure is known. It becomes
-    # developmental BODY state rather than an evaluator argument to future search.
-    runtime.ingest_raw_observations(raw_observations)
 
-    keys = {
-        f"issuer-a-{suffix}": f"secret-a-{suffix}".encode(),
-        f"issuer-b-{suffix}": f"secret-b-{suffix}".encode(),
+    world_keys = {
+        f"issuer-a-{suffix}": f"world-secret-a-{suffix}".encode(),
+        f"issuer-b-{suffix}": f"world-secret-b-{suffix}".encode(),
     }
-    signers = {issuer: HMACWorldReceiptSigner(issuer, secret) for issuer, secret in keys.items()}
-    verifier = HMACWorldReceiptVerifier(keys, independence_classes={
+    raw_keys = {
+        f"issuer-a-{suffix}": f"raw-secret-a-{suffix}".encode(),
+        f"issuer-b-{suffix}": f"raw-secret-b-{suffix}".encode(),
+    }
+    independence = {
         f"issuer-a-{suffix}": "independent-A",
         f"issuer-b-{suffix}": "independent-B",
-    })
+    }
+    world_signers = {issuer: HMACWorldReceiptSigner(issuer, secret) for issuer, secret in world_keys.items()}
+    world_verifier = HMACWorldReceiptVerifier(world_keys, independence_classes=independence)
+    raw_signers = {issuer: HMACRawObservationSigner(issuer, secret) for issuer, secret in raw_keys.items()}
+    raw_verifier = HMACRawObservationVerifier(raw_keys, independence_classes=independence)
 
     for trial_index, descriptor in enumerate(descriptors):
-        execute_two(runtime, descriptor, hidden.model, signers, verifier, suffix, trial_index)
+        execute_two(
+            runtime,
+            descriptor,
+            raw_observations[descriptor.intervention_id],
+            hidden.model,
+            world_signers,
+            world_verifier,
+            raw_signers,
+            raw_verifier,
+            suffix,
+            trial_index,
+        )
 
+    assert runtime.raw_observation_memory == raw_observations
     before = runtime.generation_version_space(6)
     assert not before.compatible_model_ids
     assert runtime.generation_falsified(6)
     assert runtime.epistemic_depth_plan().mode == "EXPAND_MODEL_CLASS"
 
-    # Freeze BEFORE symbolic expansion. A real descendant must retain enough body
-    # state to continue development without the evaluator re-supplying raw data.
     payload = primitive_checkpoint_dict(runtime)
-    raw_hash_material = json.dumps(payload["raw_observation_memory"], sort_keys=True)
+    raw_receipt_payload_length = len(json.dumps(payload["raw_observation_receipts"], sort_keys=True))
+    raw_cache_payload_length = len(json.dumps(payload["raw_observation_memory_cache"], sort_keys=True))
 
-    verifierless = restore_world_driven_primitive_runtime(payload, world_verifier=None)
-    reverified = restore_world_driven_primitive_runtime(payload, world_verifier=verifier)
+    verifierless = restore_world_driven_primitive_runtime(payload)
+    world_only = restore_world_driven_primitive_runtime(payload, world_verifier=world_verifier)
+    raw_only = restore_world_driven_primitive_runtime(payload, raw_observation_verifier=raw_verifier)
+    reverified = restore_world_driven_primitive_runtime(
+        payload,
+        world_verifier=world_verifier,
+        raw_observation_verifier=raw_verifier,
+    )
 
-    assert verifierless.raw_observation_memory == runtime.raw_observation_memory
+    assert not verifierless.raw_observation_memory
+    assert not world_only.raw_observation_memory
+    assert not raw_only.raw_observation_memory
     assert reverified.raw_observation_memory == runtime.raw_observation_memory
     assert reverified.symbolic_primitive_genesis.max_depth == 1
     assert reverified.symbolic_primitive_genesis.expression_budget == 512
     assert reverified.symbolic_primitive_genesis.operators == ("ADD", "SUB", "MUL", "ABS")
 
-    # No verifier means serialized world evidence is deauthorized, so raw memory
-    # alone must not authorize structural growth.
-    verifierless_frontier = verifierless.expand_causal_model_class_with_raw_observations(
-        variables, descriptors
-    )
+    verifierless_frontier = verifierless.expand_causal_model_class_with_raw_observations(variables, descriptors)
+    world_only_frontier = world_only.expand_causal_model_class_with_raw_observations(variables, descriptors)
+    raw_only_frontier = raw_only.expand_causal_model_class_with_raw_observations(variables, descriptors)
     assert verifierless_frontier.status == "NO_EXPANSION_REQUIRED"
+    assert world_only_frontier.status == "RAW_OBSERVATION_AUTHORITY_INCOMPLETE"
+    assert raw_only_frontier.status == "NO_EXPANSION_REQUIRED"
 
-    # Reverified descendant receives no raw_observations argument here.
-    reverified_frontier = reverified.expand_causal_model_class_with_raw_observations(
-        variables, descriptors
-    )
+    reverified_frontier = reverified.expand_causal_model_class_with_raw_observations(variables, descriptors)
     assert reverified_frontier.status == "EXPANDED"
     assert reverified_frontier.generation == 7
     assert len(reverified_frontier.active_model_ids) == 1
     resumed_space = reverified.generation_version_space(7)
     assert resumed_space.identified_model_id == hidden.model.model_id
 
-    # Matched non-checkpoint treatment from the same pre-expansion state should
-    # generate exactly the same candidate and active IDs.
-    treatment = runtime.expand_causal_model_class_with_raw_observations(
-        variables, descriptors
-    )
+    treatment = runtime.expand_causal_model_class_with_raw_observations(variables, descriptors)
     assert treatment.status == "EXPANDED"
     assert treatment.shadow_model_ids == reverified_frontier.shadow_model_ids
     assert treatment.active_model_ids == reverified_frontier.active_model_ids
 
     print(json.dumps({
-        "status": "PASS_BOUNDED_PERSISTENT_PRIMITIVE_DEVELOPMENTAL_STATE_AND_CHECKPOINT_RESUME",
+        "status": "PASS_BOUNDED_AUTHENTICATED_PRIMITIVE_DEVELOPMENTAL_STATE_AND_CHECKPOINT_RESUME",
         "checkpoint_taken_before_g7_expansion": True,
-        "raw_observation_rows_persisted": len(runtime.raw_observation_memory),
-        "raw_channels_persisted": sorted({
-            channel for row in runtime.raw_observation_memory.values() for channel in row
-        }),
-        "raw_memory_payload_length": len(raw_hash_material),
+        "signed_raw_receipts_persisted": len(payload["raw_observation_receipts"]),
+        "raw_observation_rows_authoritative_before_checkpoint": len(runtime.raw_observation_memory),
+        "raw_channels_persisted": sorted({channel for row in runtime.raw_observation_memory.values() for channel in row}),
+        "raw_receipt_payload_length": raw_receipt_payload_length,
+        "raw_cache_payload_length": raw_cache_payload_length,
+        "raw_cache_is_non_authoritative_after_restore": True,
+        "world_verifier_secret_persisted": False,
+        "raw_verifier_secret_persisted": False,
         "genesis_policy_persisted": True,
         "symbolic_policy_max_depth": reverified.symbolic_primitive_genesis.max_depth,
         "symbolic_policy_expression_budget": reverified.symbolic_primitive_genesis.expression_budget,
         "symbolic_policy_operators": list(reverified.symbolic_primitive_genesis.operators),
         "g6_version_space_before_checkpoint": len(before.compatible_model_ids),
+        "verifierless_raw_rows": len(verifierless.raw_observation_memory),
+        "world_only_raw_rows": len(world_only.raw_observation_memory),
+        "raw_only_raw_rows": len(raw_only.raw_observation_memory),
+        "reverified_raw_rows": len(reverified.raw_observation_memory),
         "verifierless_descendant_frontier_status": verifierless_frontier.status,
+        "world_only_descendant_frontier_status": world_only_frontier.status,
+        "raw_only_descendant_frontier_status": raw_only_frontier.status,
         "reverified_descendant_frontier_status": reverified_frontier.status,
         "raw_argument_resupplied_after_restore": False,
         "resumed_g7_shadow_model_count": len(reverified_frontier.shadow_model_ids),
@@ -237,7 +271,7 @@ def main(seed_path: str) -> None:
         "hidden_model": hidden.model.model_id,
         "matched_treatment_shadow_equal": treatment.shadow_model_ids == reverified_frontier.shadow_model_ids,
         "matched_treatment_active_equal": treatment.active_model_ids == reverified_frontier.active_model_ids,
-        "external_authority_still_required": True,
+        "external_outcome_and_raw_authority_both_required": True,
         "independent_organizational_custody": False,
         "physical_world": False,
         "foundation_weight_change": False,
