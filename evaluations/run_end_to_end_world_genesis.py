@@ -139,8 +139,8 @@ def main(seed_path: str) -> None:
     seed = int(Path(seed_path).read_text().strip())
     rng = random.Random(seed)
 
-    # The transform, feature names, label orientation and receipt key are chosen
-    # after checkout from evaluator-owned randomness.
+    # The transform, feature names, label orientation and receipt trust surface are
+    # chosen after checkout from evaluator-owned randomness.
     scale = rng.choice((-1.0, 1.0)) * rng.uniform(0.55, 3.25)
     swap = bool(rng.getrandbits(1))
     feature_names = (
@@ -148,10 +148,22 @@ def main(seed_path: str) -> None:
         f"sensor_{rng.randrange(100_000, 999_999)}",
     )
     label_flip = bool(rng.getrandbits(1))
-    issuer_id = f"e2e-hidden-evaluator-{rng.randrange(1_000_000, 9_999_999)}"
-    receipt_secret = secrets.token_bytes(32)
-    signer = HMACWorldReceiptSigner(issuer_id, receipt_secret)
-    verifier = HMACWorldReceiptVerifier({issuer_id: receipt_secret})
+    issuer_ids = (
+        f"e2e-hidden-evaluator-a-{rng.randrange(1_000_000, 9_999_999)}",
+        f"e2e-hidden-evaluator-b-{rng.randrange(1_000_000, 9_999_999)}",
+    )
+    receipt_secrets = (secrets.token_bytes(32), secrets.token_bytes(32))
+    signers = tuple(
+        HMACWorldReceiptSigner(issuer_id, secret)
+        for issuer_id, secret in zip(issuer_ids, receipt_secrets)
+    )
+    verifier = HMACWorldReceiptVerifier(
+        dict(zip(issuer_ids, receipt_secrets)),
+        independence_classes={
+            issuer_ids[0]: "e2e-independent-world-class-a",
+            issuer_ids[1]: "e2e-independent-world-class-b",
+        },
+    )
 
     discovery_world = HiddenAffineWorld(
         scale=scale,
@@ -160,7 +172,7 @@ def main(seed_path: str) -> None:
         source_id="discovery-source",
         challenge_id="discovery-challenge",
         epoch=0,
-        signer=signer,
+        signer=signers[0],
     )
     measurements, residuals = build_observations(discovery_world, label_flip)
 
@@ -242,9 +254,6 @@ def main(seed_path: str) -> None:
     if any(proposal.axis_id == selected_axis.axis_id for proposal in remove_cycle.intervention_proposals):
         raise AssertionError("REMOVE-PROJECTION control retained the selected generated representation")
 
-    # Generation is not action authority. Before world evidence, the generated
-    # proposal may be explored but must not be selected as an evidence-supported
-    # future action.
     action_policy = EvidenceBoundWorldActionPolicy()
     before_action = action_policy.select(
         cycle.intervention_proposals,
@@ -254,8 +263,8 @@ def main(seed_path: str) -> None:
     if before_action.status != "EXPLORE_ONLY_NO_WORLD_SUPPORTED_ACTION" or before_action.proposal is not None:
         raise AssertionError("generated proposal self-promoted to action before world evidence")
 
-    # Two separately identified challenge receipts provide bounded independent
-    # consequence evidence for the BODY's generated experiment.
+    # Two cryptographically distinct issuers are also two verifier-bound evidence
+    # classes. Source/challenge strings alone are not allowed to create independence.
     observed_effects = []
     for index in (1, 2):
         world = HiddenAffineWorld(
@@ -265,7 +274,7 @@ def main(seed_path: str) -> None:
             source_id=f"e2e-source-{index}",
             challenge_id=f"e2e-challenge-{index}",
             epoch=index,
-            signer=signer,
+            signer=signers[index - 1],
         )
         pair = runtime.execute_world_intervention(
             selected_proposal,
@@ -281,12 +290,10 @@ def main(seed_path: str) -> None:
         context_id=discovery_world.context_id,
     )
     if summary.independent_evidence_classes != 2:
-        raise AssertionError("generated representation did not receive two independent world evidence classes")
+        raise AssertionError("generated representation did not receive two verifier-bound independent world classes")
     if min(observed_effects) < 0.5 or summary.routing_score <= 0.0:
         raise AssertionError("generated experiment did not causally distinguish the hidden world")
 
-    # This is the actual behavior transition: exploration-only before realized
-    # consequences, evidence-supported action after authenticated consequences.
     after_action = action_policy.select(
         cycle.intervention_proposals,
         runtime.world_coupling,
@@ -298,10 +305,9 @@ def main(seed_path: str) -> None:
         raise AssertionError("world-supported action did not select the generated latent representation")
 
     encoded = checkpoint_json(runtime)
-    if receipt_secret.hex() in encoded or "trusted_keys" in encoded:
+    if any(secret.hex() in encoded for secret in receipt_secrets) or "trusted_keys" in encoded:
         raise AssertionError("external verifier secret leaked into persistent BODY checkpoint")
 
-    # A descendant without the external authority surface cannot self-authorize.
     unverified_descendant = restore_json(encoded)
     unverified_action = action_policy.select(
         cycle.intervention_proposals,
@@ -329,7 +335,7 @@ def main(seed_path: str) -> None:
         raise AssertionError("world-caused representation evidence changed across descendant reconstruction")
 
     print(json.dumps({
-        "status": "PASS_BOUNDED_RAW_RESIDUAL_TO_REVERIFIED_DESCENDANT_WORLD_GENESIS_WITH_ACTION_TRANSITION",
+        "status": "PASS_BOUNDED_VERIFIER_BOUND_RAW_RESIDUAL_TO_REVERIFIED_DESCENDANT_ACTION",
         "generated_axis_family": selected_axis.family,
         "generated_axis_id": selected_axis.axis_id,
         "generated_axis_coefficients": list(selected_axis.coefficients),
@@ -345,6 +351,8 @@ def main(seed_path: str) -> None:
         "after_world_action_status": after_action.status,
         "after_world_action_axis": after_action.proposal.axis_id,
         "world_effects": observed_effects,
+        "cryptographic_world_issuers": 2,
+        "verifier_independence_classes": 2,
         "independent_world_evidence_classes": summary.independent_evidence_classes,
         "unverified_descendant_action_status": unverified_action.status,
         "reverified_descendant_action_status": descendant_action.status,

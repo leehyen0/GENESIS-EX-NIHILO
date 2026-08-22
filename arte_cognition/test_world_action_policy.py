@@ -34,7 +34,8 @@ def pair(axis_id, source_id, challenge_id, context_id="CTX", effect=1.0):
         high_value=1.0,
         matched_budget=True,
         externally_generated=True,
-        issuer_id="issuer",
+        issuer_id=f"issuer::{source_id}",
+        independence_class_id=f"class::{source_id}",
         authority_verified=True,
     )
 

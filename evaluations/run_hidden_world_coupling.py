@@ -75,10 +75,30 @@ def main(seed_path):
     seed = int(Path(seed_path).read_text().strip())
     rng = random.Random(seed)
 
-    issuer_id = "hidden-ci-world-evaluator"
-    receipt_secret = secrets.token_bytes(32)
-    signer = HMACWorldReceiptSigner(issuer_id, receipt_secret)
-    verifier = HMACWorldReceiptVerifier({issuer_id: receipt_secret})
+    issuer_ids = ("hidden-ci-world-evaluator-a", "hidden-ci-world-evaluator-b")
+    receipt_secrets = (secrets.token_bytes(32), secrets.token_bytes(32))
+    signers = tuple(
+        HMACWorldReceiptSigner(issuer_id, secret)
+        for issuer_id, secret in zip(issuer_ids, receipt_secrets)
+    )
+
+    # A third cryptographic issuer is deliberately mapped to the first
+    # independence class. Authenticity alone must not manufacture a third class.
+    alias_issuer = "hidden-ci-world-evaluator-a-alias"
+    alias_secret = secrets.token_bytes(32)
+    alias_signer = HMACWorldReceiptSigner(alias_issuer, alias_secret)
+    verifier = HMACWorldReceiptVerifier(
+        {
+            issuer_ids[0]: receipt_secrets[0],
+            issuer_ids[1]: receipt_secrets[1],
+            alias_issuer: alias_secret,
+        },
+        independence_classes={
+            issuer_ids[0]: "hidden-independent-class-a",
+            issuer_ids[1]: "hidden-independent-class-b",
+            alias_issuer: "hidden-independent-class-a",
+        },
+    )
 
     runtime = PersistentCognitiveRuntime()
     proposals = [proposal("AXIS::A"), proposal("AXIS::B"), proposal("AXIS::C")]
@@ -114,12 +134,27 @@ def main(seed_path):
                 context_id=context_id,
                 challenge_id=f"{context_id}-challenge-{index}",
                 epoch=index,
-                signer=signer,
+                signer=signers[index - 1],
             )
             for item in proposals:
                 pair = runtime.execute_world_intervention(item, executor, verifier=verifier)
                 if not pair.authority_verified:
                     raise AssertionError("valid evaluator receipt failed authentication")
+
+        # Alias issuer emits another authentic challenge but shares class A, so
+        # independent evidence must remain exactly two rather than becoming three.
+        alias_executor = HiddenWorldExecutor(
+            coefficients=coefficients,
+            source_id=f"{context_id}-alias-source",
+            context_id=context_id,
+            challenge_id=f"{context_id}-alias-challenge",
+            epoch=3,
+            signer=alias_signer,
+        )
+        for item in proposals:
+            pair = runtime.execute_world_intervention(item, alias_executor, verifier=verifier)
+            if not pair.authority_verified:
+                raise AssertionError("authentic alias receipt failed verification")
 
     learned = {
         context_id: runtime.rank_intervention_proposals(proposals, context_id=context_id)[0].axis_id
@@ -134,11 +169,9 @@ def main(seed_path):
         raise AssertionError("conflicting authenticated hidden regimes did not block global transport")
 
     encoded = checkpoint_json(runtime)
-    if receipt_secret.hex() in encoded or "trusted_keys" in encoded:
+    if any(secret.hex() in encoded for secret in (*receipt_secrets, alias_secret)) or "trusted_keys" in encoded:
         raise AssertionError("evaluator authentication secret leaked into persistent BODY checkpoint")
 
-    # Without the external LAB verifier, the descendant can inspect the evidence
-    # lineage but must not recover its authority from a serialized bool.
     unverified_descendant = restore_json(encoded)
     if any(pair.authority_verified for pair in unverified_descendant.world_coupling.pairs):
         raise AssertionError("descendant self-restored external authority without verifier")
@@ -160,15 +193,18 @@ def main(seed_path):
         context_id: descendant.world_axis_summary(active_axis, context_id=context_id).independent_evidence_classes
         for context_id, (active_axis, _) in regimes.items()
     }
-    if min(evidence.values()) < 2:
-        raise AssertionError("hidden regimes did not provide two authenticated independent evidence classes each")
+    if set(evidence.values()) != {2}:
+        raise AssertionError("verifier-bound independence classes were spoofed or collapsed incorrectly")
 
     print(json.dumps({
-        "status": "PASS_BOUNDED_REVERIFIABLE_AUTHENTICATED_HIDDEN_WORLD_TO_DESCENDANT",
+        "status": "PASS_BOUNDED_VERIFIER_BOUND_INDEPENDENCE_HIDDEN_WORLD_TO_DESCENDANT",
         "initial_top_axis": initial_top,
         "learned_top_by_regime": learned,
         "descendant_top_by_regime": descendant_learned,
         "independent_evidence_classes_by_regime": evidence,
+        "cryptographic_issuers": 3,
+        "verifier_independence_classes": 2,
+        "alias_issuer_collapsed": True,
         "global_transport_status": transport.status,
         "global_transport_safe": transport.safe_for_global_transport,
         "forged_receipt_authority_verified": forged_pair.authority_verified,

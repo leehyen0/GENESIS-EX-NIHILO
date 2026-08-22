@@ -1,4 +1,5 @@
 from dataclasses import replace
+import hashlib
 import json
 import unittest
 
@@ -16,8 +17,36 @@ UNIT_SECRET = b"arte-unit-world-receipt-key-v1"
 UNIT_ISSUER = "unit-world-lab"
 
 
+def _issuer_for(source_id):
+    return f"{UNIT_ISSUER}::{source_id}"
+
+
+def _secret_for(source_id):
+    return hashlib.sha256(UNIT_SECRET + b"::" + source_id.encode("utf-8")).digest()
+
+
+class DerivedUnitVerifier:
+    """Test verifier that can reconstruct source-specific issuer keys.
+
+    Different source ids deliberately correspond to different authenticated
+    issuers, preserving the older tests that truly need two independent classes.
+    """
+
+    def verify(self, receipt):
+        prefix = UNIT_ISSUER + "::"
+        if not receipt.issuer_id.startswith(prefix):
+            return False
+        authority_id = receipt.issuer_id[len(prefix):]
+        return HMACWorldReceiptVerifier(
+            {receipt.issuer_id: _secret_for(authority_id)}
+        ).verify(receipt)
+
+    def independence_class(self, receipt):
+        return receipt.issuer_id if self.verify(receipt) else "UNVERIFIED"
+
+
 def unit_verifier():
-    return HMACWorldReceiptVerifier({UNIT_ISSUER: UNIT_SECRET})
+    return DerivedUnitVerifier()
 
 
 class LinearExecutor:
@@ -31,6 +60,8 @@ class LinearExecutor:
         matched=True,
         signed=True,
         tamper_after_sign=False,
+        issuer_source_id=None,
+        independence_class_id=None,
     ):
         self.effects = dict(effects)
         self.source_id = source_id
@@ -40,8 +71,17 @@ class LinearExecutor:
         self.matched = matched
         self.signed = signed
         self.tamper_after_sign = tamper_after_sign
-        self.signer = HMACWorldReceiptSigner(UNIT_ISSUER, UNIT_SECRET)
-        self.verifier = unit_verifier()
+        authority_id = issuer_source_id or source_id
+        issuer_id = _issuer_for(authority_id)
+        secret = _secret_for(authority_id)
+        self.signer = HMACWorldReceiptSigner(issuer_id, secret)
+        if independence_class_id is None:
+            self.verifier = unit_verifier()
+        else:
+            self.verifier = HMACWorldReceiptVerifier(
+                {issuer_id: secret},
+                independence_classes={issuer_id: independence_class_id},
+            )
 
     def execute(self, proposal, arm, value):
         coefficient = float(self.effects.get(proposal.axis_id, 0.0))
@@ -106,6 +146,34 @@ class WorldCouplingTests(unittest.TestCase):
         self.assertEqual(runtime.rank_intervention_proposals(proposals)[0].axis_id, "AXIS::B")
         self.assertEqual(runtime.world_axis_summary("AXIS::B").independent_evidence_classes, 2)
         self.assertTrue(all(pair.authority_verified for pair in runtime.world_coupling.pairs))
+
+    def test_one_authenticated_issuer_cannot_spoof_independence_with_many_sources(self):
+        runtime = PersistentCognitiveRuntime()
+        item = proposal("AXIS::B")
+        for index in (1, 2, 3):
+            executor = LinearExecutor(
+                {"AXIS::B": 2.0},
+                source_id=f"claimed-source-{index}",
+                challenge_id=f"claimed-challenge-{index}",
+                issuer_source_id="shared-authority",
+            )
+            enact(runtime, item, executor)
+        self.assertEqual(len(runtime.world_coupling.pairs), 3)
+        self.assertTrue(all(pair.authority_verified for pair in runtime.world_coupling.pairs))
+        self.assertEqual(runtime.world_axis_summary("AXIS::B").independent_evidence_classes, 1)
+
+    def test_verifier_can_collapse_distinct_issuers_into_one_independence_class(self):
+        runtime = PersistentCognitiveRuntime()
+        item = proposal("AXIS::B")
+        for index in (1, 2):
+            executor = LinearExecutor(
+                {"AXIS::B": 2.0},
+                source_id=f"source-{index}",
+                challenge_id=f"challenge-{index}",
+                independence_class_id="shared-parent-authority",
+            )
+            enact(runtime, item, executor)
+        self.assertEqual(runtime.world_axis_summary("AXIS::B").independent_evidence_classes, 1)
 
     def test_unsigned_external_claim_cannot_steer_world_routing(self):
         runtime = PersistentCognitiveRuntime()
@@ -188,9 +256,11 @@ class WorldCouplingTests(unittest.TestCase):
         payload = json.loads(checkpoint_json(runtime))
         pair = payload["world_coupling"]["pairs"][0]
         pair["authority_verified"] = True
+        pair["independence_class_id"] = "FORGED-INDEPENDENCE-CLASS"
         pair["high_outcome"] = 999.0
         restored = restore_json(json.dumps(payload), world_verifier=unit_verifier())
         self.assertFalse(restored.world_coupling.pairs[0].authority_verified)
+        self.assertEqual(restored.world_coupling.pairs[0].independence_class_id, "UNVERIFIED")
         self.assertEqual(restored.world_axis_summary("AXIS::B").routing_score, 0.0)
 
     def test_v1_checkpoint_remains_readable(self):
@@ -218,6 +288,7 @@ class WorldCouplingTests(unittest.TestCase):
         payload["schema"] = "arte.cognition_body_checkpoint/v2"
         for pair in payload["world_coupling"]["pairs"]:
             pair.pop("issuer_id", None)
+            pair.pop("independence_class_id", None)
             pair.pop("authority_verified", None)
             pair.pop("low_receipt", None)
             pair.pop("high_receipt", None)
