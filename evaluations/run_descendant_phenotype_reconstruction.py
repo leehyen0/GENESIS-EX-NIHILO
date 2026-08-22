@@ -127,8 +127,10 @@ def main(seed_path: str) -> None:
     selected_high = float(selected_proposal.high_value)
     encoded = checkpoint_json(runtime)
     payload = json.loads(encoded)
-    if payload.get("schema") != "arte.cognition_body_checkpoint/v4":
-        raise AssertionError("generated phenotype was not written through the v4 BODY checkpoint")
+    if payload.get("schema") != "arte.cognition_body_checkpoint/v3":
+        raise AssertionError("generated phenotype changed the authenticated BODY authority envelope")
+    if payload.get("phenotype_schema") != "arte.cognition_generated_phenotype/v1":
+        raise AssertionError("generated phenotype sub-schema was not declared")
     if selected_axis_id not in payload.get("memory", {}).get("representations", {}):
         raise AssertionError("checkpoint omitted exact generated representation phenotype")
     if selected_experiment_id not in payload.get("memory", {}).get("experiments", {}):
@@ -179,6 +181,7 @@ def main(seed_path: str) -> None:
     print(json.dumps({
         "status": "PASS_BOUNDED_DESCENDANT_RECONSTRUCTS_GENERATED_PHENOTYPE_FROM_BODY",
         "checkpoint_schema": payload["schema"],
+        "phenotype_schema": payload["phenotype_schema"],
         "axis_id": selected_axis_id,
         "axis_coefficients": list(selected_coefficients),
         "axis_threshold": selected_threshold,
