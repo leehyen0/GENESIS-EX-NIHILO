@@ -81,7 +81,7 @@ def main(seed_path):
 
     # Two hidden regimes require different intervention preferences. At least one
     # active axis differs from the BODY's initial default, so a static order cannot
-    # satisfy both regimes.
+    # satisfy both regimes. Their disagreement must also block contextless transport.
     axis_ids = [item.axis_id for item in proposals]
     active_regime_1 = rng.choice([axis for axis in axis_ids if axis != initial_top])
     active_regime_2 = rng.choice([axis for axis in axis_ids if axis != active_regime_1])
@@ -110,6 +110,15 @@ def main(seed_path):
         if learned[context_id] != active_axis:
             raise AssertionError(f"world outcomes did not learn the correct intervention preference in {context_id}")
 
+    transport = runtime.assess_world_transport(proposals)
+    if transport.status != "REGIME_CONFLICT_BLOCK_GLOBAL_TRANSPORT":
+        raise AssertionError("conflicting hidden regimes did not block unsafe global transport")
+    if transport.safe_for_global_transport:
+        raise AssertionError("unsafe global transport was incorrectly authorized")
+    contextless = runtime.rank_intervention_proposals(proposals)
+    if [item.axis_id for item in contextless] != [item.axis_id for item in proposals]:
+        raise AssertionError("contextless policy should abstain and preserve proposal order under regime conflict")
+
     descendant = restore_json(checkpoint_json(runtime))
     descendant_learned = {
         context_id: descendant.rank_intervention_proposals(proposals, context_id=context_id)[0].axis_id
@@ -117,6 +126,13 @@ def main(seed_path):
     }
     if descendant_learned != learned:
         raise AssertionError("context-conditioned world policy did not survive checkpoint/restore")
+
+    descendant_transport = descendant.assess_world_transport(proposals)
+    if descendant_transport != transport:
+        raise AssertionError("transport abstention did not survive checkpoint/restore")
+    descendant_contextless = descendant.rank_intervention_proposals(proposals)
+    if [item.axis_id for item in descendant_contextless] != [item.axis_id for item in proposals]:
+        raise AssertionError("descendant lost contextless abstention under regime conflict")
 
     evidence = {
         context_id: descendant.world_axis_summary(active_axis, context_id=context_id).independent_evidence_classes
@@ -126,13 +142,16 @@ def main(seed_path):
         raise AssertionError("hidden regimes did not provide two independent evidence classes each")
 
     print(json.dumps({
-        "status": "PASS_BOUNDED_HIDDEN_MULTI_REGIME_WORLD_TO_DESCENDANT_BEHAVIOR",
+        "status": "PASS_BOUNDED_HIDDEN_MULTI_REGIME_WORLD_WITH_TRANSPORT_ABSTENTION",
         "initial_top_axis": initial_top,
         "learned_top_by_regime": learned,
         "descendant_top_by_regime": descendant_learned,
         "independent_evidence_classes_by_regime": evidence,
+        "global_transport_status": transport.status,
+        "global_transport_safe": transport.safe_for_global_transport,
+        "contextless_top_axis": contextless[0].axis_id,
+        "descendant_contextless_top_axis": descendant_contextless[0].axis_id,
         "world_pair_count": len(descendant.world_coupling.pairs),
-        "global_regime_transport_required": False,
         "hidden_mechanism_exposed_to_body": False,
         "independent_organizational_custody": False,
         "physical_world": False,

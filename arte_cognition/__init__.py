@@ -77,6 +77,7 @@ from .world_coupling import (
     WorldExecutor,
     WorldOutcomePair,
     WorldOutcomeReceipt,
+    WorldTransportAssessment,
 )
 from .cognitive_runtime import CognitiveCycle, PersistentCognitiveRuntime
 from .body_checkpoint import (
@@ -139,6 +140,7 @@ __all__ = [
     "WorldExecutor",
     "WorldOutcomePair",
     "WorldOutcomeReceipt",
+    "WorldTransportAssessment",
     "CognitiveCycle",
     "PersistentCognitiveRuntime",
     "checkpoint_dict",
