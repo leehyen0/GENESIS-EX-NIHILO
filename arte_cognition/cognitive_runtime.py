@@ -50,12 +50,14 @@ class CognitiveCycle:
 
 
 class PersistentCognitiveRuntime:
-    """Executable loop from task pressure to authenticated world self-revision.
+    """Executable loop from task pressure to persistent developmental cognition.
 
-    World receipts are audit data by default. They acquire learning authority only
-    when a separately supplied verifier authenticates both intervention arms. The
-    resulting context-conditioned state and transport abstentions survive BODY
-    checkpoint/restore; verifier secrets never become persistent BODY state.
+    Incrementally valuable representation phenotypes and their generated
+    interventions are written into BODY memory before world execution. This lets a
+    descendant recover the exact coefficients/threshold/formula and intervention
+    definition from its own checkpoint rather than receiving parent-process
+    proposal objects. External world receipts still require independent verifier
+    authority before they can steer action.
     """
 
     def __init__(
@@ -111,13 +113,21 @@ class PersistentCognitiveRuntime:
             budget=possibility_budget,
         )
 
+        mutations_before = len(self.memory.mutation_log)
         axes = self.representation.propose_axes(measurements) if measurements else []
         value_assessments = [self.representation_value.assess(axis, measurements) for axis in axes] if measurements else []
+        value_by_axis = {item.axis_id: item for item in value_assessments}
         eligible_axis_ids = {
             item.axis_id for item in value_assessments
             if item.status == "INCREMENTAL_REPRESENTATION_VALUE"
         }
         semantically_eligible_axes = [axis for axis in axes if axis.axis_id in eligible_axis_ids]
+        for axis in semantically_eligible_axes:
+            self.memory.remember_representation(
+                axis,
+                value_status=value_by_axis[axis.axis_id].status,
+            )
+
         semantic_rows = (
             self.representation.augment_residuals(residuals, measurements, semantically_eligible_axes)
             if measurements and residuals
@@ -127,7 +137,10 @@ class PersistentCognitiveRuntime:
         intervention_proposals: List[InterventionProposal] = []
         if experiment_reference_values:
             for axis in semantically_eligible_axes:
-                intervention_proposals.extend(self.experiment.propose(axis, experiment_reference_values))
+                generated = self.experiment.propose(axis, experiment_reference_values)
+                intervention_proposals.extend(generated)
+                for proposal in generated:
+                    self.memory.remember_experiment(proposal)
         intervention_proposals = self.world_coupling.rank_proposals(
             intervention_proposals,
             context_id=world_context_id,
@@ -136,7 +149,6 @@ class PersistentCognitiveRuntime:
         concepts = self.semantic.propose_concepts(semantic_rows)
         semantic_queries = self.semantic.propose_queries(semantic_rows, concepts)
         laws: List[LawCandidate] = []
-        mutations_before = len(self.memory.mutation_log)
         for concept in concepts:
             self.memory.remember_concept(concept)
             law = self.semantic.induce_law(concept, semantic_rows)
@@ -158,6 +170,12 @@ class PersistentCognitiveRuntime:
             active_generated_concepts=self.memory.active_concepts(),
             shadow_generated_concepts=self.memory.shadow_concepts(),
         )
+
+    def persisted_representation_axes(self) -> List[RepresentationAxis]:
+        return self.memory.active_representation_axes()
+
+    def persisted_intervention_proposals(self) -> List[InterventionProposal]:
+        return self.memory.persisted_intervention_proposals()
 
     def observe_world(self, observations: Iterable[ResidualObservation]) -> List[RepresentationMutation]:
         mutations: List[RepresentationMutation] = []
