@@ -25,5 +25,7 @@ jobs:
           python -m py_compile arte_cognition/meta_router.py
           python -m py_compile arte_cognition/possibility_space.py
           python -m py_compile arte_cognition/semantic_genesis.py
+          python -m py_compile arte_cognition/epistemic_memory.py
+          python -m py_compile arte_cognition/cognitive_runtime.py
       - name: Run cognition tests
         run: python -m unittest discover -s arte_cognition -p 'test_*.py' -v
