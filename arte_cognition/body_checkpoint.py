@@ -13,8 +13,11 @@ from .topology_learning import CognitionTopologyLearner, EdgeExperience
 from .world_coupling import WorldCouplingEngine, WorldOutcomePair
 
 
-SCHEMA = "arte.cognition_body_checkpoint/v2"
-LEGACY_SCHEMAS = {"arte.cognition_body_checkpoint/v1"}
+SCHEMA = "arte.cognition_body_checkpoint/v3"
+LEGACY_SCHEMAS = {
+    "arte.cognition_body_checkpoint/v1",
+    "arte.cognition_body_checkpoint/v2",
+}
 
 
 def checkpoint_dict(runtime: PersistentCognitiveRuntime) -> Dict[str, Any]:
@@ -117,6 +120,7 @@ def restore_runtime(payload: Dict[str, Any]) -> PersistentCognitiveRuntime:
     world = WorldCouplingEngine(
         min_independent_classes=int(world_data.get("min_independent_classes", 2))
     )
+    is_authenticated_schema = schema == SCHEMA
     world.restore_pairs([
         WorldOutcomePair(
             pair_id=item["pair_id"],
@@ -132,6 +136,16 @@ def restore_runtime(payload: Dict[str, Any]) -> PersistentCognitiveRuntime:
             high_value=float(item["high_value"]),
             matched_budget=bool(item.get("matched_budget", False)),
             externally_generated=bool(item.get("externally_generated", False)),
+            issuer_id=(
+                str(item.get("issuer_id", "UNVERIFIED"))
+                if is_authenticated_schema
+                else "LEGACY_UNVERIFIED"
+            ),
+            authority_verified=(
+                bool(item.get("authority_verified", False))
+                if is_authenticated_schema
+                else False
+            ),
         )
         for item in world_data.get("pairs", [])
     ])
