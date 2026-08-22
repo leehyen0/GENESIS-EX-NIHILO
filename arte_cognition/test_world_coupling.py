@@ -192,6 +192,81 @@ class WorldCouplingTests(unittest.TestCase):
             runtime.world_axis_summary("AXIS::B", context_id="REGIME-B"),
         )
 
+    def test_conflicting_supported_regimes_block_contextless_transport(self):
+        runtime = PersistentCognitiveRuntime()
+        proposals = [proposal("AXIS::A"), proposal("AXIS::B")]
+        for index in (1, 2):
+            for item in proposals:
+                runtime.execute_world_intervention(
+                    item,
+                    LinearExecutor(
+                        {"AXIS::A": 2.0, "AXIS::B": 0.05},
+                        source_id=f"calm-source-{index}",
+                        context_id="CALM",
+                        challenge_id=f"calm-challenge-{index}",
+                    ),
+                )
+                runtime.execute_world_intervention(
+                    item,
+                    LinearExecutor(
+                        {"AXIS::A": 0.05, "AXIS::B": 2.0},
+                        source_id=f"turb-source-{index}",
+                        context_id="TURBULENT",
+                        challenge_id=f"turb-challenge-{index}",
+                    ),
+                )
+
+        assessment = runtime.assess_world_transport(proposals)
+        self.assertEqual(assessment.status, "REGIME_CONFLICT_BLOCK_GLOBAL_TRANSPORT")
+        self.assertFalse(assessment.safe_for_global_transport)
+        self.assertEqual(runtime.rank_intervention_proposals(proposals), proposals)
+
+    def test_agreeing_supported_regimes_allow_bounded_global_transport(self):
+        runtime = PersistentCognitiveRuntime()
+        proposals = [proposal("AXIS::A"), proposal("AXIS::B")]
+        for context_id in ("CALM", "TURBULENT"):
+            for index in (1, 2):
+                executor = LinearExecutor(
+                    {"AXIS::A": 0.05, "AXIS::B": 2.0},
+                    source_id=f"{context_id}-source-{index}",
+                    context_id=context_id,
+                    challenge_id=f"{context_id}-challenge-{index}",
+                )
+                for item in proposals:
+                    runtime.execute_world_intervention(item, executor)
+
+        assessment = runtime.assess_world_transport(proposals)
+        self.assertEqual(assessment.status, "GLOBAL_TRANSPORT_SUPPORTED_BOUNDED")
+        self.assertTrue(assessment.safe_for_global_transport)
+        self.assertEqual(runtime.rank_intervention_proposals(proposals)[0].axis_id, "AXIS::B")
+
+    def test_transport_abstention_survives_descendant_restore(self):
+        runtime = PersistentCognitiveRuntime()
+        proposals = [proposal("AXIS::A"), proposal("AXIS::B")]
+        for index in (1, 2):
+            calm = LinearExecutor(
+                {"AXIS::A": 2.0, "AXIS::B": 0.0},
+                source_id=f"calm-source-{index}",
+                context_id="CALM",
+                challenge_id=f"calm-challenge-{index}",
+            )
+            turbulent = LinearExecutor(
+                {"AXIS::A": 0.0, "AXIS::B": 2.0},
+                source_id=f"turb-source-{index}",
+                context_id="TURBULENT",
+                challenge_id=f"turb-challenge-{index}",
+            )
+            for item in proposals:
+                runtime.execute_world_intervention(item, calm)
+                runtime.execute_world_intervention(item, turbulent)
+
+        before = runtime.assess_world_transport(proposals)
+        restored = restore_json(checkpoint_json(runtime))
+        after = restored.assess_world_transport(proposals)
+        self.assertEqual(before, after)
+        self.assertFalse(after.safe_for_global_transport)
+        self.assertEqual(restored.rank_intervention_proposals(proposals), proposals)
+
 
 if __name__ == "__main__":
     unittest.main()
