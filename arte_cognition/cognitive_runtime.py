@@ -22,6 +22,7 @@ from .semantic_genesis import (
 from .subgraph_credit import MinimumCausalSubgraphFinder, MinimumSufficientSubgraph, SubgraphEvaluation
 from .topology_learning import CognitionTopologyLearner, MacroCognitionCandidate
 from .validation_matrix import RobustPromotionGate, ValidationGateResult, ValidationObservation
+from .world_coupling import AxisWorldSummary, WorldCouplingEngine, WorldExecutor, WorldOutcomePair
 
 
 @dataclass
@@ -47,8 +48,10 @@ class PersistentCognitiveRuntime:
     The runtime composes sparse routing, bounded topology learning, modal
     generation, measurable representation-axis genesis, incremental-value gates,
     experiment genesis, residual-driven semantic genesis, reversible epistemic
-    memory, outcome-ablation credit, causal-law staging and robust promotion.
-    Generated objects never become evidence merely by existing.
+    memory, outcome-ablation credit, causal-law staging, robust promotion and a
+    narrow world-coupling memory. Externally realized intervention consequences
+    can change the ordering of future experiments and that change survives BODY
+    checkpoint/restore. Generated objects never become evidence merely by existing.
     """
 
     def __init__(
@@ -66,6 +69,7 @@ class PersistentCognitiveRuntime:
         causal_law: Optional[CausalLawEvaluator] = None,
         subgraph_finder: Optional[MinimumCausalSubgraphFinder] = None,
         promotion_gate: Optional[RobustPromotionGate] = None,
+        world_coupling: Optional[WorldCouplingEngine] = None,
     ) -> None:
         self.compiler = compiler or AdaptiveCognitionCompiler()
         self.router = router or OutcomeLearnedCognitionRouter(self.compiler)
@@ -80,6 +84,7 @@ class PersistentCognitiveRuntime:
         self.causal_law = causal_law or CausalLawEvaluator()
         self.subgraph_finder = subgraph_finder or MinimumCausalSubgraphFinder()
         self.promotion_gate = promotion_gate or RobustPromotionGate()
+        self.world_coupling = world_coupling or WorldCouplingEngine()
 
     def cycle(
         self,
@@ -119,6 +124,7 @@ class PersistentCognitiveRuntime:
         if experiment_reference_values:
             for axis in semantically_eligible_axes:
                 intervention_proposals.extend(self.experiment.propose(axis, experiment_reference_values))
+        intervention_proposals = self.world_coupling.rank_proposals(intervention_proposals)
 
         concepts = self.semantic.propose_concepts(semantic_rows)
         semantic_queries = self.semantic.propose_queries(semantic_rows, concepts)
@@ -213,3 +219,20 @@ class PersistentCognitiveRuntime:
         protected_contexts: Iterable[str] = (),
     ) -> ValidationGateResult:
         return self.promotion_gate.assess(observations, protected_contexts)
+
+    def execute_world_intervention(
+        self,
+        proposal: InterventionProposal,
+        executor: WorldExecutor,
+    ) -> WorldOutcomePair:
+        """Enact a proposal through an external executor and consume its outcome."""
+        return self.world_coupling.execute(proposal, executor)
+
+    def world_axis_summary(self, axis_id: str) -> AxisWorldSummary:
+        return self.world_coupling.summary(axis_id)
+
+    def rank_intervention_proposals(
+        self,
+        proposals: Sequence[InterventionProposal],
+    ) -> List[InterventionProposal]:
+        return self.world_coupling.rank_proposals(proposals)

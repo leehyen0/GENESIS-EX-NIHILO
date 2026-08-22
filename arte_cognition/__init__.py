@@ -71,6 +71,13 @@ from .validation_matrix import (
     ValidationGateResult,
     ValidationObservation,
 )
+from .world_coupling import (
+    AxisWorldSummary,
+    WorldCouplingEngine,
+    WorldExecutor,
+    WorldOutcomePair,
+    WorldOutcomeReceipt,
+)
 from .cognitive_runtime import CognitiveCycle, PersistentCognitiveRuntime
 from .body_checkpoint import (
     checkpoint_dict,
@@ -127,6 +134,11 @@ __all__ = [
     "RobustPromotionGate",
     "ValidationGateResult",
     "ValidationObservation",
+    "AxisWorldSummary",
+    "WorldCouplingEngine",
+    "WorldExecutor",
+    "WorldOutcomePair",
+    "WorldOutcomeReceipt",
     "CognitiveCycle",
     "PersistentCognitiveRuntime",
     "checkpoint_dict",

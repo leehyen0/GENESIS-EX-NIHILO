@@ -10,14 +10,17 @@ from .epistemic_memory import ConceptRecord, EpistemicMemory, LawRecord, Represe
 from .meta_router import CognitionPolicyState, ModuleExperience, OutcomeLearnedCognitionRouter
 from .semantic_genesis import ConceptCandidate, LawCandidate
 from .topology_learning import CognitionTopologyLearner, EdgeExperience
+from .world_coupling import WorldCouplingEngine, WorldOutcomePair
 
 
-SCHEMA = "arte.cognition_body_checkpoint/v1"
+SCHEMA = "arte.cognition_body_checkpoint/v2"
+LEGACY_SCHEMAS = {"arte.cognition_body_checkpoint/v1"}
 
 
 def checkpoint_dict(runtime: PersistentCognitiveRuntime) -> Dict[str, Any]:
     policy = runtime.router.policy
     topology = runtime.topology
+    world = runtime.world_coupling
     return {
         "schema": SCHEMA,
         "policy": {
@@ -42,6 +45,10 @@ def checkpoint_dict(runtime: PersistentCognitiveRuntime) -> Dict[str, Any]:
                 {"sequence": list(sequence), "count": count}
                 for sequence, count in sorted(topology.sequence_counts.items())
             ],
+        },
+        "world_coupling": {
+            "min_independent_classes": world.min_independent_classes,
+            "pairs": [asdict(pair) for pair in world.pairs],
         },
         "memory": {
             "concepts": {
@@ -71,7 +78,8 @@ def checkpoint_json(runtime: PersistentCognitiveRuntime) -> str:
 
 
 def restore_runtime(payload: Dict[str, Any]) -> PersistentCognitiveRuntime:
-    if payload.get("schema") != SCHEMA:
+    schema = payload.get("schema")
+    if schema != SCHEMA and schema not in LEGACY_SCHEMAS:
         raise ValueError("unsupported cognition checkpoint schema")
 
     policy_data = payload.get("policy", {})
@@ -104,6 +112,29 @@ def restore_runtime(payload: Dict[str, Any]) -> PersistentCognitiveRuntime:
         )
     for item in topology_data.get("sequence_counts", []):
         topology.sequence_counts[tuple(item.get("sequence", []))] = int(item.get("count", 0))
+
+    world_data = payload.get("world_coupling", {})
+    world = WorldCouplingEngine(
+        min_independent_classes=int(world_data.get("min_independent_classes", 2))
+    )
+    world.restore_pairs([
+        WorldOutcomePair(
+            pair_id=item["pair_id"],
+            experiment_id=item["experiment_id"],
+            axis_id=item["axis_id"],
+            source_id=item["source_id"],
+            context_id=item["context_id"],
+            challenge_id=item["challenge_id"],
+            epoch=int(item["epoch"]),
+            low_outcome=float(item["low_outcome"]),
+            high_outcome=float(item["high_outcome"]),
+            low_value=float(item["low_value"]),
+            high_value=float(item["high_value"]),
+            matched_budget=bool(item.get("matched_budget", False)),
+            externally_generated=bool(item.get("externally_generated", False)),
+        )
+        for item in world_data.get("pairs", [])
+    ])
 
     compiler = AdaptiveCognitionCompiler()
     router = OutcomeLearnedCognitionRouter(compiler=compiler, policy=policy)
@@ -162,6 +193,7 @@ def restore_runtime(payload: Dict[str, Any]) -> PersistentCognitiveRuntime:
         router=router,
         topology=topology,
         memory=memory,
+        world_coupling=world,
     )
 
 
