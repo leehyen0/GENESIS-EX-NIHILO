@@ -5,6 +5,10 @@ import random
 import sys
 from pathlib import Path
 
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
 from arte_cognition.body_checkpoint import checkpoint_json, restore_json
 from arte_cognition.cognitive_runtime import PersistentCognitiveRuntime
 from arte_cognition.experiment_genesis import InterventionProposal
