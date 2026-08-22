@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Iterable, List, Mapping, Optional, Sequence
+from typing import Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 
 from .adaptive_cognition import AdaptiveCognitionCompiler, CognitionPlan, ModuleCredit, TaskState
 from .causal_credit import OutcomeAblationCredit, OutcomeAblationCreditEngine
@@ -58,6 +58,12 @@ class PersistentCognitiveRuntime:
     definition from its own checkpoint rather than receiving parent-process
     proposal objects. External world receipts still require independent verifier
     authority before they can steer action.
+
+    Projection experiment search is also allowed to become evidence-conditioned,
+    but only from already persisted exact experiments whose world outcomes were
+    authenticated and span the configured minimum number of verifier-derived
+    independence classes. The learned search schedule is therefore reconstructed
+    from BODY evidence after restart rather than trusted as a serialized scalar.
     """
 
     def __init__(
@@ -76,6 +82,7 @@ class PersistentCognitiveRuntime:
         subgraph_finder: Optional[MinimumCausalSubgraphFinder] = None,
         promotion_gate: Optional[RobustPromotionGate] = None,
         world_coupling: Optional[WorldCouplingEngine] = None,
+        adaptive_projection_search: bool = True,
     ) -> None:
         self.compiler = compiler or AdaptiveCognitionCompiler()
         self.router = router or OutcomeLearnedCognitionRouter(self.compiler)
@@ -91,6 +98,118 @@ class PersistentCognitiveRuntime:
         self.subgraph_finder = subgraph_finder or MinimumCausalSubgraphFinder()
         self.promotion_gate = promotion_gate or RobustPromotionGate()
         self.world_coupling = world_coupling or WorldCouplingEngine()
+        self.adaptive_projection_search = bool(adaptive_projection_search)
+
+    @staticmethod
+    def _proposal_probe_scale(proposal: InterventionProposal) -> Optional[float]:
+        marker = "probe_scale="
+        reason = str(proposal.reason)
+        if marker not in reason:
+            return None
+        tail = reason.split(marker, 1)[1].strip().split()[0].rstrip(",;)")
+        try:
+            return float(tail)
+        except (TypeError, ValueError):
+            return None
+
+    def projection_search_schedule(self) -> Tuple[float, ...]:
+        """Derive a bounded projection-probe schedule from authenticated history.
+
+        The default 1x/2x/4x vocabulary is never changed until every scale has at
+        least one exact experiment supported by the required number of independent
+        verifier classes. A dominant scale may reduce the next search to two scales
+        after repeated exact-experiment evidence, and to one scale only after the
+        dominant scale has reproduced across at least two world contexts. This is a
+        bounded matched-family search optimization, not global transport authority.
+        """
+        base = tuple(float(value) for value in self.experiment.projection_margin_multipliers)
+        if not self.adaptive_projection_search or len(base) <= 1:
+            return base
+
+        stats: Dict[float, Dict[str, object]] = {
+            scale: {"effects": [], "contexts": set()} for scale in base
+        }
+        for record in self.memory.experiments.values():
+            proposal = record.proposal
+            scale = self._proposal_probe_scale(proposal)
+            if scale is None:
+                continue
+            matched_scale = next((item for item in base if abs(item - scale) <= 1e-12), None)
+            if matched_scale is None:
+                continue
+
+            by_class: Dict[str, WorldOutcomePair] = {}
+            for pair in self.world_coupling.pairs:
+                if pair.experiment_id != proposal.experiment_id:
+                    continue
+                if not (
+                    pair.matched_budget
+                    and pair.externally_generated
+                    and pair.authority_verified
+                    and pair.independence_class_id != "UNVERIFIED"
+                ):
+                    continue
+                by_class.setdefault(pair.independence_class_id, pair)
+            if len(by_class) < self.world_coupling.min_independent_classes:
+                continue
+
+            unique_pairs = list(by_class.values())
+            mean_abs_effect = sum(abs(pair.effect) for pair in unique_pairs) / len(unique_pairs)
+            effects = stats[matched_scale]["effects"]
+            contexts = stats[matched_scale]["contexts"]
+            assert isinstance(effects, list)
+            assert isinstance(contexts, set)
+            effects.append(float(mean_abs_effect))
+            contexts.update(pair.context_id for pair in unique_pairs)
+
+        # Do not narrow the vocabulary while any default scale remains untested.
+        if any(not stats[scale]["effects"] for scale in base):
+            return base
+
+        scores = {
+            scale: sum(stats[scale]["effects"]) / len(stats[scale]["effects"])
+            for scale in base
+        }
+        base_index = {scale: index for index, scale in enumerate(base)}
+        ordered = tuple(sorted(base, key=lambda scale: (-scores[scale], base_index[scale])))
+        top = ordered[0]
+        runner_up = ordered[1]
+
+        # Material dominance is required before search-space contraction.
+        if scores[top] < 0.5 or (scores[top] - scores[runner_up]) < 0.25:
+            return base
+
+        top_effects = stats[top]["effects"]
+        top_contexts = stats[top]["contexts"]
+        assert isinstance(top_effects, list)
+        assert isinstance(top_contexts, set)
+
+        budget = len(base)
+        if len(top_effects) >= 2:
+            budget = min(budget, 2)
+        if len(top_effects) >= 4 and len(top_contexts) >= 2:
+            budget = 1
+        return ordered[:budget]
+
+    def generate_interventions(
+        self,
+        axis: RepresentationAxis,
+        reference_values: Mapping[str, float],
+    ) -> List[InterventionProposal]:
+        """Generate exact interventions using BODY-derived search scheduling."""
+        engine = self.experiment
+        if axis.family == "PROJECTION":
+            schedule = self.projection_search_schedule()
+            if schedule != tuple(self.experiment.projection_margin_multipliers):
+                engine = ExperimentGenesisEngine(
+                    relative_margin=self.experiment.relative_margin,
+                    max_proposals=self.experiment.max_proposals,
+                    projection_margin_multipliers=schedule,
+                )
+        generated = engine.propose(axis, reference_values)
+        for proposal in generated:
+            self.memory.remember_experiment(proposal)
+        return generated
 
     def cycle(
         self,
@@ -137,10 +256,9 @@ class PersistentCognitiveRuntime:
         intervention_proposals: List[InterventionProposal] = []
         if experiment_reference_values:
             for axis in semantically_eligible_axes:
-                generated = self.experiment.propose(axis, experiment_reference_values)
-                intervention_proposals.extend(generated)
-                for proposal in generated:
-                    self.memory.remember_experiment(proposal)
+                intervention_proposals.extend(
+                    self.generate_interventions(axis, experiment_reference_values)
+                )
         intervention_proposals = self.world_coupling.rank_proposals(
             intervention_proposals,
             context_id=world_context_id,
