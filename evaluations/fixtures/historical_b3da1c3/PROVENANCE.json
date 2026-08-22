@@ -1,0 +1,10 @@
+{
+  "repository": "leehyen0/GENESIS-EX-NIHILO",
+  "historical_commit_sha": "b3da1c3db7eb29995a6d06f696016cf52c89cd77",
+  "historical_path": "arte_cognition/epistemic_memory.py",
+  "historical_blob_sha": "d75b171f9cb79b7089492bd15fb6d64cd6f5690c",
+  "natural_historical_bug": "EXACT_INTERVENTION_IDENTITY_PROVENANCE_ALIAS_OVERWRITE",
+  "later_fix_pr": 71,
+  "fixture_is_exact_git_blob": true,
+  "claim_boundary": "The fixture is the exact pre-fix production Git blob. The later fixed source is provenance metadata only and is not supplied to BODY or candidate generation."
+}
