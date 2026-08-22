@@ -8,7 +8,6 @@ from arte_cognition.experiment_genesis import ExperimentGenesisEngine
 from arte_cognition.projection_generator_metapolicy import (
     ProjectionGeneratorPolicy,
     derive_projection_generator_frontier,
-    derive_projection_generator_policy,
 )
 from arte_cognition.projection_scale_genesis import projection_scale_scores
 from arte_cognition.representation_genesis import RepresentationAxis
@@ -115,30 +114,6 @@ class ProjectionGeneratorMetaPolicyTests(unittest.TestCase):
         )
         return engine.propose(ax, {names[0]: 0.0, names[1]: 0.0})
 
-    def _policy(self, runtime):
-        return derive_projection_generator_policy(
-            AUTHORED,
-            (record.proposal for record in runtime.memory.experiments.values()),
-            runtime.world_coupling.pairs,
-            runtime.world_coupling.min_independent_classes,
-            scale_of,
-            strong_effect_threshold=0.9,
-            min_contexts=2,
-        )
-
-    def _frontier(self, runtime, context, policy, max_candidates=16):
-        return derive_projection_generator_frontier(
-            AUTHORED,
-            (record.proposal for record in runtime.memory.experiments.values()),
-            runtime.world_coupling.pairs,
-            runtime.world_coupling.min_independent_classes,
-            scale_of,
-            context_id=context,
-            learned_policy=policy,
-            strong_effect_threshold=0.9,
-            max_candidates=max_candidates,
-        )
-
     def _context_capability(self, runtime, context, target):
         scores = projection_scale_scores(
             (record.proposal for record in runtime.memory.experiments.values()),
@@ -160,22 +135,19 @@ class ProjectionGeneratorMetaPolicyTests(unittest.TestCase):
             base = self._proposals(ax, AUTHORED)
             self._remember_and_execute(runtime, base, 1.25, context, 1000 + index * 1000)
 
-            no_policy = ProjectionGeneratorPolicy(
-                status="NO_REPRODUCED_GENERATOR_POLICY",
-                alpha=None,
-                supporting_contexts=(),
-                candidate_alpha_count=0,
-                strong_effect_threshold=0.9,
-                reason="training shadow search",
-            )
-            shadow = self._frontier(runtime, context, no_policy)
+            shadow = runtime.projection_generator_frontier(context, max_candidates=16)
             self.assertEqual(shadow.status, "SHADOW_GENERATOR_PROGRAM_SEARCH")
             self.assertEqual(shadow.generator_alphas, (0.25, 0.5, 0.75))
             self.assertIn(1.25, shadow.candidate_scales)
-            generated = self._proposals(ax, shadow.candidate_scales)
+            generated = runtime.generate_projection_generator_interventions(
+                ax,
+                {ax.inputs[0]: 0.0, ax.inputs[1]: 0.0},
+                context,
+                max_candidates=16,
+            )
             self._remember_and_execute(runtime, generated, 1.25, context, 1500 + index * 1000)
 
-        learned = self._policy(runtime)
+        learned = runtime.projection_generator_policy()
         self.assertEqual(learned.status, "REPRODUCED_GENERATOR_POLICY")
         self.assertEqual(learned.alpha, 0.25)
         self.assertEqual(len(learned.supporting_contexts), 2)
@@ -184,9 +156,9 @@ class ProjectionGeneratorMetaPolicyTests(unittest.TestCase):
         # cannot recreate a generator policy without the external verifier.
         payload = checkpoint_dict(runtime)
         verifierless = restore_runtime(payload)
-        self.assertIsNone(self._policy(verifierless).alpha)
+        self.assertIsNone(verifierless.projection_generator_policy().alpha)
         descendant = restore_runtime(payload, world_verifier=self.verifier)
-        descendant_policy = self._policy(descendant)
+        descendant_policy = descendant.projection_generator_policy()
         self.assertEqual(descendant_policy.alpha, 0.25)
 
         # Fresh context moves the hidden optimum to a different authored bracket.
@@ -199,13 +171,18 @@ class ProjectionGeneratorMetaPolicyTests(unittest.TestCase):
         self._remember_and_execute(descendant, base, 2.5, fresh_context, 5000)
         self.assertEqual(self._context_capability(descendant, fresh_context, 2.5), 0.0)
 
-        learned_frontier = self._frontier(
-            descendant, fresh_context, descendant_policy, max_candidates=2
+        learned_frontier = descendant.projection_generator_frontier(
+            fresh_context, max_candidates=2
         )
         self.assertEqual(learned_frontier.status, "LEARNED_GENERATOR_TRANSFER")
         self.assertEqual(learned_frontier.learned_alpha, 0.25)
         self.assertEqual(learned_frontier.candidate_scales, (1.25, 2.5))
-        treatment = self._proposals(fresh_axis, learned_frontier.candidate_scales)
+        treatment = descendant.generate_projection_generator_interventions(
+            fresh_axis,
+            {fresh_axis.inputs[0]: 0.0, fresh_axis.inputs[1]: 0.0},
+            fresh_context,
+            max_candidates=2,
+        )
         self._remember_and_execute(descendant, treatment, 2.5, fresh_context, 6000)
         self.assertEqual(self._context_capability(descendant, fresh_context, 2.5), 1.0)
 
@@ -214,13 +191,17 @@ class ProjectionGeneratorMetaPolicyTests(unittest.TestCase):
         reset = PersistentCognitiveRuntime()
         reset_axis = axis("generator-reset-heldout")
         reset.memory.remember_representation(reset_axis)
-        reset_base = self._proposals(reset_axis, AUTHORED)
         reset_context = "generator-reset-heldout"
+        reset_base = self._proposals(reset_axis, AUTHORED)
         self._remember_and_execute(reset, reset_base, 2.5, reset_context, 7000)
-        no_policy = self._policy(reset)
-        reset_frontier = self._frontier(reset, reset_context, no_policy, max_candidates=2)
+        reset_frontier = reset.projection_generator_frontier(reset_context, max_candidates=2)
         self.assertEqual(reset_frontier.candidate_scales, (1.25, 1.5))
-        reset_generated = self._proposals(reset_axis, reset_frontier.candidate_scales)
+        reset_generated = reset.generate_projection_generator_interventions(
+            reset_axis,
+            {reset_axis.inputs[0]: 0.0, reset_axis.inputs[1]: 0.0},
+            reset_context,
+            max_candidates=2,
+        )
         self._remember_and_execute(reset, reset_generated, 2.5, reset_context, 8000)
         self.assertEqual(self._context_capability(reset, reset_context, 2.5), 0.0)
 
@@ -239,7 +220,17 @@ class ProjectionGeneratorMetaPolicyTests(unittest.TestCase):
             strong_effect_threshold=0.9,
             reason="matched wrong-swap",
         )
-        wrong_frontier = self._frontier(wrong, wrong_context, wrong_policy, max_candidates=2)
+        wrong_frontier = derive_projection_generator_frontier(
+            AUTHORED,
+            (record.proposal for record in wrong.memory.experiments.values()),
+            wrong.world_coupling.pairs,
+            wrong.world_coupling.min_independent_classes,
+            scale_of,
+            context_id=wrong_context,
+            learned_policy=wrong_policy,
+            strong_effect_threshold=0.9,
+            max_candidates=2,
+        )
         self.assertEqual(wrong_frontier.candidate_scales, (1.75, 3.5))
         wrong_generated = self._proposals(wrong_axis, wrong_frontier.candidate_scales)
         self._remember_and_execute(wrong, wrong_generated, 2.5, wrong_context, 10000)
