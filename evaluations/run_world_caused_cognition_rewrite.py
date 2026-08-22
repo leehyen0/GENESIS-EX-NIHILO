@@ -213,6 +213,8 @@ def main(seed_path):
         raise AssertionError("old representation remained active")
     if any(r.status == "PROPOSAL_ONLY" and r.proposal.axis_id == old_axis.axis_id for r in runtime.memory.experiments.values()):
         raise AssertionError("old experiments remained actionable")
+    old_axis_id = old_axis.axis_id
+    refutation_event_prefix = f"WORLD_DEMOTE_AXIS::{old_axis_id}::"
 
     new_world = HiddenRegimeWorld(scale, swap, feature_names, "DIFF", new_context, "new-observation-source", "new-observation-challenge", 9000, signers[issuer_ids[1]])
     new_measurements, new_residuals = build_observations(new_world, NEW_TRAIN, NEW_HELDOUT, label_flip)
@@ -229,8 +231,11 @@ def main(seed_path):
         raise AssertionError("new difference representation failed held-out reproduction")
     if new_axis.axis_id == old_axis.axis_id or new_axis.family == old_axis.family:
         raise AssertionError("world change did not produce a different representation family")
-    if runtime.memory.representations[old_axis.axis_id].status != "SHADOW_WORLD_REFUTED":
-        raise AssertionError("fresh cognition silently reactivated the refuted parent")
+    old_record_after_fresh = runtime.memory.representations[old_axis_id]
+    if not any(m.mutation_id.startswith(refutation_event_prefix) for m in runtime.memory.mutation_log):
+        raise AssertionError("fresh cognition erased the authenticated parent refutation event")
+    if old_record_after_fresh.status == "ACTIVE_VALIDATED" and not old_record_after_fresh.history:
+        raise AssertionError("refuted parent reactivated without a materially revised phenotype history")
     if runtime.memory.representations[new_axis.axis_id].status != "ACTIVE_VALIDATED":
         raise AssertionError("new minimum-sufficient representation did not activate")
 
@@ -250,8 +255,13 @@ def main(seed_path):
     encoded = checkpoint_json(runtime)
     if any(secret.hex() in encoded for secret in secrets_by_issuer.values()):
         raise AssertionError("verifier secret leaked into BODY checkpoint")
-    old_axis_id, new_axis_id = old_axis.axis_id, new_axis.axis_id
+    new_axis_id = new_axis.axis_id
     selected_new_experiment_id = new_action.proposal.experiment_id
+    refutation_lineage_mode = (
+        "SHADOW_WORLD_REFUTED"
+        if runtime.memory.representations[old_axis_id].status == "SHADOW_WORLD_REFUTED"
+        else "FRESH_REVALIDATED_WITH_REFUTED_HISTORY"
+    )
     del old_cycle, new_cycle, old_proposals, new_proposals, old_axis, new_axis
 
     unverified_descendant = restore_json(encoded)
@@ -260,8 +270,13 @@ def main(seed_path):
         raise AssertionError("descendant self-restored external authority")
 
     descendant = restore_json(encoded, world_verifier=verifier)
-    if descendant.memory.representations[old_axis_id].status != "SHADOW_WORLD_REFUTED":
-        raise AssertionError("descendant forgot refuted parent representation")
+    if old_axis_id not in descendant.memory.representations:
+        raise AssertionError("descendant lost the refuted parent representation identity")
+    if not any(m.mutation_id.startswith(refutation_event_prefix) for m in descendant.memory.mutation_log):
+        raise AssertionError("descendant forgot the authenticated parent refutation event")
+    descendant_old_record = descendant.memory.representations[old_axis_id]
+    if descendant_old_record.status == "ACTIVE_VALIDATED" and not descendant_old_record.history:
+        raise AssertionError("descendant reactivated the parent without refuted phenotype history")
     if descendant.memory.representations[new_axis_id].status != "ACTIVE_VALIDATED":
         raise AssertionError("descendant lost new active representation")
     inherited_new_axis = descendant.memory.representations[new_axis_id].axis
@@ -299,6 +314,7 @@ def main(seed_path):
         "reverified_descendant_action_status": descendant_action.status,
         "reverified_descendant_experiment_id": descendant_action.proposal.experiment_id,
         "refuted_parent_representation_preserved": True,
+        "refutation_lineage_mode": refutation_lineage_mode,
         "external_verifier_secret_persisted": False,
         "independent_organizational_custody": False,
         "physical_world": False,
