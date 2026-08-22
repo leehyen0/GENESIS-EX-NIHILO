@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import List, Mapping, Tuple
+from typing import List, Mapping, Sequence, Tuple
 import hashlib
 import json
 
@@ -29,14 +29,32 @@ class ExperimentGenesisEngine:
     axis, manipulated variable, held-fixed values, and LOW/HIGH values. Evidence
     from one reference state therefore cannot authorize a numerically different
     intervention that happens to manipulate the same variable on the same axis.
+
+    Latent projection experiments use a bounded multi-scale search rather than one
+    fixed threshold margin. A representation can be predictive while its first
+    local threshold probe is too weak to cross the world's actual causal boundary;
+    proposal generation therefore emits several exact, separately identifiable
+    intervention scales. They remain proposal-only until external outcomes decide
+    which, if any, has world consequence.
     """
 
-    def __init__(self, relative_margin: float = 0.15, max_proposals: int = 8) -> None:
+    def __init__(
+        self,
+        relative_margin: float = 0.15,
+        max_proposals: int = 8,
+        projection_margin_multipliers: Sequence[float] = (1.0, 2.0, 4.0),
+    ) -> None:
         self.relative_margin = max(0.01, float(relative_margin))
         self.max_proposals = max(1, int(max_proposals))
+        cleaned = sorted({
+            float(value) for value in projection_margin_multipliers
+            if float(value) > 0.0
+        })
+        self.projection_margin_multipliers = tuple(cleaned or (1.0,))
 
-    def _around(self, value: float) -> Tuple[float, float]:
+    def _around(self, value: float, multiplier: float = 1.0) -> Tuple[float, float]:
         margin = max(abs(value) * self.relative_margin, self.relative_margin)
+        margin *= max(0.01, float(multiplier))
         return value - margin, value + margin
 
     @staticmethod
@@ -140,38 +158,52 @@ class ExperimentGenesisEngine:
                 add(variable, base + low_rate, base + high_rate, {}, "create two one-step trajectories that straddle the learned derivative threshold")
 
         elif axis.family == "PROJECTION" and axis.coefficients:
-            low_score, high_score = self._around(threshold)
             coeffs = dict(axis.coefficients)
-            for variable, coefficient in sorted(coeffs.items(), key=lambda kv: (-abs(kv[1]), kv[0])):
-                if abs(coefficient) <= 1e-12:
-                    continue
-                others = {name: float(reference_values[name]) for name in coeffs if name != variable and name in reference_values}
-                if len(others) != len(coeffs) - 1:
-                    continue
-                fixed_score = float(axis.bias) + sum(coeffs[name] * value for name, value in others.items())
-                x_for_low_score = (low_score - fixed_score) / coefficient
-                x_for_high_score = (high_score - fixed_score) / coefficient
-                if x_for_low_score <= x_for_high_score:
-                    add(
-                        variable,
-                        x_for_low_score,
-                        x_for_high_score,
-                        others,
-                        "cross learned latent projection threshold while holding other projection parents fixed",
+            for multiplier in self.projection_margin_multipliers:
+                low_score, high_score = self._around(threshold, multiplier=multiplier)
+                for variable, coefficient in sorted(coeffs.items(), key=lambda kv: (-abs(kv[1]), kv[0])):
+                    if abs(coefficient) <= 1e-12:
+                        continue
+                    others = {
+                        name: float(reference_values[name])
+                        for name in coeffs
+                        if name != variable and name in reference_values
+                    }
+                    if len(others) != len(coeffs) - 1:
+                        continue
+                    fixed_score = float(axis.bias) + sum(
+                        coeffs[name] * value for name, value in others.items()
                     )
-                else:
-                    add(
-                        variable,
-                        x_for_high_score,
-                        x_for_low_score,
-                        others,
-                        "cross learned latent projection threshold while holding other projection parents fixed",
-                        low_side="GT_THRESHOLD",
-                        high_side="LE_THRESHOLD",
+                    x_for_low_score = (low_score - fixed_score) / coefficient
+                    x_for_high_score = (high_score - fixed_score) / coefficient
+                    reason = (
+                        "cross learned latent projection threshold while holding other projection parents fixed; "
+                        f"probe_scale={multiplier:g}"
                     )
+                    if x_for_low_score <= x_for_high_score:
+                        add(
+                            variable,
+                            x_for_low_score,
+                            x_for_high_score,
+                            others,
+                            reason,
+                        )
+                    else:
+                        add(
+                            variable,
+                            x_for_high_score,
+                            x_for_low_score,
+                            others,
+                            reason,
+                            low_side="GT_THRESHOLD",
+                            high_side="LE_THRESHOLD",
+                        )
 
         valid = [
             p for p in proposals
             if p.low_value == p.low_value and p.high_value == p.high_value and p.low_value < p.high_value
         ]
-        return valid[: self.max_proposals]
+        dedup = {}
+        for proposal in valid:
+            dedup.setdefault(proposal.experiment_id, proposal)
+        return list(dedup.values())[: self.max_proposals]
