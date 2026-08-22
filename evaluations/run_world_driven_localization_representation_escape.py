@@ -214,6 +214,9 @@ def {decoy_public_fn}(row, pivot):
 
 def _execute_candidate(body, task, candidate, signers, verifier, epoch_base):
     effects = []
+    exact_token = hashlib.sha256(
+        f"{candidate.file_path}|{candidate.site_index}|{candidate.proposal.experiment_id}".encode()
+    ).hexdigest()[:16]
     for issuer_index, (issuer, signer) in enumerate(signers.items()):
         executor = SubprocessRepositoryRepairExecutor(
             baseline_files=task.files,
@@ -222,9 +225,9 @@ def _execute_candidate(body, task, candidate, signers, verifier, epoch_base):
             function_name=task.function_name,
             hidden_cases=task.cases,
             signer=signer,
-            source_id=f"{task.task_id}-topology-{candidate.site_index}-{issuer}",
+            source_id=f"{task.task_id}-topology-{exact_token}-{issuer}",
             context_id=task.task_id,
-            challenge_id=f"{task.task_id}-hidden-topology-{candidate.site_index}-{issuer}",
+            challenge_id=f"{task.task_id}-hidden-topology-{exact_token}-{issuer}",
             epoch=epoch_base + issuer_index,
         )
         pair = body.execute_world_intervention(candidate.proposal, executor, verifier=verifier)
@@ -341,7 +344,6 @@ def main(seed_path):
     treatment_effects = _execute_one(treatment, heldout, treatment_selection, signers, verifier, 40000)
     treatment_cap = float(min(treatment_effects) >= 0.9)
 
-    # Same checkpoint, same fresh candidate universe, but graph representation is removed.
     role_only = restore_runtime(checkpoint, world_verifier=verifier)
     role_candidates, role_depth = RepositoryLocalizationRepresentationOrgan(role_only).propose(heldout.task_id, heldout.files)
     role_selection = RepositoryTaskAcquisitionOrgan(role_only).select(
@@ -365,7 +367,6 @@ def main(seed_path):
         effects = _execute_candidate(full, heldout, candidate, signers, verifier, 70000 + index * 10)
         full_cap = max(full_cap, float(min(effects) >= 0.9))
 
-    # Genuine WRONG representation: same operator, opposite generated structural fingerprint.
     wrong_parent = PersistentCognitiveRuntime()
     wrong_numeric = _make_task(rng, hidden_operator, "numeric-scalar", "wrong-graph-numeric", "DECOY")
     wrong_lexical = _make_task(rng, hidden_operator, "lexical-scalar", "wrong-graph-lexical", "DECOY")
