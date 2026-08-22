@@ -23,22 +23,43 @@ class RepresentationGenesisTests(unittest.TestCase):
             MeasurementObservation("hj", {"load": 135, "capacity": 150}, "JERK", heldout=True),
         ]
 
+    def _latent_measurements(self):
+        train = [
+            ("a1", (-2, -3, -1), "A"),
+            ("a2", (1, 3, -3), "A"),
+            ("a3", (-5, 5, -2), "A"),
+            ("b1", (-1, -4, 5), "B"),
+            ("b2", (2, 1, 3), "B"),
+            ("a4", (-1, 3, 2), "A"),
+            ("b3", (3, 2, -5), "B"),
+            ("b4", (1, 0, -3), "B"),
+        ]
+        rows = [
+            MeasurementObservation(obs, {"x": p[0], "y": p[1], "z": p[2]}, outcome)
+            for obs, p, outcome in train
+        ]
+        rows.extend([
+            MeasurementObservation("ha", {"x": 0, "y": 2, "z": 0}, "A", heldout=True),
+            MeasurementObservation("hb", {"x": 0, "y": 0, "z": 0}, "B", heldout=True),
+        ])
+        return rows
+
     def _residuals(self):
-        rows = []
-        for row in self._measurements():
-            rows.append(ResidualObservation(
+        return [
+            ResidualObservation(
                 residual_id=row.observation_id,
                 features=("startup",),
                 outcome=row.outcome,
                 heldout=row.heldout,
-            ))
-        return rows
+            )
+            for row in self._measurements()
+        ]
 
     def test_new_axis_generated_when_supplied_feature_vocabulary_is_inadequate(self):
         engine = RepresentationGenesisEngine()
         axes = engine.propose_axes(self._measurements())
         self.assertTrue(axes)
-        self.assertTrue(any(axis.family in {"DIFFERENCE", "ABS_DIFFERENCE", "RATIO", "INTERACTION"} for axis in axes))
+        self.assertTrue(any(axis.family in {"DIFFERENCE", "ABS_DIFFERENCE", "RATIO", "INTERACTION", "PROJECTION"} for axis in axes))
         self.assertGreaterEqual(max(axis.information_gain for axis in axes), 0.9)
 
     def test_generated_axis_must_add_value_beyond_raw_parents(self):
@@ -115,6 +136,29 @@ class RepresentationGenesisTests(unittest.TestCase):
         self.assertTrue(proposals)
         self.assertTrue(all(p.status == "PROPOSAL_ONLY" for p in proposals))
         self.assertTrue(any(p.manipulated_variable == "load" for p in proposals))
+
+    def test_learned_projection_can_outperform_every_single_parent_axis(self):
+        rows = self._latent_measurements()
+        engine = RepresentationGenesisEngine(axis_budget=16, enable_projection=True)
+        axes = engine.propose_axes(rows)
+        projections = [axis for axis in axes if axis.family == "PROJECTION"]
+        self.assertTrue(projections)
+        projection = projections[0]
+        assessment = RepresentationValueEvaluator(min_incremental_gain=0.10, min_heldout_support=2).assess(projection, rows)
+        self.assertEqual(assessment.status, "INCREMENTAL_REPRESENTATION_VALUE")
+        self.assertGreater(assessment.incremental_gain, 0.10)
+        self.assertAlmostEqual(assessment.heldout_accuracy, 1.0)
+
+    def test_projection_generates_actionable_threshold_crossing_experiment(self):
+        rows = self._latent_measurements()
+        projection = next(
+            axis for axis in RepresentationGenesisEngine(axis_budget=16).propose_axes(rows)
+            if axis.family == "PROJECTION"
+        )
+        proposals = ExperimentGenesisEngine().propose(projection, {"x": 0.0, "y": 1.0, "z": 0.0})
+        self.assertTrue(proposals)
+        self.assertTrue(all(p.axis_id == projection.axis_id for p in proposals))
+        self.assertTrue(all(p.status == "PROPOSAL_ONLY" for p in proposals))
 
     def test_axis_budget_and_partition_quotient_prevent_explosion(self):
         engine = RepresentationGenesisEngine(axis_budget=2)
