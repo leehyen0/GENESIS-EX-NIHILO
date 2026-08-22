@@ -36,6 +36,7 @@ jobs:
           python -m py_compile arte_cognition/topology_learning.py
           python -m py_compile arte_cognition/validation_matrix.py
           python -m py_compile arte_cognition/world_coupling.py
+          python -m py_compile arte_cognition/world_action_policy.py
           python -m py_compile arte_cognition/cognitive_runtime.py
           python -m py_compile arte_cognition/body_checkpoint.py
           python -m py_compile evaluations/run_hidden_world_coupling.py
