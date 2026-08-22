@@ -10,6 +10,12 @@ from .epistemic_memory import EpistemicMemory, RepresentationMutation
 from .experiment_genesis import ExperimentGenesisEngine, InterventionProposal
 from .meta_router import OutcomeLearnedCognitionRouter
 from .possibility_space import Fact, OperatorSpec, PossibilityCandidate, PossibilitySpaceGenerator
+from .projection_generator_metapolicy import (
+    ProjectionGeneratorFrontier,
+    ProjectionGeneratorPolicy,
+    derive_projection_generator_frontier,
+    derive_projection_generator_policy,
+)
 from .projection_scale_genesis import (
     ProjectionScaleFrontier,
     derive_projection_scale_frontier,
@@ -68,11 +74,11 @@ class PersistentCognitiveRuntime:
     Projection experiment search can become evidence-conditioned. The BODY searches
     a bounded policy space for the smallest cross-context sufficient probe subset.
     When the authored numeric probe vocabulary itself leaves a strong-effect world
-    residual, the BODY may also generate bounded midpoint scale atoms, test them as
-    proposal-only interventions, and admit only externally verified strong scales
-    into descendant search. Neither learned subset nor generated scale is trusted as
-    a serialized authority scalar; both are reconstructed from reverified BODY
-    evidence after restart.
+    residual, the BODY can generate off-grid scale atoms. Repeated authenticated
+    success of generated atoms can additionally induce a reusable interpolation
+    generator policy, which is transferred to new authored brackets. Search subsets,
+    generated atoms, and generator policy are reconstructed from reverified BODY
+    evidence after restart rather than trusted as serialized authority scalars.
     """
 
     def __init__(
@@ -124,9 +130,12 @@ class PersistentCognitiveRuntime:
     def _persisted_proposals(self) -> List[InterventionProposal]:
         return [record.proposal for record in self.memory.experiments.values()]
 
+    def _authored_projection_scales(self) -> Tuple[float, ...]:
+        return tuple(float(value) for value in self.experiment.projection_margin_multipliers)
+
     def projection_probe_vocabulary(self) -> Tuple[float, ...]:
         """Return authored scales plus externally validated BODY-generated scales."""
-        authored = tuple(float(value) for value in self.experiment.projection_margin_multipliers)
+        authored = self._authored_projection_scales()
         if not self.adaptive_projection_search:
             return authored
         generated = validated_generated_projection_scales(
@@ -141,7 +150,7 @@ class PersistentCognitiveRuntime:
 
     def projection_search_metapolicy(self) -> ProjectionSearchMetaPolicy:
         """Derive the smallest authenticated cross-context sufficient probe policy."""
-        authored = tuple(float(value) for value in self.experiment.projection_margin_multipliers)
+        authored = self._authored_projection_scales()
         if not self.adaptive_projection_search:
             return ProjectionSearchMetaPolicy(
                 schedule=authored,
@@ -164,12 +173,78 @@ class PersistentCognitiveRuntime:
     def projection_search_schedule(self) -> Tuple[float, ...]:
         return self.projection_search_metapolicy().schedule
 
+    def projection_generator_policy(self) -> ProjectionGeneratorPolicy:
+        """Reconstruct a reusable refinement generator from authenticated history."""
+        if not self.adaptive_projection_search:
+            return ProjectionGeneratorPolicy(
+                status="GENERATOR_POLICY_DISABLED",
+                alpha=None,
+                supporting_contexts=(),
+                candidate_alpha_count=0,
+                strong_effect_threshold=0.9,
+                reason="adaptive projection search is disabled",
+            )
+        return derive_projection_generator_policy(
+            authored_scales=self._authored_projection_scales(),
+            proposals=self._persisted_proposals(),
+            world_pairs=self.world_coupling.pairs,
+            min_independent_classes=self.world_coupling.min_independent_classes,
+            probe_scale=self._proposal_probe_scale,
+            strong_effect_threshold=0.9,
+            min_contexts=2,
+        )
+
+    def projection_generator_frontier(
+        self,
+        context_id: Optional[str],
+        max_candidates: int = 16,
+    ) -> ProjectionGeneratorFrontier:
+        """Generate a shadow or learned-generator refinement frontier for a context."""
+        policy = self.projection_generator_policy()
+        return derive_projection_generator_frontier(
+            authored_scales=self._authored_projection_scales(),
+            proposals=self._persisted_proposals(),
+            world_pairs=self.world_coupling.pairs,
+            min_independent_classes=self.world_coupling.min_independent_classes,
+            probe_scale=self._proposal_probe_scale,
+            context_id=context_id,
+            learned_policy=policy,
+            strong_effect_threshold=0.9,
+            max_candidates=max_candidates,
+        )
+
+    def generate_projection_generator_interventions(
+        self,
+        axis: RepresentationAxis,
+        reference_values: Mapping[str, float],
+        context_id: Optional[str],
+        max_candidates: int = 16,
+    ) -> List[InterventionProposal]:
+        """Instantiate proposal-only atoms from the BODY's current generator frontier."""
+        if axis.family != "PROJECTION":
+            return []
+        frontier = self.projection_generator_frontier(
+            context_id=context_id,
+            max_candidates=max_candidates,
+        )
+        if not frontier.candidate_scales:
+            return []
+        engine = ExperimentGenesisEngine(
+            relative_margin=self.experiment.relative_margin,
+            max_proposals=max(self.experiment.max_proposals, len(frontier.candidate_scales) * len(axis.coefficients)),
+            projection_margin_multipliers=frontier.candidate_scales,
+        )
+        generated = engine.propose(axis, reference_values)
+        for proposal in generated:
+            self.memory.remember_experiment(proposal)
+        return generated
+
     def projection_scale_frontier(
         self,
         context_id: Optional[str] = None,
     ) -> ProjectionScaleFrontier:
-        """Generate bounded new numeric probe atoms when current scales are weak."""
-        authored = tuple(float(value) for value in self.experiment.projection_margin_multipliers)
+        """Legacy bounded midpoint atom frontier retained for causal comparison."""
+        authored = self._authored_projection_scales()
         return derive_projection_scale_frontier(
             authored_scales=authored,
             proposals=self._persisted_proposals(),
@@ -187,7 +262,7 @@ class PersistentCognitiveRuntime:
         reference_values: Mapping[str, float],
         context_id: Optional[str] = None,
     ) -> List[InterventionProposal]:
-        """Instantiate proposal-only experiments for BODY-generated scale atoms."""
+        """Instantiate proposal-only experiments for legacy midpoint scale atoms."""
         if axis.family != "PROJECTION":
             return []
         frontier = self.projection_scale_frontier(context_id=context_id)
