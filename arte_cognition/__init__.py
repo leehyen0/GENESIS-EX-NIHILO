@@ -20,6 +20,13 @@ from .possibility_space import (
     PossibilityCandidate,
     PossibilitySpaceGenerator,
 )
+from .semantic_genesis import (
+    ConceptCandidate,
+    LawCandidate,
+    ResidualObservation,
+    SemanticGenesisEngine,
+    SemanticQuery,
+)
 
 __all__ = [
     "AdaptiveCognitionCompiler",
@@ -38,4 +45,9 @@ __all__ = [
     "OperatorSpec",
     "PossibilityCandidate",
     "PossibilitySpaceGenerator",
+    "ConceptCandidate",
+    "LawCandidate",
+    "ResidualObservation",
+    "SemanticGenesisEngine",
+    "SemanticQuery",
 ]
