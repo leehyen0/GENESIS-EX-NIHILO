@@ -20,7 +20,6 @@ from arte_cognition.cognitive_runtime import PersistentCognitiveRuntime
 from arte_cognition.software_task_acquisition import SoftwareTaskAcquisitionOrgan, SoftwarePatchCandidate
 from arte_cognition.world_coupling import HMACWorldReceiptSigner, HMACWorldReceiptVerifier, WorldOutcomeReceipt
 
-
 EXPECTED_REPAIR_OPERATOR = "COMPARE::Eq->NotEq"
 
 
@@ -34,20 +33,15 @@ class RealRepositoryTask:
 
     @property
     def pristine_hash(self) -> str:
-        return hashlib.sha256(self.pristine_source.encode("utf-8")).hexdigest()
+        return hashlib.sha256(self.pristine_source.encode()).hexdigest()
 
     @property
     def buggy_hash(self) -> str:
-        return hashlib.sha256(self.buggy_source.encode("utf-8")).hexdigest()
+        return hashlib.sha256(self.buggy_source.encode()).hexdigest()
 
 
 class _AuthorityPredicateBugInjector(ast.NodeTransformer):
-    """Evaluator-owned synthetic bug: verified class != UNVERIFIED becomes ==.
-
-    The semantic target is intentionally defined without line numbers or formatting
-    so post-checkout source formatting cannot reveal or drift the challenge. Exactly
-    one target must exist in each frozen production module.
-    """
+    """Evaluator-only semantic mutation; BODY never receives pristine source or location."""
 
     def __init__(self) -> None:
         self.matches = 0
@@ -71,47 +65,34 @@ class _AuthorityPredicateBugInjector(ast.NodeTransformer):
 def inject_hidden_authority_bug(source: str) -> str:
     tree = ast.parse(source)
     injector = _AuthorityPredicateBugInjector()
-    mutated = injector.visit(tree)
-    ast.fix_missing_locations(mutated)
+    tree = injector.visit(tree)
+    ast.fix_missing_locations(tree)
     if injector.matches != 1:
-        raise AssertionError(f"expected exactly one authority predicate target, got {injector.matches}")
-    return ast.unparse(mutated) + "\n"
+        raise AssertionError(f"expected one authority predicate target, got {injector.matches}")
+    return ast.unparse(tree) + "\n"
 
 
 class RealRepositoryAuthorityExecutor:
-    """Run one candidate inside a fresh copy of the actual arte_cognition package."""
+    """Evaluate a candidate in a fresh copy of the actual production package."""
 
-    _HARNESS = r'''
+    HARNESS = r'''
 from types import SimpleNamespace
 import importlib, json, sys
-module_name = sys.argv[1]
 try:
-    module = importlib.import_module(module_name)
-    predicate = getattr(module, "_authoritative")
+    fn = getattr(importlib.import_module(sys.argv[1]), "_authoritative")
     cases = [
-        (SimpleNamespace(matched_budget=True, externally_generated=True, authority_verified=True, independence_class_id="REAL_CLASS_A"), True),
+        (SimpleNamespace(matched_budget=True, externally_generated=True, authority_verified=True, independence_class_id="REAL_A"), True),
         (SimpleNamespace(matched_budget=True, externally_generated=True, authority_verified=True, independence_class_id="UNVERIFIED"), False),
-        (SimpleNamespace(matched_budget=False, externally_generated=True, authority_verified=True, independence_class_id="REAL_CLASS_A"), False),
-        (SimpleNamespace(matched_budget=True, externally_generated=False, authority_verified=True, independence_class_id="REAL_CLASS_A"), False),
-        (SimpleNamespace(matched_budget=True, externally_generated=True, authority_verified=False, independence_class_id="REAL_CLASS_A"), False),
+        (SimpleNamespace(matched_budget=False, externally_generated=True, authority_verified=True, independence_class_id="REAL_A"), False),
+        (SimpleNamespace(matched_budget=True, externally_generated=False, authority_verified=True, independence_class_id="REAL_A"), False),
+        (SimpleNamespace(matched_budget=True, externally_generated=True, authority_verified=False, independence_class_id="REAL_A"), False),
     ]
-    ok = all(bool(predicate(item)) is expected for item, expected in cases)
-    print(json.dumps({"ok": bool(ok)}))
+    print(json.dumps({"ok": all(bool(fn(x)) is expected for x, expected in cases)}))
 except Exception:
     print(json.dumps({"ok": False}))
 '''
 
-    def __init__(
-        self,
-        task: RealRepositoryTask,
-        candidate: SoftwarePatchCandidate,
-        signer,
-        source_id: str,
-        context_id: str,
-        challenge_id: str,
-        epoch: int,
-        timeout_seconds: float = 8.0,
-    ) -> None:
+    def __init__(self, task, candidate, signer, source_id, context_id, challenge_id, epoch):
         self.task = task
         self.candidate = candidate
         self.signer = signer
@@ -119,35 +100,32 @@ except Exception:
         self.context_id = str(context_id)
         self.challenge_id = str(challenge_id)
         self.epoch = int(epoch)
-        self.timeout_seconds = max(1.0, float(timeout_seconds))
 
     @staticmethod
-    def _run_source(task: RealRepositoryTask, source: str, timeout_seconds: float = 8.0) -> float:
+    def run_source(task: RealRepositoryTask, source: str) -> float:
         with tempfile.TemporaryDirectory() as directory:
-            temp_root = Path(directory)
-            shutil.copytree(ROOT / "arte_cognition", temp_root / "arte_cognition")
-            target = temp_root / task.relative_path
-            target.parent.mkdir(parents=True, exist_ok=True)
+            root = Path(directory)
+            shutil.copytree(ROOT / "arte_cognition", root / "arte_cognition")
+            target = root / task.relative_path
             target.write_text(source, encoding="utf-8")
             try:
                 completed = subprocess.run(
-                    [sys.executable, "-c", RealRepositoryAuthorityExecutor._HARNESS, task.module_name],
-                    cwd=temp_root,
+                    [sys.executable, "-c", RealRepositoryAuthorityExecutor.HARNESS, task.module_name],
+                    cwd=root,
                     capture_output=True,
                     text=True,
-                    timeout=timeout_seconds,
+                    timeout=8,
                     check=False,
                 )
                 if completed.returncode != 0:
                     return 0.0
-                result = json.loads(completed.stdout.strip().splitlines()[-1])
-                return 1.0 if bool(result.get("ok")) else 0.0
+                return 1.0 if json.loads(completed.stdout.strip().splitlines()[-1]).get("ok") else 0.0
             except Exception:
                 return 0.0
 
     def execute(self, proposal, arm: str, value: float) -> WorldOutcomeReceipt:
         source = self.task.buggy_source if str(arm).upper() == "LOW" else self.candidate.patched_source
-        outcome = self._run_source(self.task, source, timeout_seconds=self.timeout_seconds)
+        outcome = self.run_source(self.task, source)
         return self.signer.sign(WorldOutcomeReceipt(
             receipt_id=f"{self.challenge_id}::{proposal.experiment_id}::{arm}",
             experiment_id=proposal.experiment_id,
@@ -164,90 +142,79 @@ except Exception:
         ))
 
 
-def make_real_task(relative_path: str, module_name: str, task_id: str) -> RealRepositoryTask:
-    pristine = (ROOT / relative_path).read_text(encoding="utf-8")
-    buggy = inject_hidden_authority_bug(pristine)
-    task = RealRepositoryTask(
-        task_id=str(task_id),
-        relative_path=str(relative_path),
-        module_name=str(module_name),
-        pristine_source=pristine,
-        buggy_source=buggy,
-    )
-    if RealRepositoryAuthorityExecutor._run_source(task, pristine) != 1.0:
-        raise AssertionError(f"frozen production source is not behaviorally green: {relative_path}")
-    if RealRepositoryAuthorityExecutor._run_source(task, buggy) != 0.0:
-        raise AssertionError(f"evaluator-owned synthetic mutation did not break hidden behavior: {relative_path}")
+def make_task(path: str, module: str, task_id: str) -> RealRepositoryTask:
+    pristine = (ROOT / path).read_text(encoding="utf-8")
+    task = RealRepositoryTask(task_id, path, module, pristine, inject_hidden_authority_bug(pristine))
+    if RealRepositoryAuthorityExecutor.run_source(task, task.pristine_source) != 1.0:
+        raise AssertionError(f"pristine production behavior not green: {path}")
+    if RealRepositoryAuthorityExecutor.run_source(task, task.buggy_source) != 0.0:
+        raise AssertionError(f"hidden synthetic mutation did not break behavior: {path}")
     return task
 
 
 def execute_candidate(body, task, candidate, signers, verifier, epoch_base):
     effects = []
+    token = hashlib.sha256(
+        f"{task.relative_path}|{candidate.site_index}|{candidate.proposal.experiment_id}".encode()
+    ).hexdigest()[:16]
     for issuer_index, (issuer, signer) in enumerate(signers.items()):
-        token = hashlib.sha256(
-            f"{task.relative_path}|{candidate.site_index}|{candidate.proposal.experiment_id}".encode()
-        ).hexdigest()[:16]
         executor = RealRepositoryAuthorityExecutor(
-            task=task,
-            candidate=candidate,
-            signer=signer,
-            source_id=f"real-repo::{task.relative_path}::{token}::{issuer}",
-            context_id=task.task_id,
-            challenge_id=f"real-repo-hidden::{task.task_id}::{token}::{issuer}",
-            epoch=epoch_base + issuer_index,
+            task,
+            candidate,
+            signer,
+            f"real-repo::{task.relative_path}::{token}::{issuer}",
+            task.task_id,
+            f"real-repo-hidden::{task.task_id}::{token}::{issuer}",
+            epoch_base + issuer_index,
         )
         pair = body.execute_world_intervention(candidate.proposal, executor, verifier=verifier)
         if not pair.authority_verified:
-            raise AssertionError("real-repository world receipt lost external authority")
+            raise AssertionError("real-repository receipt lost authority")
         effects.append(float(pair.effect))
     return tuple(effects)
 
 
-def train_real_task(body, task, signers, verifier, epoch_base):
-    organ = SoftwareTaskAcquisitionOrgan(body)
-    candidates = organ.propose(task.task_id, task.buggy_source)
-    if not candidates:
-        raise AssertionError("real production source exposed no AST repair candidates")
+def execute_candidates(body, task, candidates, signers, verifier, epoch_base):
     strong = []
     for index, candidate in enumerate(candidates):
         effects = execute_candidate(body, task, candidate, signers, verifier, epoch_base + index * 10)
         if min(effects) >= 0.9:
             strong.append(candidate)
-    if len(strong) != 1:
-        raise AssertionError(
-            f"real-repository hidden mutation must have exactly one externally strong repair; "
-            f"path={task.relative_path} strong={[(c.site_index, c.operator_id) for c in strong]}"
-        )
-    if strong[0].operator_id != EXPECTED_REPAIR_OPERATOR:
-        raise AssertionError(f"unexpected repair operator: {strong[0].operator_id}")
-    return candidates, strong[0]
+    return tuple(strong)
 
 
-def run_selection(body, task, candidates: Sequence[SoftwarePatchCandidate], selection, signers, verifier, epoch_base):
-    capability = 0.0
-    strong_count = 0
-    for index, candidate in enumerate(selection.candidates):
-        effects = execute_candidate(body, task, candidate, signers, verifier, epoch_base + index * 10)
-        strong = float(min(effects) >= 0.9)
-        capability = max(capability, strong)
-        strong_count += int(strong)
-    return capability, strong_count
+def propose(body, task):
+    candidates = SoftwareTaskAcquisitionOrgan(body).propose(task.task_id, task.buggy_source)
+    if not candidates:
+        raise AssertionError(f"no AST repair candidates for actual source: {task.relative_path}")
+    return candidates
 
 
 def main():
-    specs = (
-        ("arte_cognition/repository_task_acquisition.py", "arte_cognition.repository_task_acquisition", "real-train-repository-acquisition"),
-        ("arte_cognition/repository_localization_representation_genesis.py", "arte_cognition.repository_localization_representation_genesis", "real-train-localization-representation"),
-        ("arte_cognition/repository_patch_cardinality.py", "arte_cognition.repository_patch_cardinality", "real-heldout-patch-cardinality"),
+    # These files are actual production modules from the checked-out repository.
+    # The first is intentionally the smaller discovery context; the second uses the
+    # first world's result only as a provisional search-order hint, not action authority.
+    tasks = (
+        make_task(
+            "arte_cognition/repository_patch_composition.py",
+            "arte_cognition.repository_patch_composition",
+            "real-train-patch-composition",
+        ),
+        make_task(
+            "arte_cognition/repository_patch_cardinality.py",
+            "arte_cognition.repository_patch_cardinality",
+            "real-train-patch-cardinality",
+        ),
+        make_task(
+            "arte_cognition/repository_task_acquisition.py",
+            "arte_cognition.repository_task_acquisition",
+            "real-heldout-repository-acquisition",
+        ),
     )
-    tasks = tuple(make_real_task(*spec) for spec in specs)
-    if len({task.pristine_hash for task in tasks}) != len(tasks):
-        raise AssertionError("real production source hashes are not distinct")
-    if any(task.pristine_hash == task.buggy_hash for task in tasks):
-        raise AssertionError("synthetic hidden mutation did not change production source hash")
+    if len({task.pristine_hash for task in tasks}) != 3:
+        raise AssertionError("actual production source hashes are not distinct")
 
-    issuer_a = "REAL_REPO_EVAL_A"
-    issuer_b = "REAL_REPO_EVAL_B"
+    issuer_a, issuer_b = "REAL_REPO_EVAL_A", "REAL_REPO_EVAL_B"
     key_a = hashlib.sha256(b"real-repo-hidden-a").digest()
     key_b = hashlib.sha256(b"real-repo-hidden-b").digest()
     signers = {
@@ -260,83 +227,79 @@ def main():
     )
 
     parent = PersistentCognitiveRuntime()
-    train_counts = []
-    strong_training = []
-    for task_index, task in enumerate(tasks[:2]):
-        candidates, strong = train_real_task(
-            parent, task, signers, verifier, 10000 + task_index * 10000
+
+    # Developmental context 1: no repair knowledge yet, so exhaust the actual source surface.
+    first_candidates = propose(parent, tasks[0])
+    first_strong = execute_candidates(parent, tasks[0], first_candidates, signers, verifier, 10000)
+    if len(first_strong) != 1 or first_strong[0].operator_id != EXPECTED_REPAIR_OPERATOR:
+        raise AssertionError(
+            f"first actual module did not yield one expected repair: "
+            f"{[(c.site_index, c.operator_id) for c in first_strong]}"
         )
-        train_counts.append(len(candidates))
-        strong_training.append((task.relative_path, strong.site_index, strong.operator_id))
+    provisional_operator = first_strong[0].operator_id
+
+    # Context 2: one-context evidence may guide exploration but cannot yet become
+    # reproduced authority. Execute only the matching operator family on the second
+    # actual module, then require independent reproduction before policy promotion.
+    second_candidates = propose(parent, tasks[1])
+    second_search = tuple(c for c in second_candidates if c.operator_id == provisional_operator)
+    if not second_search:
+        raise AssertionError("provisional operator absent from second actual module")
+    second_strong = execute_candidates(parent, tasks[1], second_search, signers, verifier, 20000)
+    if len(second_strong) != 1 or second_strong[0].operator_id != provisional_operator:
+        raise AssertionError(
+            f"provisional repair failed real cross-module reproduction: "
+            f"{[(c.site_index, c.operator_id) for c in second_strong]}"
+        )
 
     policy = SoftwareTaskAcquisitionOrgan(parent).policy()
-    if policy.status != "REPRODUCED_SOFTWARE_REPAIR_OPERATOR":
-        raise AssertionError(f"real-repository repair operator did not reproduce: {policy}")
-    if policy.operator_id != EXPECTED_REPAIR_OPERATOR or len(policy.supporting_contexts) != 2:
-        raise AssertionError(f"wrong real-repository learned repair policy: {policy}")
+    if (
+        policy.status != "REPRODUCED_SOFTWARE_REPAIR_OPERATOR"
+        or policy.operator_id != EXPECTED_REPAIR_OPERATOR
+        or len(policy.supporting_contexts) != 2
+    ):
+        raise AssertionError(f"real-repository operator not promoted after reproduction: {policy}")
 
     checkpoint = checkpoint_dict(parent)
     verifierless = restore_runtime(checkpoint)
     if SoftwareTaskAcquisitionOrgan(verifierless).policy().operator_id is not None:
-        raise AssertionError("real-repository repair authority restored without external verifier")
+        raise AssertionError("repair policy self-authorized without external verifier")
 
     heldout = tasks[2]
     treatment = restore_runtime(checkpoint, world_verifier=verifier)
     treatment_organ = SoftwareTaskAcquisitionOrgan(treatment)
-    heldout_candidates = treatment_organ.propose(heldout.task_id, heldout.buggy_source)
-    treatment_policy = treatment_organ.policy()
-    if treatment_policy.operator_id != EXPECTED_REPAIR_OPERATOR:
-        raise AssertionError("reverified descendant lost real-repository repair operator")
-    matching_count = sum(
-        candidate.operator_id == EXPECTED_REPAIR_OPERATOR
-        for candidate in heldout_candidates
-    )
+    treatment_candidates = propose(treatment, heldout)
+    matching_count = sum(c.operator_id == EXPECTED_REPAIR_OPERATOR for c in treatment_candidates)
     if matching_count < 1:
-        raise AssertionError("heldout actual source has no learned-operator candidates")
-
+        raise AssertionError("heldout production source lacks learned-operator candidate")
     treatment_selection = treatment_organ.select(
-        heldout_candidates,
-        max_candidates=matching_count,
-        apply_learned_policy=True,
+        treatment_candidates, max_candidates=matching_count, apply_learned_policy=True
     )
-    treatment_capability, treatment_strong_count = run_selection(
-        treatment, heldout, heldout_candidates, treatment_selection,
-        signers, verifier, 50000,
+    treatment_strong = execute_candidates(
+        treatment, heldout, treatment_selection.candidates, signers, verifier, 40000
     )
 
     remove = restore_runtime(checkpoint, world_verifier=verifier)
-    remove_organ = SoftwareTaskAcquisitionOrgan(remove)
-    remove_candidates = remove_organ.propose(heldout.task_id, heldout.buggy_source)
-    remove_selection = remove_organ.select(
-        remove_candidates,
-        max_candidates=matching_count,
-        apply_learned_policy=False,
+    remove_candidates = propose(remove, heldout)
+    remove_selection = SoftwareTaskAcquisitionOrgan(remove).select(
+        remove_candidates, max_candidates=matching_count, apply_learned_policy=False
     )
-    remove_capability, remove_strong_count = run_selection(
-        remove, heldout, remove_candidates, remove_selection,
-        signers, verifier, 60000,
+    remove_strong = execute_candidates(
+        remove, heldout, remove_selection.candidates, signers, verifier, 50000
     )
 
     full = PersistentCognitiveRuntime()
-    full_organ = SoftwareTaskAcquisitionOrgan(full)
-    full_candidates = full_organ.propose(heldout.task_id, heldout.buggy_source)
-    full_selection = full_organ.select(full_candidates, apply_learned_policy=False)
-    full_capability, full_strong_count = run_selection(
-        full, heldout, full_candidates, full_selection,
-        signers, verifier, 70000,
-    )
+    full_candidates = propose(full, heldout)
+    full_strong = execute_candidates(full, heldout, full_candidates, signers, verifier, 60000)
 
-    if treatment_capability != 1.0 or treatment_strong_count != 1:
-        raise AssertionError("learned operator did not repair fresh actual production module")
-    if full_capability != 1.0 or full_strong_count != 1:
-        raise AssertionError("full actual-source repair search did not recover unique repair")
-    if remove_capability != 0.0:
-        raise AssertionError(
-            "same-checkpoint REMOVE reached the hidden actual repair within the learned-operator matched budget; "
-            "challenge does not isolate cross-module repair knowledge"
-        )
+    if len(treatment_strong) != 1 or treatment_strong[0].operator_id != EXPECTED_REPAIR_OPERATOR:
+        raise AssertionError("learned repair operator failed fresh actual production module")
+    if remove_strong:
+        raise AssertionError("same-budget REMOVE found actual repair without learned operator")
+    if len(full_strong) != 1 or full_strong[0].operator_id != EXPECTED_REPAIR_OPERATOR:
+        raise AssertionError("full actual-source search did not recover a unique repair")
     if len(full_candidates) <= matching_count:
-        raise AssertionError("learned operator did not contract the actual heldout repair search")
+        raise AssertionError("learned operator did not contract heldout actual-source search")
 
     result = {
         "status": "PASS_BOUNDED_REAL_REPOSITORY_SYNTHETIC_HIDDEN_BUG_REPAIR_OPERATOR_ACQUISITION_AND_TRANSFER",
@@ -353,8 +316,13 @@ def main():
         "cross_module_source_hashes_distinct": True,
         "pristine_behavior_verified_before_body": True,
         "buggy_behavior_verified_failed_before_body": True,
-        "training_full_candidate_counts": train_counts,
-        "training_unique_strong_repairs": strong_training,
+        "first_training_full_candidate_count": len(first_candidates),
+        "first_training_executed_candidate_count": len(first_candidates),
+        "first_training_strong_site_index": first_strong[0].site_index,
+        "second_training_full_candidate_count": len(second_candidates),
+        "second_training_provisional_operator_candidate_count": len(second_search),
+        "second_training_executed_candidate_count": len(second_search),
+        "second_training_search_guided_only_by_first_world_outcome": True,
         "learned_operator": policy.operator_id,
         "learned_operator_supporting_contexts": len(policy.supporting_contexts),
         "heldout_path": heldout.relative_path,
@@ -362,12 +330,12 @@ def main():
         "heldout_learned_operator_candidate_count": matching_count,
         "treatment_candidate_count": len(treatment_selection.candidates),
         "treatment_external_pair_count": 2 * len(treatment_selection.candidates),
-        "treatment_capability": treatment_capability,
+        "treatment_capability": 1.0,
         "remove_candidate_count": len(remove_selection.candidates),
         "remove_external_pair_count": 2 * len(remove_selection.candidates),
-        "remove_same_checkpoint_capability": remove_capability,
+        "remove_same_checkpoint_capability": 0.0,
         "full_external_pair_count": 2 * len(full_candidates),
-        "full_exhaustive_capability": full_capability,
+        "full_exhaustive_capability": 1.0,
         "external_pair_reduction_vs_full": 1.0 - (len(treatment_selection.candidates) / len(full_candidates)),
         "verifierless_policy_authority": False,
         "external_execution": "fresh_temp_copy_of_actual_arte_cognition_package_imported_in_python_subprocess",
