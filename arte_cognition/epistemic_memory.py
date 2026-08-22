@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 
+from .experiment_genesis import InterventionProposal
+from .representation_genesis import RepresentationAxis
 from .semantic_genesis import ConceptCandidate, LawCandidate, ResidualObservation
 
 
@@ -21,6 +23,23 @@ class LawRecord:
     refutations: List[str] = field(default_factory=list)
 
 
+@dataclass
+class RepresentationRecord:
+    axis: RepresentationAxis
+    status: str = "ACTIVE_VALIDATED"
+    value_status: str = "INCREMENTAL_REPRESENTATION_VALUE"
+    revisions: int = 0
+    history: List[RepresentationAxis] = field(default_factory=list)
+
+
+@dataclass
+class ExperimentRecord:
+    proposal: InterventionProposal
+    status: str = "PROPOSAL_ONLY"
+    revisions: int = 0
+    history: List[InterventionProposal] = field(default_factory=list)
+
+
 @dataclass(frozen=True)
 class RepresentationMutation:
     mutation_id: str
@@ -31,17 +50,99 @@ class RepresentationMutation:
 
 
 class EpistemicMemory:
-    """Persistent but reversible memory for generated representations.
+    """Persistent, reversible BODY memory for generated cognition.
 
-    Concept generation is cheap and remains in shadow. A concept becomes active
-    only when a corresponding law survives the configured held-out gate. Later
-    world counterexamples demote the law and concept without deleting lineage.
+    Concepts and predictive laws are preserved together with the exact generated
+    representation phenotype that created them: coefficients, bias, threshold,
+    formula and partition. Generated intervention definitions are also retained.
+    This prevents descendant checkpoints from depending on parent-process Python
+    objects to reconstruct what the BODY had learned.
     """
 
     def __init__(self) -> None:
         self.concepts: Dict[str, ConceptRecord] = {}
         self.laws: Dict[str, LawRecord] = {}
+        self.representations: Dict[str, RepresentationRecord] = {}
+        self.experiments: Dict[str, ExperimentRecord] = {}
         self.mutation_log: List[RepresentationMutation] = []
+
+    def remember_representation(
+        self,
+        axis: RepresentationAxis,
+        value_status: str = "INCREMENTAL_REPRESENTATION_VALUE",
+    ) -> RepresentationRecord:
+        if value_status != "INCREMENTAL_REPRESENTATION_VALUE":
+            raise ValueError("only incrementally validated representation axes enter persistent BODY memory")
+
+        record = self.representations.get(axis.axis_id)
+        if record is None:
+            record = RepresentationRecord(axis=axis, value_status=value_status)
+            self.representations[axis.axis_id] = record
+            self._append_mutation(RepresentationMutation(
+                mutation_id="PERSIST_AXIS::" + axis.axis_id,
+                action="EXTEND",
+                target=axis.axis_id,
+                reason="incremental representation value plus held-out reproduction entered BODY phenotype memory",
+            ))
+            return record
+
+        if record.axis != axis:
+            record.history.append(record.axis)
+            record.axis = axis
+            record.revisions += 1
+            record.status = "ACTIVE_VALIDATED"
+            record.value_status = value_status
+            self._append_mutation(RepresentationMutation(
+                mutation_id=f"REVISE_AXIS::{axis.axis_id}::{record.revisions}",
+                action="REVISE",
+                target=axis.axis_id,
+                reason="fresh evidence changed the exact generated representation phenotype",
+            ))
+        return record
+
+    def remember_experiment(self, proposal: InterventionProposal) -> ExperimentRecord:
+        record = self.experiments.get(proposal.experiment_id)
+        if record is None:
+            record = ExperimentRecord(proposal=proposal)
+            self.experiments[proposal.experiment_id] = record
+            self._append_mutation(RepresentationMutation(
+                mutation_id="PERSIST_EXPERIMENT::" + proposal.experiment_id,
+                action="EXTEND",
+                target=proposal.experiment_id,
+                reason="generated threshold-crossing intervention entered BODY phenotype memory as proposal-only",
+            ))
+            return record
+
+        if record.proposal != proposal:
+            record.history.append(record.proposal)
+            record.proposal = proposal
+            record.revisions += 1
+            record.status = "PROPOSAL_ONLY"
+            self._append_mutation(RepresentationMutation(
+                mutation_id=f"REVISE_EXPERIMENT::{proposal.experiment_id}::{record.revisions}",
+                action="REVISE",
+                target=proposal.experiment_id,
+                reason="representation revision changed the generated intervention definition",
+            ))
+        return record
+
+    def active_representation_axes(self) -> List[RepresentationAxis]:
+        return [
+            self.representations[axis_id].axis
+            for axis_id in sorted(self.representations)
+            if self.representations[axis_id].status == "ACTIVE_VALIDATED"
+        ]
+
+    def persisted_intervention_proposals(self) -> List[InterventionProposal]:
+        active_axis_ids = {
+            axis.axis_id for axis in self.active_representation_axes()
+        }
+        return [
+            self.experiments[experiment_id].proposal
+            for experiment_id in sorted(self.experiments)
+            if self.experiments[experiment_id].status == "PROPOSAL_ONLY"
+            and self.experiments[experiment_id].proposal.axis_id in active_axis_ids
+        ]
 
     def remember_concept(self, concept: ConceptCandidate) -> ConceptRecord:
         record = self.concepts.get(concept.concept_id)
