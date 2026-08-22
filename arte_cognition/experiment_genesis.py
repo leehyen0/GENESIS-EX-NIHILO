@@ -178,7 +178,7 @@ class ExperimentGenesisEngine:
                     x_for_high_score = (high_score - fixed_score) / coefficient
                     reason = (
                         "cross learned latent projection threshold while holding other projection parents fixed; "
-                        f"probe_scale={multiplier:g}"
+                        f"probe_scale={multiplier:.17g}"
                     )
                     if x_for_low_score <= x_for_high_score:
                         add(

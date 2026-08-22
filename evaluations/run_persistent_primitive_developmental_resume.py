@@ -33,18 +33,18 @@ from arte_cognition.world_coupling import (
 def proposal(descriptor: InterventionDescriptor) -> InterventionProposal:
     return InterventionProposal(
         experiment_id=descriptor.intervention_id,
-        axis_id="RAW_SYMBOLIC_PRIMITIVE_DISCOVERY_AXIS",
-        manipulated_variable=descriptor.targets[0] if descriptor.targets else "__context__",
+        axis_id="PERSISTENT_RAW_DEVELOPMENT_AXIS",
+        manipulated_variable=descriptor.targets[0],
         held_fixed=(),
         low_value=0.0,
         high_value=1.0,
         predicted_low_side="LOW",
         predicted_high_side="HIGH",
-        reason="same authored intervention semantics; discover symbolic relation from authenticated raw observations",
+        reason="checkpoint-before-symbolic-expansion authenticated developmental continuity probe",
     )
 
 
-class HiddenSymbolicWorld:
+class HiddenDevelopmentWorld:
     def __init__(self, model, signer, source_id: str, challenge_id: str):
         self.model = model
         self.signer = signer
@@ -62,7 +62,7 @@ class HiddenSymbolicWorld:
             intervention_value=float(value),
             outcome=0.0 if arm.upper() == "LOW" else effect,
             source_id=self.source_id,
-            context_id="hidden-symbolic-primitive-world",
+            context_id="hidden-persistent-development-world",
             challenge_id=self.challenge_id,
             epoch=1,
             budget_token=f"budget::{self.challenge_id}",
@@ -87,7 +87,7 @@ def execute_two(runtime, descriptor, row, hidden_model, world_signers, world_ver
     for issuer_index, (issuer, signer) in enumerate(world_signers.items()):
         pair = runtime.execute_world_intervention(
             proposal(descriptor),
-            HiddenSymbolicWorld(
+            HiddenDevelopmentWorld(
                 hidden_model,
                 signer,
                 source_id=f"source-{issuer_index}-{trial_index}-{suffix}",
@@ -109,7 +109,7 @@ def main(seed_path: str) -> None:
     trial_count = 16
     descriptors = [
         InterventionDescriptor(
-            intervention_id=f"SYMBOLICTRIAL::{suffix}::{index:02d}",
+            intervention_id=f"RESUMETRIAL::{suffix}::{index:02d}",
             targets=(x,), blocked=(), delay_steps=0, context_shift=False, cost=1.0,
         )
         for index in range(trial_count)
@@ -135,25 +135,23 @@ def main(seed_path: str) -> None:
     g6 = g6_engine.generate_novel(variables, descriptors, raw_observations, (), ())
     assert g6 and not g6_engine.last_truncated
     g6_models = [item.model for item in g6]
-    g6_signatures = {tuple(sorted(model.predictions)) for model in g6_models}
 
-    symbolic_engine = SymbolicPrimitiveGenesisEngine(
+    symbolic_policy = SymbolicPrimitiveGenesisEngine(
         model_budget=16384,
         expression_budget=512,
         max_depth=1,
         operators=("ADD", "SUB", "MUL", "ABS"),
     )
-    g7_shadow = symbolic_engine.generate_novel(variables, descriptors, raw_observations, (), g6_models)
-    assert g7_shadow and not symbolic_engine.last_truncated
-    balanced_nonlinear = []
-    for item in g7_shadow:
+    symbolic_shadow = symbolic_policy.generate_novel(variables, descriptors, raw_observations, (), g6_models)
+    assert symbolic_shadow and not symbolic_policy.last_truncated
+    nonlinear = []
+    for item in symbolic_shadow:
         expression = item.primitive.expression.render()
         effect_count = sum(1 for _iid, outcome in item.model.predictions if outcome != "NO_EFFECT")
         if " * " in expression and 5 <= effect_count <= trial_count - 5:
-            balanced_nonlinear.append(item)
-    assert balanced_nonlinear
-    hidden = rng.choice(balanced_nonlinear)
-    assert tuple(sorted(hidden.model.predictions)) not in g6_signatures
+            nonlinear.append(item)
+    assert nonlinear
+    hidden = rng.choice(nonlinear)
 
     runtime = WorldDrivenPrimitiveRuntime(
         symbolic_primitive_genesis=SymbolicPrimitiveGenesisEngine(
@@ -196,75 +194,88 @@ def main(seed_path: str) -> None:
             trial_index,
         )
 
-    assert len(runtime.raw_observation_memory) == len(descriptors)
-    g6_final = runtime.generation_version_space(6)
-    assert not g6_final.compatible_model_ids
+    assert runtime.raw_observation_memory == raw_observations
+    before = runtime.generation_version_space(6)
+    assert not before.compatible_model_ids
     assert runtime.generation_falsified(6)
     assert runtime.epistemic_depth_plan().mode == "EXPAND_MODEL_CLASS"
 
-    frontier = runtime.expand_causal_model_class_with_raw_observations(variables, descriptors)
-    assert frontier.status == "EXPANDED"
-    assert frontier.generation == 7
-    assert frontier.origin == "GENERATED_SYMBOLIC_PRIMITIVE"
-    assert len(frontier.active_model_ids) == 1
-
-    g7_final = runtime.generation_version_space(7)
-    assert g7_final.identified
-    assert g7_final.identified_model_id == hidden.model.model_id
-
     payload = primitive_checkpoint_dict(runtime)
-    no_verify = restore_world_driven_primitive_runtime(payload)
+    raw_receipt_payload_length = len(json.dumps(payload["raw_observation_receipts"], sort_keys=True))
+    raw_cache_payload_length = len(json.dumps(payload["raw_observation_memory_cache"], sort_keys=True))
+
+    verifierless = restore_world_driven_primitive_runtime(payload)
     world_only = restore_world_driven_primitive_runtime(payload, world_verifier=world_verifier)
+    raw_only = restore_world_driven_primitive_runtime(payload, raw_observation_verifier=raw_verifier)
     reverified = restore_world_driven_primitive_runtime(
         payload,
         world_verifier=world_verifier,
         raw_observation_verifier=raw_verifier,
     )
-    assert not no_verify.raw_observation_memory
-    assert not world_only.raw_observation_memory
-    assert reverified.raw_observation_memory == runtime.raw_observation_memory
-    no_verify_g7 = no_verify.generation_version_space(7)
-    reverified_g7 = reverified.generation_version_space(7)
-    assert len(no_verify_g7.compatible_model_ids) == len(frontier.shadow_model_ids)
-    assert reverified_g7.identified_model_id == hidden.model.model_id
 
-    old_semantic_signatures = {(d.targets, d.blocked, d.delay_steps, d.context_shift) for d in descriptors}
-    assert len(old_semantic_signatures) == 1
+    assert not verifierless.raw_observation_memory
+    assert not world_only.raw_observation_memory
+    assert not raw_only.raw_observation_memory
+    assert reverified.raw_observation_memory == runtime.raw_observation_memory
+    assert reverified.symbolic_primitive_genesis.max_depth == 1
+    assert reverified.symbolic_primitive_genesis.expression_budget == 512
+    assert reverified.symbolic_primitive_genesis.operators == ("ADD", "SUB", "MUL", "ABS")
+
+    verifierless_frontier = verifierless.expand_causal_model_class_with_raw_observations(variables, descriptors)
+    world_only_frontier = world_only.expand_causal_model_class_with_raw_observations(variables, descriptors)
+    raw_only_frontier = raw_only.expand_causal_model_class_with_raw_observations(variables, descriptors)
+    assert verifierless_frontier.status == "NO_EXPANSION_REQUIRED"
+    assert world_only_frontier.status == "RAW_OBSERVATION_AUTHORITY_INCOMPLETE"
+    assert raw_only_frontier.status == "NO_EXPANSION_REQUIRED"
+
+    reverified_frontier = reverified.expand_causal_model_class_with_raw_observations(variables, descriptors)
+    assert reverified_frontier.status == "EXPANDED"
+    assert reverified_frontier.generation == 7
+    assert len(reverified_frontier.active_model_ids) == 1
+    resumed_space = reverified.generation_version_space(7)
+    assert resumed_space.identified_model_id == hidden.model.model_id
+
+    treatment = runtime.expand_causal_model_class_with_raw_observations(variables, descriptors)
+    assert treatment.status == "EXPANDED"
+    assert treatment.shadow_model_ids == reverified_frontier.shadow_model_ids
+    assert treatment.active_model_ids == reverified_frontier.active_model_ids
 
     print(json.dumps({
-        "status": "PASS_BOUNDED_AUTHENTICATED_GENERIC_SYMBOLIC_PRIMITIVE_SEARCH",
-        "same_old_semantics_across_all_trials": True,
-        "old_atom_semantic_signature_count": len(old_semantic_signatures),
-        "raw_channel_count": 2,
-        "raw_channel_names_random_post_checkout": True,
-        "raw_outcome_keys_separated": True,
-        "raw_quorum_requires_two_independence_classes": True,
-        "g6_complete_candidate_universe": True,
-        "g6_shadow_model_count": len(g6_models),
-        "g6_final_version_space": len(g6_final.compatible_model_ids),
-        "symbolic_expression_count": symbolic_engine.last_expression_count,
-        "g7_shadow_model_count": len(frontier.shadow_model_ids),
-        "g7_active_model_count": len(frontier.active_model_ids),
-        "hidden_symbolic_expression": hidden.primitive.expression.render(),
-        "hidden_symbolic_threshold": hidden.primitive.threshold,
-        "hidden_symbolic_direction": hidden.primitive.direction,
-        "hidden_symbolic_model": hidden.model.model_id,
-        "hidden_symbolic_expression_exposed_to_body": False,
-        "g7_prediction_signature_absent_from_g6": True,
-        "g7_exact_identified_model": g7_final.identified_model_id,
-        "symbolic_candidate_generation_uses_outcomes": False,
-        "symbolic_activation_requires_g6_falsification": True,
-        "external_evaluator_selected_symbolic_operator": False,
-        "verifierless_descendant_raw_rows": len(no_verify.raw_observation_memory),
-        "world_only_descendant_raw_rows": len(world_only.raw_observation_memory),
-        "reverified_descendant_raw_rows": len(reverified.raw_observation_memory),
-        "reverified_descendant_g7_identified_model": reverified_g7.identified_model_id,
-        "authored_operation_alphabet": list(symbolic_engine.operators),
-        "unrestricted_operator_genesis": False,
-        "physical_world": False,
+        "status": "PASS_BOUNDED_AUTHENTICATED_PRIMITIVE_DEVELOPMENTAL_STATE_AND_CHECKPOINT_RESUME",
+        "checkpoint_taken_before_g7_expansion": True,
+        "signed_raw_receipts_persisted": len(payload["raw_observation_receipts"]),
+        "raw_observation_rows_authoritative_before_checkpoint": len(runtime.raw_observation_memory),
+        "raw_channels_persisted": sorted({channel for row in runtime.raw_observation_memory.values() for channel in row}),
+        "raw_receipt_payload_length": raw_receipt_payload_length,
+        "raw_cache_payload_length": raw_cache_payload_length,
+        "raw_cache_is_non_authoritative_after_restore": True,
+        "world_verifier_secret_persisted": False,
+        "raw_verifier_secret_persisted": False,
+        "genesis_policy_persisted": True,
+        "symbolic_policy_max_depth": reverified.symbolic_primitive_genesis.max_depth,
+        "symbolic_policy_expression_budget": reverified.symbolic_primitive_genesis.expression_budget,
+        "symbolic_policy_operators": list(reverified.symbolic_primitive_genesis.operators),
+        "g6_version_space_before_checkpoint": len(before.compatible_model_ids),
+        "verifierless_raw_rows": len(verifierless.raw_observation_memory),
+        "world_only_raw_rows": len(world_only.raw_observation_memory),
+        "raw_only_raw_rows": len(raw_only.raw_observation_memory),
+        "reverified_raw_rows": len(reverified.raw_observation_memory),
+        "verifierless_descendant_frontier_status": verifierless_frontier.status,
+        "world_only_descendant_frontier_status": world_only_frontier.status,
+        "raw_only_descendant_frontier_status": raw_only_frontier.status,
+        "reverified_descendant_frontier_status": reverified_frontier.status,
+        "raw_argument_resupplied_after_restore": False,
+        "resumed_g7_shadow_model_count": len(reverified_frontier.shadow_model_ids),
+        "resumed_g7_active_model_count": len(reverified_frontier.active_model_ids),
+        "resumed_g7_identified_model": resumed_space.identified_model_id,
+        "hidden_model": hidden.model.model_id,
+        "matched_treatment_shadow_equal": treatment.shadow_model_ids == reverified_frontier.shadow_model_ids,
+        "matched_treatment_active_equal": treatment.active_model_ids == reverified_frontier.active_model_ids,
+        "external_outcome_and_raw_authority_both_required": True,
         "independent_organizational_custody": False,
-        "global_recursive_acceleration": False,
+        "physical_world": False,
         "foundation_weight_change": False,
+        "global_recursive_acceleration": False,
         "AGI": False,
         "ASI": False,
     }, sort_keys=True))

@@ -42,10 +42,15 @@ jobs:
           python -m py_compile arte_cognition/representation_genesis.py
           python -m py_compile arte_cognition/representation_value.py
           python -m py_compile arte_cognition/experiment_genesis.py
+          python -m py_compile arte_cognition/projection_search_metapolicy.py
+          python -m py_compile arte_cognition/projection_generator_metapolicy.py
+          python -m py_compile arte_cognition/projection_generator_program_genesis.py
+          python -m py_compile arte_cognition/projection_generator_transform_grammar.py
           python -m py_compile arte_cognition/subgraph_credit.py
           python -m py_compile arte_cognition/topology_learning.py
           python -m py_compile arte_cognition/validation_matrix.py
           python -m py_compile arte_cognition/world_coupling.py
+          python -m py_compile arte_cognition/raw_observation_authority.py
           python -m py_compile arte_cognition/world_action_policy.py
           python -m py_compile arte_cognition/world_revision.py
           python -m py_compile arte_cognition/world_model_ecology.py
@@ -53,6 +58,7 @@ jobs:
           python -m py_compile arte_cognition/body_checkpoint.py
           python -m py_compile arte_cognition/epistemic_depth_runtime.py
           python -m py_compile arte_cognition/primitive_genesis_runtime.py
+          python -m py_compile arte_cognition/canonical_body_checkpoint.py
           python -m py_compile evaluations/run_hidden_world_coupling.py
           python -m py_compile evaluations/run_end_to_end_world_genesis.py
           python -m py_compile evaluations/run_descendant_phenotype_reconstruction.py
@@ -60,6 +66,8 @@ jobs:
           python -m py_compile evaluations/run_world_revision_causal_credit.py
           python -m py_compile evaluations/run_multi_episode_world_rewrite.py
           python -m py_compile evaluations/run_matched_descendant_search_acceleration.py
+          python -m py_compile evaluations/run_cross_context_projection_metapolicy.py
+          python -m py_compile evaluations/run_compositional_transform_generator_genesis.py
           python -m py_compile evaluations/run_epistemic_depth_expansion.py
           python -m py_compile evaluations/run_autonomous_causal_model_genesis.py
           python -m py_compile evaluations/run_compositional_causal_grammar_genesis.py
@@ -71,6 +79,7 @@ jobs:
           python -m py_compile evaluations/run_world_driven_primitive_genesis.py
           python -m py_compile evaluations/run_falsification_driven_linear_primitive_genesis.py
           python -m py_compile evaluations/run_generic_symbolic_primitive_search.py
+          python -m py_compile evaluations/run_persistent_primitive_developmental_resume.py
       - name: Run cognition tests
         run: python -m unittest discover -s arte_cognition -p 'test_*.py' -v
       - name: Generate evaluator-owned hidden world seeds
@@ -85,6 +94,8 @@ jobs:
           Path('/tmp/arte_world_rewrite_credit_seed').write_text(str(secrets.randbits(128)))
           Path('/tmp/arte_multi_episode_rewrite_seed').write_text(str(secrets.randbits(128)))
           Path('/tmp/arte_matched_descendant_accel_seed').write_text(str(secrets.randbits(128)))
+          Path('/tmp/arte_cross_context_metapolicy_seed').write_text(str(secrets.randbits(128)))
+          Path('/tmp/arte_transform_generator_seed').write_text(str(secrets.randbits(128)))
           Path('/tmp/arte_epistemic_depth_seed').write_text(str(secrets.randbits(128)))
           Path('/tmp/arte_causal_model_genesis_seed').write_text(str(secrets.randbits(128)))
           Path('/tmp/arte_compositional_causal_seed').write_text(str(secrets.randbits(128)))
@@ -95,6 +106,7 @@ jobs:
           Path('/tmp/arte_primitive_genesis_seed').write_text(str(secrets.randbits(128)))
           Path('/tmp/arte_linear_primitive_seed').write_text(str(secrets.randbits(128)))
           Path('/tmp/arte_symbolic_primitive_seed').write_text(str(secrets.randbits(128)))
+          Path('/tmp/arte_primitive_resume_seed').write_text(str(secrets.randbits(128)))
           PY
       - name: Run hidden software-world descendant evaluation
         run: python evaluations/run_hidden_world_coupling.py /tmp/arte_hidden_world_seed
@@ -110,6 +122,10 @@ jobs:
         run: python evaluations/run_multi_episode_world_rewrite.py /tmp/arte_multi_episode_rewrite_seed
       - name: Run matched descendant search acceleration evaluation
         run: python evaluations/run_matched_descendant_search_acceleration.py /tmp/arte_matched_descendant_accel_seed
+      - name: Run cross-context generated search metapolicy evaluation
+        run: python evaluations/run_cross_context_projection_metapolicy.py /tmp/arte_cross_context_metapolicy_seed
+      - name: Run compositional transform generator genesis evaluation
+        run: python evaluations/run_compositional_transform_generator_genesis.py /tmp/arte_transform_generator_seed
       - name: Run cost-tolerant causal-model depth expansion evaluation
         run: python evaluations/run_epistemic_depth_expansion.py /tmp/arte_epistemic_depth_seed
       - name: Run autonomous causal-model structure genesis evaluation
@@ -124,9 +140,11 @@ jobs:
         run: python evaluations/run_autonomous_model_falsification.py /tmp/arte_model_falsification_seed
       - name: Run falsification-driven G4 grammar expansion evaluation
         run: python evaluations/run_falsification_driven_g4_grammar.py /tmp/arte_g4_grammar_seed
-      - name: Run world-driven raw primitive genesis evaluation
+      - name: Run authenticated world-driven raw primitive genesis evaluation
         run: python evaluations/run_world_driven_primitive_genesis.py /tmp/arte_primitive_genesis_seed
-      - name: Run falsification-driven multi-channel linear primitive evaluation
+      - name: Run authenticated multi-channel linear primitive evaluation
         run: python evaluations/run_falsification_driven_linear_primitive_genesis.py /tmp/arte_linear_primitive_seed
-      - name: Run generic symbolic primitive search evaluation
+      - name: Run authenticated generic symbolic primitive search evaluation
         run: python evaluations/run_generic_symbolic_primitive_search.py /tmp/arte_symbolic_primitive_seed
+      - name: Run authenticated checkpoint-resumed primitive developmental state evaluation
+        run: python evaluations/run_persistent_primitive_developmental_resume.py /tmp/arte_primitive_resume_seed

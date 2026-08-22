@@ -69,8 +69,11 @@ class RawThresholdPrimitiveGenesisTests(unittest.TestCase):
             generation=4,
         )
         runtime.register_causal_world_models([g4])
+        # Raw representation authority is a separate gate. This test isolates the
+        # structural-order invariant: while G4 still survives, G5 cannot open even
+        # before any authenticated raw observation has entered BODY state.
         generated = runtime.generate_world_driven_primitive_models(
-            [self.x], self.descriptors, self.raw
+            [self.x], self.descriptors
         )
         self.assertEqual(generated, [])
         self.assertFalse(runtime.generation_falsified(4))

@@ -18,8 +18,6 @@ class LinearFormPrimitiveGenesisTests(unittest.TestCase):
             InterventionDescriptor(f"probe-{index}", (self.x,), cost=1.0)
             for index in range(6)
         ]
-        # Individually each channel is non-monotonic with respect to the target
-        # partition below; a multi-channel linear relation can separate it.
         a_values = [0, 1, 2, 3, 4, 5]
         b_values = [0, 3, 1, 5, 2, 4]
         self.raw = {
@@ -72,8 +70,10 @@ class LinearFormPrimitiveGenesisTests(unittest.TestCase):
         g5 = g5_engine.generate_novel([self.x], self.descriptors, self.raw, (), ())
         runtime = WorldDrivenPrimitiveRuntime()
         runtime.register_causal_world_models([item.model for item in g5])
+        # Isolate structural ordering from raw-observation authority: a live G5
+        # class blocks G6 before raw completeness is relevant.
         generated = runtime.generate_world_driven_linear_primitive_models(
-            [self.x], self.descriptors, self.raw
+            [self.x], self.descriptors
         )
         self.assertEqual(generated, [])
         self.assertFalse(runtime.generation_falsified(5))

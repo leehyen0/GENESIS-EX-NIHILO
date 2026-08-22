@@ -11,11 +11,16 @@ if str(ROOT) not in sys.path:
 
 from arte_cognition.causal_model_genesis import InterventionDescriptor
 from arte_cognition.causal_primitive_genesis import RawThresholdPrimitiveGenesisEngine
-from arte_cognition.epistemic_depth_runtime import epistemic_checkpoint_dict
 from arte_cognition.experiment_genesis import InterventionProposal
 from arte_cognition.primitive_genesis_runtime import (
     WorldDrivenPrimitiveRuntime,
+    primitive_checkpoint_dict,
     restore_world_driven_primitive_runtime,
+)
+from arte_cognition.raw_observation_authority import (
+    HMACRawObservationSigner,
+    HMACRawObservationVerifier,
+    RawObservationReceipt,
 )
 from arte_cognition.sparse_minterm_genesis import SparseMintermCausalGenesisEngine
 from arte_cognition.world_coupling import (
@@ -35,7 +40,7 @@ def proposal(descriptor: InterventionDescriptor) -> InterventionProposal:
         high_value=1.0,
         predicted_low_side="LOW",
         predicted_high_side="HIGH",
-        reason="repeat same authored intervention semantics under raw observable variation",
+        reason="repeat same authored intervention semantics under authenticated raw observable variation",
     )
 
 
@@ -70,9 +75,34 @@ class HiddenPrimitiveWorld:
         return self.signer.sign(receipt)
 
 
-def execute_two(runtime, descriptor, hidden_model, signers, verifier, suffix, trial_index):
-    for issuer_index, (_issuer, signer) in enumerate(signers.items()):
-        runtime.execute_world_intervention(
+def raw_receipt(pair, row):
+    return RawObservationReceipt(
+        observation_id=f"RAWOBS::{pair.pair_id}",
+        intervention_id=pair.experiment_id,
+        channel_values=tuple(sorted((str(k), float(v)) for k, v in row.items())),
+        source_id=pair.source_id,
+        context_id=pair.context_id,
+        challenge_id=pair.challenge_id,
+        epoch=pair.epoch,
+        externally_generated=True,
+    )
+
+
+def execute_two(
+    runtime,
+    descriptor,
+    row,
+    hidden_model,
+    world_signers,
+    world_verifier,
+    raw_signers,
+    raw_verifier,
+    suffix,
+    trial_index,
+):
+    pairs = []
+    for issuer_index, (issuer, signer) in enumerate(world_signers.items()):
+        pair = runtime.execute_world_intervention(
             proposal(descriptor),
             HiddenPrimitiveWorld(
                 hidden_model,
@@ -80,8 +110,12 @@ def execute_two(runtime, descriptor, hidden_model, signers, verifier, suffix, tr
                 source_id=f"source-{issuer_index}-{trial_index}-{suffix}",
                 challenge_id=f"challenge-{issuer_index}-{trial_index}-{suffix}",
             ),
-            verifier=verifier,
+            verifier=world_verifier,
         )
+        pairs.append(pair)
+        signed_raw = raw_signers[issuer].sign(raw_receipt(pair, row))
+        runtime.ingest_raw_observation_receipt(signed_raw, raw_verifier)
+    return pairs
 
 
 def main(seed_path: str) -> None:
@@ -90,9 +124,6 @@ def main(seed_path: str) -> None:
     x, z = f"sensor_x_{suffix}", f"sensor_z_{suffix}"
     variables = [x, z]
 
-    # Every trial has exactly the same G1-G4 intervention semantics. Only raw
-    # numeric observations vary. Therefore no Boolean expression over the old
-    # TARGET/BLOCKED/DELAY/CONTEXT atoms can distinguish these trials.
     trial_count = 12
     descriptors = [
         InterventionDescriptor(
@@ -130,11 +161,7 @@ def main(seed_path: str) -> None:
 
     primitive_engine = RawThresholdPrimitiveGenesisEngine(model_budget=4096)
     g5_shadow = primitive_engine.generate_novel(
-        variables,
-        descriptors,
-        raw_observations,
-        (),
-        g4_models,
+        variables, descriptors, raw_observations, (), g4_models
     )
     assert g5_shadow and not primitive_engine.last_truncated
     balanced = []
@@ -153,40 +180,98 @@ def main(seed_path: str) -> None:
     runtime = WorldDrivenPrimitiveRuntime()
     runtime.register_causal_world_models(g4_models)
 
-    keys = {
-        f"issuer-a-{suffix}": f"secret-a-{suffix}".encode(),
-        f"issuer-b-{suffix}": f"secret-b-{suffix}".encode(),
+    world_keys = {
+        f"issuer-a-{suffix}": f"world-secret-a-{suffix}".encode(),
+        f"issuer-b-{suffix}": f"world-secret-b-{suffix}".encode(),
     }
-    signers = {
-        issuer: HMACWorldReceiptSigner(issuer, secret)
-        for issuer, secret in keys.items()
+    raw_keys = {
+        f"issuer-a-{suffix}": f"raw-secret-a-{suffix}".encode(),
+        f"issuer-b-{suffix}": f"raw-secret-b-{suffix}".encode(),
     }
-    verifier = HMACWorldReceiptVerifier(keys, independence_classes={
+    independence = {
         f"issuer-a-{suffix}": "independent-A",
         f"issuer-b-{suffix}": "independent-B",
-    })
+    }
+    world_signers = {issuer: HMACWorldReceiptSigner(issuer, secret) for issuer, secret in world_keys.items()}
+    world_verifier = HMACWorldReceiptVerifier(world_keys, independence_classes=independence)
+    raw_signers = {issuer: HMACRawObservationSigner(issuer, secret) for issuer, secret in raw_keys.items()}
+    raw_verifier = HMACRawObservationVerifier(raw_keys, independence_classes=independence)
 
-    for trial_index, descriptor in enumerate(descriptors):
+    # Negative control: one authenticated class cannot make raw representation
+    # authoritative, and a post-signature mutation cannot supply the second class.
+    first = descriptors[0]
+    first_row = raw_observations[first.intervention_id]
+    issuer_a = f"issuer-a-{suffix}"
+    pair_a = runtime.execute_world_intervention(
+        proposal(first),
+        HiddenPrimitiveWorld(
+            hidden.model,
+            world_signers[issuer_a],
+            source_id=f"source-0-0-{suffix}",
+            challenge_id=f"challenge-0-0-{suffix}",
+        ),
+        verifier=world_verifier,
+    )
+    signed_a = raw_signers[issuer_a].sign(raw_receipt(pair_a, first_row))
+    runtime.ingest_raw_observation_receipt(signed_a, raw_verifier)
+    assert first.intervention_id not in runtime.raw_observation_memory
+
+    issuer_b = f"issuer-b-{suffix}"
+    pair_b = runtime.execute_world_intervention(
+        proposal(first),
+        HiddenPrimitiveWorld(
+            hidden.model,
+            world_signers[issuer_b],
+            source_id=f"source-1-0-{suffix}",
+            challenge_id=f"challenge-1-0-{suffix}",
+        ),
+        verifier=world_verifier,
+    )
+    honest_b = raw_signers[issuer_b].sign(raw_receipt(pair_b, first_row))
+    tampered_b = RawObservationReceipt(
+        observation_id=honest_b.observation_id + "::tampered",
+        intervention_id=honest_b.intervention_id,
+        channel_values=((raw_channel_a, first_row[raw_channel_a] + 999.0), (raw_channel_b, first_row[raw_channel_b])),
+        source_id=honest_b.source_id,
+        context_id=honest_b.context_id,
+        challenge_id=honest_b.challenge_id,
+        epoch=honest_b.epoch,
+        externally_generated=honest_b.externally_generated,
+        issuer_id=honest_b.issuer_id,
+        signature=honest_b.signature,
+    )
+    runtime.ingest_raw_observation_receipt(tampered_b, raw_verifier)
+    assert first.intervention_id not in runtime.raw_observation_memory
+    runtime.ingest_raw_observation_receipt(honest_b, raw_verifier)
+    assert runtime.raw_observation_memory[first.intervention_id] == first_row
+
+    for trial_index, descriptor in enumerate(descriptors[1:], start=1):
         execute_two(
             runtime,
             descriptor,
+            raw_observations[descriptor.intervention_id],
             hidden.model,
-            signers,
-            verifier,
+            world_signers,
+            world_verifier,
+            raw_signers,
+            raw_verifier,
             suffix,
             trial_index,
         )
 
+    assert len(runtime.raw_observation_memory) == len(descriptors)
     g4_final = runtime.generation_version_space(4)
     assert not g4_final.compatible_model_ids
     assert runtime.generation_falsified(4)
     assert runtime.epistemic_depth_plan().mode == "EXPAND_MODEL_CLASS"
 
-    frontier = runtime.expand_causal_model_class_with_raw_observations(
-        variables,
-        descriptors,
-        raw_observations,
-    )
+    try:
+        runtime.expand_causal_model_class_with_raw_observations(variables, descriptors, raw_observations)
+        raise AssertionError("direct raw-map bypass must fail closed")
+    except ValueError:
+        pass
+
+    frontier = runtime.expand_causal_model_class_with_raw_observations(variables, descriptors)
     assert frontier.status == "EXPANDED"
     assert frontier.generation == 5
     assert frontier.origin == "GENERATED_PRIMITIVE_THRESHOLD"
@@ -196,31 +281,38 @@ def main(seed_path: str) -> None:
     assert g5_final.identified_model_id == hidden.model.model_id
     assert len(frontier.active_model_ids) == 1
 
-    payload = epistemic_checkpoint_dict(runtime)
-    no_verify = restore_world_driven_primitive_runtime(payload, world_verifier=None)
-    reverified = restore_world_driven_primitive_runtime(payload, world_verifier=verifier)
+    payload = primitive_checkpoint_dict(runtime)
+    no_verify = restore_world_driven_primitive_runtime(payload, world_verifier=None, raw_observation_verifier=None)
+    world_only = restore_world_driven_primitive_runtime(payload, world_verifier=world_verifier, raw_observation_verifier=None)
+    reverified = restore_world_driven_primitive_runtime(
+        payload,
+        world_verifier=world_verifier,
+        raw_observation_verifier=raw_verifier,
+    )
+    assert not no_verify.raw_observation_memory
+    assert not world_only.raw_observation_memory
+    assert reverified.raw_observation_memory == runtime.raw_observation_memory
     no_verify_g5 = no_verify.generation_version_space(5)
     reverified_g5 = reverified.generation_version_space(5)
     assert len(no_verify_g5.compatible_model_ids) == len(frontier.shadow_model_ids)
     assert reverified_g5.identified_model_id == hidden.model.model_id
 
     old_semantic_signatures = {
-        (
-            descriptor.targets,
-            descriptor.blocked,
-            descriptor.delay_steps,
-            descriptor.context_shift,
-        )
-        for descriptor in descriptors
+        (d.targets, d.blocked, d.delay_steps, d.context_shift)
+        for d in descriptors
     }
     assert len(old_semantic_signatures) == 1
 
     print(json.dumps({
-        "status": "PASS_BOUNDED_WORLD_FALSIFICATION_DRIVEN_RAW_PRIMITIVE_GENESIS_AND_DESCENDANT",
+        "status": "PASS_BOUNDED_AUTHENTICATED_RAW_PRIMITIVE_GENESIS_AND_DESCENDANT",
         "old_atom_semantic_signature_count": len(old_semantic_signatures),
         "same_old_semantics_across_all_trials": True,
         "raw_channel_count": 2,
         "raw_channel_names_random_post_checkout": True,
+        "raw_outcome_keys_separated": True,
+        "raw_quorum_requires_two_independence_classes": True,
+        "tampered_raw_signature_rejected": True,
+        "direct_raw_map_bypass_blocked": True,
         "hidden_primitive_channel": hidden.primitive.channel,
         "hidden_primitive_direction": hidden.primitive.direction,
         "hidden_primitive_threshold": hidden.primitive.threshold,
@@ -235,8 +327,9 @@ def main(seed_path: str) -> None:
         "g5_prediction_signature_absent_from_g4": True,
         "primitive_candidate_generation_uses_outcomes": False,
         "primitive_activation_requires_g4_falsification": True,
-        "external_evaluator_selected_g5_generator": False,
-        "verifierless_descendant_g5_version_space": len(no_verify_g5.compatible_model_ids),
+        "verifierless_descendant_raw_rows": len(no_verify.raw_observation_memory),
+        "world_only_descendant_raw_rows": len(world_only.raw_observation_memory),
+        "reverified_descendant_raw_rows": len(reverified.raw_observation_memory),
         "reverified_descendant_g5_identified_model": reverified_g5.identified_model_id,
         "numeric_threshold_meta_rule_human_authored": True,
         "unrestricted_primitive_genesis": False,

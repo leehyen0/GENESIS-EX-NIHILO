@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 
 from .adaptive_cognition import AdaptiveCognitionCompiler, CognitionPlan, ModuleCredit, TaskState
@@ -10,6 +10,34 @@ from .epistemic_memory import EpistemicMemory, RepresentationMutation
 from .experiment_genesis import ExperimentGenesisEngine, InterventionProposal
 from .meta_router import OutcomeLearnedCognitionRouter
 from .possibility_space import Fact, OperatorSpec, PossibilityCandidate, PossibilitySpaceGenerator
+from .projection_generator_metapolicy import (
+    ProjectionGeneratorFrontier,
+    ProjectionGeneratorPolicy,
+    derive_projection_generator_frontier,
+    derive_projection_generator_policy,
+)
+from .projection_generator_program_genesis import (
+    PROGRAM_MARKER,
+    ProjectionGeneratorProgramFrontier,
+    ProjectionGeneratorProgramPolicy,
+    derive_projection_generator_program_frontier,
+    derive_projection_generator_program_policy,
+    generate_projection_generator_programs,
+)
+from .projection_generator_transform_grammar import (
+    TRANSFORM_PROGRAM_MARKER,
+    ProjectionTransformFrontier,
+    ProjectionTransformPolicy,
+    derive_projection_transform_frontier,
+    derive_projection_transform_policy,
+    generate_projection_transform_programs,
+)
+from .projection_scale_genesis import (
+    ProjectionScaleFrontier,
+    derive_projection_scale_frontier,
+    validated_generated_projection_scales,
+)
+from .projection_search_metapolicy import ProjectionSearchMetaPolicy, derive_projection_search_metapolicy
 from .representation_genesis import MeasurementObservation, RepresentationAxis, RepresentationGenesisEngine
 from .representation_value import RepresentationValueAssessment, RepresentationValueEvaluator
 from .semantic_genesis import (
@@ -59,11 +87,15 @@ class PersistentCognitiveRuntime:
     proposal objects. External world receipts still require independent verifier
     authority before they can steer action.
 
-    Projection experiment search is also allowed to become evidence-conditioned,
-    but only from already persisted exact experiments whose world outcomes were
-    authenticated and span the configured minimum number of verifier-derived
-    independence classes. The learned search schedule is therefore reconstructed
-    from BODY evidence after restart rather than trusted as a serialized scalar.
+    Projection experiment search can become evidence-conditioned. The BODY searches
+    a bounded policy space for the smallest cross-context sufficient probe subset.
+    When the authored numeric probe vocabulary itself leaves a strong-effect world
+    residual, the BODY can generate off-grid scale atoms. Repeated authenticated
+    success of generated atoms can induce reusable interpolation parameters, bounded
+    generator programs, and compositional transform ASTs built from primitive unary
+    operators. Search subsets, generated atoms, and generator policies are always
+    reconstructed from reverified BODY evidence after restart rather than trusted as
+    serialized authority scalars.
     """
 
     def __init__(
@@ -112,84 +144,335 @@ class PersistentCognitiveRuntime:
         except (TypeError, ValueError):
             return None
 
+    def _persisted_proposals(self) -> List[InterventionProposal]:
+        return [record.proposal for record in self.memory.experiments.values()]
+
+    def _authored_projection_scales(self) -> Tuple[float, ...]:
+        return tuple(float(value) for value in self.experiment.projection_margin_multipliers)
+
+    def projection_probe_vocabulary(self) -> Tuple[float, ...]:
+        """Return authored scales plus externally validated BODY-generated scales."""
+        authored = self._authored_projection_scales()
+        if not self.adaptive_projection_search:
+            return authored
+        generated = validated_generated_projection_scales(
+            authored_scales=authored,
+            proposals=self._persisted_proposals(),
+            world_pairs=self.world_coupling.pairs,
+            min_independent_classes=self.world_coupling.min_independent_classes,
+            probe_scale=self._proposal_probe_scale,
+            strong_effect_threshold=0.9,
+        )
+        return tuple(sorted(set(authored + generated)))
+
+    def projection_search_metapolicy(self) -> ProjectionSearchMetaPolicy:
+        """Derive the smallest authenticated cross-context sufficient probe policy."""
+        authored = self._authored_projection_scales()
+        if not self.adaptive_projection_search:
+            return ProjectionSearchMetaPolicy(
+                schedule=authored,
+                observed_contexts=(),
+                covered_contexts=(),
+                candidate_count=(2 ** len(authored)) - 1 if authored else 0,
+                material_effect_threshold=0.5,
+                reason="adaptive metapolicy application disabled",
+            )
+        vocabulary = self.projection_probe_vocabulary()
+        return derive_projection_search_metapolicy(
+            base_scales=vocabulary,
+            proposals=self._persisted_proposals(),
+            world_pairs=self.world_coupling.pairs,
+            min_independent_classes=self.world_coupling.min_independent_classes,
+            probe_scale=self._proposal_probe_scale,
+            material_effect_threshold=0.5,
+        )
+
     def projection_search_schedule(self) -> Tuple[float, ...]:
-        """Derive a bounded projection-probe schedule from authenticated history.
+        return self.projection_search_metapolicy().schedule
 
-        The default 1x/2x/4x vocabulary is never changed until every scale has at
-        least one exact experiment supported by the required number of independent
-        verifier classes. A dominant scale may reduce the next search to two scales
-        after repeated exact-experiment evidence, and to one scale only after the
-        dominant scale has reproduced across at least two world contexts. This is a
-        bounded matched-family search optimization, not global transport authority.
+    def projection_generator_policy(self) -> ProjectionGeneratorPolicy:
+        """Reconstruct a reusable scalar refinement generator from authenticated history."""
+        if not self.adaptive_projection_search:
+            return ProjectionGeneratorPolicy(
+                status="GENERATOR_POLICY_DISABLED",
+                alpha=None,
+                supporting_contexts=(),
+                candidate_alpha_count=0,
+                strong_effect_threshold=0.9,
+                reason="adaptive projection search is disabled",
+            )
+        return derive_projection_generator_policy(
+            authored_scales=self._authored_projection_scales(),
+            proposals=self._persisted_proposals(),
+            world_pairs=self.world_coupling.pairs,
+            min_independent_classes=self.world_coupling.min_independent_classes,
+            probe_scale=self._proposal_probe_scale,
+            strong_effect_threshold=0.9,
+            min_contexts=2,
+        )
+
+    def projection_generator_frontier(
+        self,
+        context_id: Optional[str],
+        max_candidates: int = 16,
+    ) -> ProjectionGeneratorFrontier:
+        """Generate a shadow or learned scalar-generator refinement frontier."""
+        policy = self.projection_generator_policy()
+        return derive_projection_generator_frontier(
+            authored_scales=self._authored_projection_scales(),
+            proposals=self._persisted_proposals(),
+            world_pairs=self.world_coupling.pairs,
+            min_independent_classes=self.world_coupling.min_independent_classes,
+            probe_scale=self._proposal_probe_scale,
+            context_id=context_id,
+            learned_policy=policy,
+            strong_effect_threshold=0.9,
+            max_candidates=max_candidates,
+        )
+
+    def generate_projection_generator_interventions(
+        self,
+        axis: RepresentationAxis,
+        reference_values: Mapping[str, float],
+        context_id: Optional[str],
+        max_candidates: int = 16,
+    ) -> List[InterventionProposal]:
+        """Instantiate proposal-only atoms from the BODY's scalar-generator frontier."""
+        if axis.family != "PROJECTION":
+            return []
+        frontier = self.projection_generator_frontier(
+            context_id=context_id,
+            max_candidates=max_candidates,
+        )
+        if not frontier.candidate_scales:
+            return []
+        engine = ExperimentGenesisEngine(
+            relative_margin=self.experiment.relative_margin,
+            max_proposals=max(self.experiment.max_proposals, len(frontier.candidate_scales) * len(axis.coefficients)),
+            projection_margin_multipliers=frontier.candidate_scales,
+        )
+        generated = engine.propose(axis, reference_values)
+        for proposal in generated:
+            self.memory.remember_experiment(proposal)
+        return generated
+
+    def projection_generator_program_policy(self) -> ProjectionGeneratorProgramPolicy:
+        """Reconstruct the minimum-complexity repeated-success generator program."""
+        if not self.adaptive_projection_search:
+            return ProjectionGeneratorProgramPolicy(
+                status="GENERATOR_PROGRAM_POLICY_DISABLED",
+                program_id=None,
+                family=None,
+                alpha=None,
+                supporting_contexts=(),
+                candidate_program_count=0,
+                reason="adaptive projection search is disabled",
+            )
+        programs = generate_projection_generator_programs()
+        return derive_projection_generator_program_policy(
+            proposals=self._persisted_proposals(),
+            world_pairs=self.world_coupling.pairs,
+            min_independent_classes=self.world_coupling.min_independent_classes,
+            programs=programs,
+            strong_effect_threshold=0.9,
+            min_contexts=2,
+        )
+
+    def projection_generator_program_frontier(
+        self,
+        context_id: str,
+        left: float,
+        right: float,
+        max_candidates: int = 32,
+        apply_learned_program: bool = True,
+    ) -> ProjectionGeneratorProgramFrontier:
+        """Open a bounded generator-program frontier for one authenticated weak bracket.
+
+        `apply_learned_program=False` is an explicit REMOVE-ablation surface: it
+        preserves the same BODY memory and world evidence but suppresses only the
+        application of the causally learned generator program.
         """
-        base = tuple(float(value) for value in self.experiment.projection_margin_multipliers)
-        if not self.adaptive_projection_search or len(base) <= 1:
-            return base
+        policy = self.projection_generator_program_policy() if apply_learned_program else None
+        return derive_projection_generator_program_frontier(
+            proposals=self._persisted_proposals(),
+            world_pairs=self.world_coupling.pairs,
+            min_independent_classes=self.world_coupling.min_independent_classes,
+            probe_scale=self._proposal_probe_scale,
+            context_id=context_id,
+            left=left,
+            right=right,
+            policy=policy,
+            programs=generate_projection_generator_programs(),
+            strong_effect_threshold=0.9,
+            max_candidates=max_candidates,
+        )
 
-        stats: Dict[float, Dict[str, object]] = {
-            scale: {"effects": [], "contexts": set()} for scale in base
-        }
-        for record in self.memory.experiments.values():
-            proposal = record.proposal
-            scale = self._proposal_probe_scale(proposal)
-            if scale is None:
-                continue
-            matched_scale = next((item for item in base if abs(item - scale) <= 1e-12), None)
-            if matched_scale is None:
-                continue
+    def generate_projection_generator_program_interventions(
+        self,
+        axis: RepresentationAxis,
+        reference_values: Mapping[str, float],
+        context_id: str,
+        left: float,
+        right: float,
+        max_candidates: int = 32,
+        apply_learned_program: bool = True,
+    ) -> List[InterventionProposal]:
+        """Generate proposal-only atoms and bind exact generator-program provenance."""
+        if axis.family != "PROJECTION":
+            return []
+        frontier = self.projection_generator_program_frontier(
+            context_id=context_id,
+            left=left,
+            right=right,
+            max_candidates=max_candidates,
+            apply_learned_program=apply_learned_program,
+        )
+        if not frontier.candidates:
+            return []
+        generated: List[InterventionProposal] = []
+        for candidate in frontier.candidates:
+            engine = ExperimentGenesisEngine(
+                relative_margin=self.experiment.relative_margin,
+                max_proposals=max(self.experiment.max_proposals, len(axis.coefficients)),
+                projection_margin_multipliers=(candidate.scale,),
+            )
+            for proposal in engine.propose(axis, reference_values):
+                reason = (
+                    f"{proposal.reason} {PROGRAM_MARKER}"
+                    f"{'|'.join(candidate.program_ids)}"
+                )
+                bound = replace(proposal, reason=reason)
+                self.memory.remember_experiment(bound)
+                generated.append(bound)
+        return generated
 
-            by_class: Dict[str, WorldOutcomePair] = {}
-            for pair in self.world_coupling.pairs:
-                if pair.experiment_id != proposal.experiment_id:
-                    continue
-                if not (
-                    pair.matched_budget
-                    and pair.externally_generated
-                    and pair.authority_verified
-                    and pair.independence_class_id != "UNVERIFIED"
-                ):
-                    continue
-                by_class.setdefault(pair.independence_class_id, pair)
-            if len(by_class) < self.world_coupling.min_independent_classes:
-                continue
+    def projection_transform_program_policy(self) -> ProjectionTransformPolicy:
+        """Reconstruct a repeated-success transform AST from authenticated history."""
+        if not self.adaptive_projection_search:
+            return ProjectionTransformPolicy(
+                status="TRANSFORM_PROGRAM_POLICY_DISABLED",
+                program_id=None,
+                operations=(),
+                alpha=None,
+                supporting_contexts=(),
+                candidate_program_count=0,
+                reason="adaptive projection search is disabled",
+            )
+        programs = generate_projection_transform_programs()
+        return derive_projection_transform_policy(
+            proposals=self._persisted_proposals(),
+            world_pairs=self.world_coupling.pairs,
+            min_independent_classes=self.world_coupling.min_independent_classes,
+            programs=programs,
+            strong_effect_threshold=0.9,
+            min_contexts=2,
+        )
 
-            unique_pairs = list(by_class.values())
-            mean_abs_effect = sum(abs(pair.effect) for pair in unique_pairs) / len(unique_pairs)
-            effects = stats[matched_scale]["effects"]
-            contexts = stats[matched_scale]["contexts"]
-            assert isinstance(effects, list)
-            assert isinstance(contexts, set)
-            effects.append(float(mean_abs_effect))
-            contexts.update(pair.context_id for pair in unique_pairs)
+    def projection_transform_frontier(
+        self,
+        context_id: str,
+        left: float,
+        right: float,
+        max_candidates: int = 64,
+        apply_learned_program: bool = True,
+    ) -> ProjectionTransformFrontier:
+        """Open a bounded compositional transform frontier for a weak bracket.
 
-        # Do not narrow the vocabulary while any default scale remains untested.
-        if any(not stats[scale]["effects"] for scale in base):
-            return base
+        The REMOVE surface preserves identical evidence and only suppresses transfer
+        of the learned transform AST into the fresh bracket.
+        """
+        policy = self.projection_transform_program_policy() if apply_learned_program else None
+        return derive_projection_transform_frontier(
+            proposals=self._persisted_proposals(),
+            world_pairs=self.world_coupling.pairs,
+            min_independent_classes=self.world_coupling.min_independent_classes,
+            probe_scale=self._proposal_probe_scale,
+            context_id=context_id,
+            left=left,
+            right=right,
+            policy=policy,
+            programs=generate_projection_transform_programs(),
+            strong_effect_threshold=0.9,
+            max_candidates=max_candidates,
+        )
 
-        scores = {
-            scale: sum(stats[scale]["effects"]) / len(stats[scale]["effects"])
-            for scale in base
-        }
-        base_index = {scale: index for index, scale in enumerate(base)}
-        ordered = tuple(sorted(base, key=lambda scale: (-scores[scale], base_index[scale])))
-        top = ordered[0]
-        runner_up = ordered[1]
+    def generate_projection_transform_interventions(
+        self,
+        axis: RepresentationAxis,
+        reference_values: Mapping[str, float],
+        context_id: str,
+        left: float,
+        right: float,
+        max_candidates: int = 64,
+        apply_learned_program: bool = True,
+    ) -> List[InterventionProposal]:
+        """Generate proposal-only atoms with exact compositional transform provenance."""
+        if axis.family != "PROJECTION":
+            return []
+        frontier = self.projection_transform_frontier(
+            context_id=context_id,
+            left=left,
+            right=right,
+            max_candidates=max_candidates,
+            apply_learned_program=apply_learned_program,
+        )
+        if not frontier.candidates:
+            return []
+        generated: List[InterventionProposal] = []
+        for candidate in frontier.candidates:
+            engine = ExperimentGenesisEngine(
+                relative_margin=self.experiment.relative_margin,
+                max_proposals=max(self.experiment.max_proposals, len(axis.coefficients)),
+                projection_margin_multipliers=(candidate.scale,),
+            )
+            for proposal in engine.propose(axis, reference_values):
+                reason = (
+                    f"{proposal.reason} {TRANSFORM_PROGRAM_MARKER}"
+                    f"{'|'.join(candidate.program_ids)}"
+                )
+                bound = replace(proposal, reason=reason)
+                self.memory.remember_experiment(bound)
+                generated.append(bound)
+        return generated
 
-        # Material dominance is required before search-space contraction.
-        if scores[top] < 0.5 or (scores[top] - scores[runner_up]) < 0.25:
-            return base
+    def projection_scale_frontier(
+        self,
+        context_id: Optional[str] = None,
+    ) -> ProjectionScaleFrontier:
+        """Legacy bounded midpoint atom frontier retained for causal comparison."""
+        authored = self._authored_projection_scales()
+        return derive_projection_scale_frontier(
+            authored_scales=authored,
+            proposals=self._persisted_proposals(),
+            world_pairs=self.world_coupling.pairs,
+            min_independent_classes=self.world_coupling.min_independent_classes,
+            probe_scale=self._proposal_probe_scale,
+            context_id=context_id,
+            strong_effect_threshold=0.9,
+            max_candidates=8,
+        )
 
-        top_effects = stats[top]["effects"]
-        top_contexts = stats[top]["contexts"]
-        assert isinstance(top_effects, list)
-        assert isinstance(top_contexts, set)
-
-        budget = len(base)
-        if len(top_effects) >= 2:
-            budget = min(budget, 2)
-        if len(top_effects) >= 4 and len(top_contexts) >= 2:
-            budget = 1
-        return ordered[:budget]
+    def generate_projection_scale_frontier_interventions(
+        self,
+        axis: RepresentationAxis,
+        reference_values: Mapping[str, float],
+        context_id: Optional[str] = None,
+    ) -> List[InterventionProposal]:
+        """Instantiate proposal-only experiments for legacy midpoint scale atoms."""
+        if axis.family != "PROJECTION":
+            return []
+        frontier = self.projection_scale_frontier(context_id=context_id)
+        if not frontier.candidate_scales:
+            return []
+        engine = ExperimentGenesisEngine(
+            relative_margin=self.experiment.relative_margin,
+            max_proposals=self.experiment.max_proposals,
+            projection_margin_multipliers=frontier.candidate_scales,
+        )
+        generated = engine.propose(axis, reference_values)
+        for proposal in generated:
+            self.memory.remember_experiment(proposal)
+        return generated
 
     def generate_interventions(
         self,

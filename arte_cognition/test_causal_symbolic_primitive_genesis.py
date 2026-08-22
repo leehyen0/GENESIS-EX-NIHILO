@@ -78,8 +78,10 @@ class SymbolicPrimitiveGenesisTests(unittest.TestCase):
         g6 = self._g6()
         runtime = WorldDrivenPrimitiveRuntime()
         runtime.register_causal_world_models([item.model for item in g6])
+        # A surviving G6 class blocks symbolic expansion independently of whether
+        # authenticated raw representation evidence has already been collected.
         generated = runtime.generate_world_driven_symbolic_primitive_models(
-            [self.x], self.descriptors, self.raw
+            [self.x], self.descriptors
         )
         self.assertEqual(generated, [])
         self.assertFalse(runtime.generation_falsified(6))
