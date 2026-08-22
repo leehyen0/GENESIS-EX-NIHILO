@@ -18,6 +18,7 @@ from .world_coupling import WorldOutcomePair
 
 GRAPH_FINGERPRINT_MARKER = "repository_graph_fingerprint="
 GRAPH_FINGERPRINT_DEPTH_MARKER = "repository_graph_fingerprint_depth="
+GRAPH_CONTEXT_MARKER = "repository_graph_context="
 
 
 @dataclass(frozen=True)
@@ -159,7 +160,8 @@ def enrich_repository_candidates_with_graph_fingerprint(
         reason = (
             f"{candidate.proposal.reason} "
             f"{GRAPH_FINGERPRINT_MARKER}{fingerprint} "
-            f"{GRAPH_FINGERPRINT_DEPTH_MARKER}{depth}"
+            f"{GRAPH_FINGERPRINT_DEPTH_MARKER}{depth} "
+            f"{GRAPH_CONTEXT_MARKER}{candidate.task_id}"
         )
         enriched.append(replace(
             candidate,
@@ -190,12 +192,55 @@ def parse_graph_localization_signature(
     return fingerprint, operator_id, depth
 
 
+def parse_graph_context(proposal: InterventionProposal) -> Optional[str]:
+    return _parse_marker(str(proposal.reason), GRAPH_CONTEXT_MARKER)
+
+
+def parse_old_localization_signature(
+    proposal: InterventionProposal,
+) -> Tuple[Optional[str], Optional[str]]:
+    reason = str(proposal.reason)
+    return (
+        _parse_marker(reason, REPOSITORY_FILE_ROLE_MARKER),
+        _parse_marker(reason, REPOSITORY_REPAIR_OPERATOR_MARKER),
+    )
+
+
 def _authoritative(pair: WorldOutcomePair) -> bool:
     return bool(
         pair.matched_budget
         and pair.externally_generated
         and pair.authority_verified
         and pair.independence_class_id != "UNVERIFIED"
+    )
+
+
+def _finalize_localization_assessment(
+    ambiguous_contexts,
+    complete_contexts,
+    missing,
+    evaluated: int,
+    min_contexts: int,
+) -> LocalizationLanguageAssessment:
+    if len(ambiguous_contexts) >= max(1, int(min_contexts)):
+        status = "NAMED_ROLE_LOCALIZATION_NON_IDENTIFYING_OPEN_GRAPH_REPRESENTATION"
+        reason = (
+            "repeated complete executable evidence shows that successful patches are not identifiable "
+            "within the authored file-role plus repair-operator vocabulary"
+        )
+    else:
+        status = "NO_AUTHORIZED_LOCALIZATION_REPRESENTATION_ESCAPE"
+        reason = (
+            "graph representation escape requires repeated complete old-language ambiguity; "
+            "absence or an ordinary repair failure is insufficient"
+        )
+    return LocalizationLanguageAssessment(
+        status=status,
+        ambiguous_contexts=tuple(sorted(ambiguous_contexts)),
+        complete_contexts=tuple(sorted(complete_contexts)),
+        missing_experiment_ids=tuple(sorted(set(missing))),
+        evaluated_candidate_count=int(evaluated),
+        reason=reason,
     )
 
 
@@ -266,25 +311,110 @@ def assess_named_role_localization_language(
         if every_strong_is_ambiguous:
             ambiguous_contexts.append(str(context_id))
 
-    if len(ambiguous_contexts) >= max(1, int(min_contexts)):
-        status = "NAMED_ROLE_LOCALIZATION_NON_IDENTIFYING_OPEN_GRAPH_REPRESENTATION"
-        reason = (
-            "repeated complete executable evidence shows that successful patches are not identifiable "
-            "within the authored file-role plus repair-operator vocabulary"
+    return _finalize_localization_assessment(
+        ambiguous_contexts,
+        complete_contexts,
+        missing,
+        evaluated,
+        min_contexts,
+    )
+
+
+def assess_persisted_named_role_localization_language(
+    proposals: Iterable[InterventionProposal],
+    world_pairs: Sequence[WorldOutcomePair],
+    min_independent_classes: int,
+    strong_effect_threshold: float = 0.9,
+    min_contexts: int = 2,
+) -> LocalizationLanguageAssessment:
+    """Rebuild the old-language ambiguity gate from checkpointed BODY state alone.
+
+    Graph-enriched proposals persist their source-context identity and old
+    `(file_role, operator)` signature. After restore, no training source tree or
+    parent-process candidate object is needed: the candidate universe comes from
+    proposal memory, while authority comes only from externally reverified world
+    receipts. Missing independent evidence still fails closed.
+    """
+    proposals_by_context: Dict[str, list[InterventionProposal]] = {}
+    for proposal in proposals:
+        context_id = parse_graph_context(proposal)
+        fingerprint, operator_id, depth = parse_graph_localization_signature(proposal)
+        role, old_operator = parse_old_localization_signature(proposal)
+        if (
+            context_id is None
+            or fingerprint is None
+            or operator_id is None
+            or depth is None
+            or role is None
+            or old_operator is None
+        ):
+            continue
+        proposals_by_context.setdefault(context_id, []).append(proposal)
+
+    minimum_classes = max(1, int(min_independent_classes))
+    by_key: Dict[Tuple[str, str], Dict[str, WorldOutcomePair]] = {}
+    for pair in world_pairs:
+        if not _authoritative(pair):
+            continue
+        by_key.setdefault((pair.context_id, pair.experiment_id), {}).setdefault(
+            pair.independence_class_id, pair
         )
-    else:
-        status = "NO_AUTHORIZED_LOCALIZATION_REPRESENTATION_ESCAPE"
-        reason = (
-            "graph representation escape requires repeated complete old-language ambiguity; "
-            "absence or an ordinary repair failure is insufficient"
-        )
-    return LocalizationLanguageAssessment(
-        status=status,
-        ambiguous_contexts=tuple(sorted(ambiguous_contexts)),
-        complete_contexts=tuple(sorted(complete_contexts)),
-        missing_experiment_ids=tuple(sorted(set(missing))),
-        evaluated_candidate_count=evaluated,
-        reason=reason,
+
+    complete_contexts = []
+    ambiguous_contexts = []
+    missing = []
+    evaluated = 0
+    for context_id, context_proposals in proposals_by_context.items():
+        if not context_proposals:
+            continue
+        scores: Dict[str, float] = {}
+        context_complete = True
+        for proposal in context_proposals:
+            classes = by_key.get((str(context_id), proposal.experiment_id), {})
+            if len(classes) < minimum_classes:
+                context_complete = False
+                missing.append(proposal.experiment_id)
+                continue
+            evaluated += 1
+            scores[proposal.experiment_id] = (
+                sum(abs(pair.effect) for pair in classes.values()) / len(classes)
+            )
+        if not context_complete:
+            continue
+        complete_contexts.append(str(context_id))
+        strong = [
+            proposal for proposal in context_proposals
+            if scores.get(proposal.experiment_id, 0.0) >= float(strong_effect_threshold)
+        ]
+        if not strong:
+            continue
+        groups: Dict[Tuple[str, str], list[InterventionProposal]] = {}
+        for proposal in context_proposals:
+            role, operator_id = parse_old_localization_signature(proposal)
+            if role is None or operator_id is None:
+                continue
+            groups.setdefault((role, operator_id), []).append(proposal)
+        every_strong_is_ambiguous = True
+        for proposal in strong:
+            signature = parse_old_localization_signature(proposal)
+            peers = groups.get((str(signature[0]), str(signature[1])), [])
+            weak_peer_exists = any(
+                peer.experiment_id != proposal.experiment_id
+                and scores.get(peer.experiment_id, 0.0) < float(strong_effect_threshold)
+                for peer in peers
+            )
+            if not weak_peer_exists:
+                every_strong_is_ambiguous = False
+                break
+        if every_strong_is_ambiguous:
+            ambiguous_contexts.append(str(context_id))
+
+    return _finalize_localization_assessment(
+        ambiguous_contexts,
+        complete_contexts,
+        missing,
+        evaluated,
+        min_contexts,
     )
 
 
@@ -437,6 +567,15 @@ class RepositoryLocalizationRepresentationOrgan:
     ) -> LocalizationLanguageAssessment:
         return assess_named_role_localization_language(
             candidates_by_context=candidates_by_context,
+            world_pairs=self.body.world_coupling.pairs,
+            min_independent_classes=self.body.world_coupling.min_independent_classes,
+            strong_effect_threshold=0.9,
+            min_contexts=2,
+        )
+
+    def assess_persisted_old_language(self) -> LocalizationLanguageAssessment:
+        return assess_persisted_named_role_localization_language(
+            proposals=(record.proposal for record in self.body.memory.experiments.values()),
             world_pairs=self.body.world_coupling.pairs,
             min_independent_classes=self.body.world_coupling.min_independent_classes,
             strong_effect_threshold=0.9,
