@@ -10,6 +10,7 @@ from .epistemic_memory import EpistemicMemory, RepresentationMutation
 from .experiment_genesis import ExperimentGenesisEngine, InterventionProposal
 from .meta_router import OutcomeLearnedCognitionRouter
 from .possibility_space import Fact, OperatorSpec, PossibilityCandidate, PossibilitySpaceGenerator
+from .projection_search_metapolicy import ProjectionSearchMetaPolicy, derive_projection_search_metapolicy
 from .representation_genesis import MeasurementObservation, RepresentationAxis, RepresentationGenesisEngine
 from .representation_value import RepresentationValueAssessment, RepresentationValueEvaluator
 from .semantic_genesis import (
@@ -59,11 +60,12 @@ class PersistentCognitiveRuntime:
     proposal objects. External world receipts still require independent verifier
     authority before they can steer action.
 
-    Projection experiment search is also allowed to become evidence-conditioned,
-    but only from already persisted exact experiments whose world outcomes were
-    authenticated and span the configured minimum number of verifier-derived
-    independence classes. The learned search schedule is therefore reconstructed
-    from BODY evidence after restart rather than trusted as a serialized scalar.
+    Projection experiment search can also become evidence-conditioned. Rather than
+    following a fixed hand-authored contraction schedule, the BODY searches the
+    bounded non-empty power set of its authored probe vocabulary and selects the
+    smallest policy that preserves authenticated material capability across every
+    observed world context. The learned metapolicy is reconstructed from BODY
+    evidence after restart rather than trusted as a serialized scalar.
     """
 
     def __init__(
@@ -112,84 +114,37 @@ class PersistentCognitiveRuntime:
         except (TypeError, ValueError):
             return None
 
-    def projection_search_schedule(self) -> Tuple[float, ...]:
-        """Derive a bounded projection-probe schedule from authenticated history.
+    def projection_search_metapolicy(self) -> ProjectionSearchMetaPolicy:
+        """Derive the smallest authenticated cross-context sufficient probe policy.
 
-        The default 1x/2x/4x vocabulary is never changed until every scale has at
-        least one exact experiment supported by the required number of independent
-        verifier classes. A dominant scale may reduce the next search to two scales
-        after repeated exact-experiment evidence, and to one scale only after the
-        dominant scale has reproduced across at least two world contexts. This is a
-        bounded matched-family search optimization, not global transport authority.
+        The generator vocabulary remains authored and bounded, but which subset is
+        retained is discovered from re-verifiable world consequences rather than
+        fixed effect-difference/count thresholds. A singleton policy requires
+        material reproduction in at least two contexts; heterogeneous contexts can
+        therefore preserve a non-prefix multi-scale subset when that is the minimum
+        sufficient search policy.
         """
         base = tuple(float(value) for value in self.experiment.projection_margin_multipliers)
-        if not self.adaptive_projection_search or len(base) <= 1:
-            return base
+        if not self.adaptive_projection_search:
+            return ProjectionSearchMetaPolicy(
+                schedule=base,
+                observed_contexts=(),
+                covered_contexts=(),
+                candidate_count=(2 ** len(base)) - 1 if base else 0,
+                material_effect_threshold=0.5,
+                reason="adaptive metapolicy application disabled",
+            )
+        return derive_projection_search_metapolicy(
+            base_scales=base,
+            proposals=(record.proposal for record in self.memory.experiments.values()),
+            world_pairs=self.world_coupling.pairs,
+            min_independent_classes=self.world_coupling.min_independent_classes,
+            probe_scale=self._proposal_probe_scale,
+            material_effect_threshold=0.5,
+        )
 
-        stats: Dict[float, Dict[str, object]] = {
-            scale: {"effects": [], "contexts": set()} for scale in base
-        }
-        for record in self.memory.experiments.values():
-            proposal = record.proposal
-            scale = self._proposal_probe_scale(proposal)
-            if scale is None:
-                continue
-            matched_scale = next((item for item in base if abs(item - scale) <= 1e-12), None)
-            if matched_scale is None:
-                continue
-
-            by_class: Dict[str, WorldOutcomePair] = {}
-            for pair in self.world_coupling.pairs:
-                if pair.experiment_id != proposal.experiment_id:
-                    continue
-                if not (
-                    pair.matched_budget
-                    and pair.externally_generated
-                    and pair.authority_verified
-                    and pair.independence_class_id != "UNVERIFIED"
-                ):
-                    continue
-                by_class.setdefault(pair.independence_class_id, pair)
-            if len(by_class) < self.world_coupling.min_independent_classes:
-                continue
-
-            unique_pairs = list(by_class.values())
-            mean_abs_effect = sum(abs(pair.effect) for pair in unique_pairs) / len(unique_pairs)
-            effects = stats[matched_scale]["effects"]
-            contexts = stats[matched_scale]["contexts"]
-            assert isinstance(effects, list)
-            assert isinstance(contexts, set)
-            effects.append(float(mean_abs_effect))
-            contexts.update(pair.context_id for pair in unique_pairs)
-
-        # Do not narrow the vocabulary while any default scale remains untested.
-        if any(not stats[scale]["effects"] for scale in base):
-            return base
-
-        scores = {
-            scale: sum(stats[scale]["effects"]) / len(stats[scale]["effects"])
-            for scale in base
-        }
-        base_index = {scale: index for index, scale in enumerate(base)}
-        ordered = tuple(sorted(base, key=lambda scale: (-scores[scale], base_index[scale])))
-        top = ordered[0]
-        runner_up = ordered[1]
-
-        # Material dominance is required before search-space contraction.
-        if scores[top] < 0.5 or (scores[top] - scores[runner_up]) < 0.25:
-            return base
-
-        top_effects = stats[top]["effects"]
-        top_contexts = stats[top]["contexts"]
-        assert isinstance(top_effects, list)
-        assert isinstance(top_contexts, set)
-
-        budget = len(base)
-        if len(top_effects) >= 2:
-            budget = min(budget, 2)
-        if len(top_effects) >= 4 and len(top_contexts) >= 2:
-            budget = 1
-        return ordered[:budget]
+    def projection_search_schedule(self) -> Tuple[float, ...]:
+        return self.projection_search_metapolicy().schedule
 
     def generate_interventions(
         self,
