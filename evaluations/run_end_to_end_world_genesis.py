@@ -13,8 +13,9 @@ if str(ROOT) not in sys.path:
 from arte_cognition.adaptive_cognition import TaskState
 from arte_cognition.body_checkpoint import checkpoint_json, restore_json
 from arte_cognition.cognitive_runtime import PersistentCognitiveRuntime
-from arte_cognition.representation_genesis import MeasurementObservation
+from arte_cognition.representation_genesis import MeasurementObservation, RepresentationGenesisEngine
 from arte_cognition.semantic_genesis import ResidualObservation
+from arte_cognition.world_action_policy import EvidenceBoundWorldActionPolicy
 from arte_cognition.world_coupling import (
     HMACWorldReceiptSigner,
     HMACWorldReceiptVerifier,
@@ -180,7 +181,6 @@ def main(seed_path: str) -> None:
     )
 
     assessment_by_axis = {item.axis_id: item for item in cycle.representation_value}
-    axis_by_id = {axis.axis_id: axis for axis in cycle.representation_axes}
     eligible_projection_axes = [
         axis for axis in cycle.representation_axes
         if axis.family == "PROJECTION"
@@ -217,24 +217,42 @@ def main(seed_path: str) -> None:
     ]
     if not selected_proposals:
         raise AssertionError("generated latent representation did not create an actionable experiment")
-    # At the zero reference state the fixed ratio family has no admissible
-    # threshold-crossing intervention; require that the executable candidate is
-    # genuinely generated from the learned projection rather than a raw parent.
-    executable_families = {
-        axis_by_id[proposal.axis_id].family
-        for proposal in cycle.intervention_proposals
-        if proposal.axis_id in axis_by_id
-    }
-    if "PROJECTION" not in executable_families:
-        raise AssertionError("learned projection was not present in executable experiment candidates")
-
     selected_proposal = selected_proposals[0]
-    remove_projection_proposals = [
-        proposal for proposal in cycle.intervention_proposals
-        if proposal.axis_id != selected_axis.axis_id
-    ]
-    if any(proposal.axis_id == selected_axis.axis_id for proposal in remove_projection_proposals):
-        raise AssertionError("REMOVE control retained the selected generated representation")
+
+    # Explicit REMOVE-PROJECTION control: the same raw observations are compiled
+    # with latent projection disabled. It must not recreate the treatment axis.
+    remove_runtime = PersistentCognitiveRuntime(
+        representation=RepresentationGenesisEngine(enable_projection=False)
+    )
+    remove_cycle = remove_runtime.cycle(
+        TaskState(
+            goal="discover a representation that explains the unseen residual structure",
+            novelty=0.95,
+            residuals=[row.residual_id for row in residuals if not row.heldout],
+            external_world=True,
+            action_required=True,
+        ),
+        residuals=residuals,
+        measurements=measurements,
+        experiment_reference_values=reference_values,
+        world_context_id=discovery_world.context_id,
+    )
+    if any(axis.family == "PROJECTION" for axis in remove_cycle.representation_axes):
+        raise AssertionError("REMOVE-PROJECTION control regenerated the removed latent family")
+    if any(proposal.axis_id == selected_axis.axis_id for proposal in remove_cycle.intervention_proposals):
+        raise AssertionError("REMOVE-PROJECTION control retained the selected generated representation")
+
+    # Generation is not action authority. Before world evidence, the generated
+    # proposal may be explored but must not be selected as an evidence-supported
+    # future action.
+    action_policy = EvidenceBoundWorldActionPolicy()
+    before_action = action_policy.select(
+        cycle.intervention_proposals,
+        runtime.world_coupling,
+        context_id=discovery_world.context_id,
+    )
+    if before_action.status != "EXPLORE_ONLY_NO_WORLD_SUPPORTED_ACTION" or before_action.proposal is not None:
+        raise AssertionError("generated proposal self-promoted to action before world evidence")
 
     # Two separately identified challenge receipts provide bounded independent
     # consequence evidence for the BODY's generated experiment.
@@ -267,17 +285,17 @@ def main(seed_path: str) -> None:
     if min(observed_effects) < 0.5 or summary.routing_score <= 0.0:
         raise AssertionError("generated experiment did not causally distinguish the hidden world")
 
-    # The world consequence must change a future choice, not merely be logged.
-    ranking_input = list(reversed(cycle.intervention_proposals))
-    if not ranking_input:
-        raise AssertionError("no generated intervention candidates available for future routing")
-    before_world_top = ranking_input[0].axis_id
-    after_world_ranked = runtime.rank_intervention_proposals(
-        ranking_input,
+    # This is the actual behavior transition: exploration-only before realized
+    # consequences, evidence-supported action after authenticated consequences.
+    after_action = action_policy.select(
+        cycle.intervention_proposals,
+        runtime.world_coupling,
         context_id=discovery_world.context_id,
     )
-    if after_world_ranked[0].axis_id != selected_axis.axis_id:
-        raise AssertionError("world consequence did not make the generated representation control future intervention choice")
+    if after_action.status != "WORLD_SUPPORTED_ACTION" or after_action.proposal is None:
+        raise AssertionError("authenticated world consequences did not create a supported future action")
+    if after_action.proposal.axis_id != selected_axis.axis_id:
+        raise AssertionError("world-supported action did not select the generated latent representation")
 
     encoded = checkpoint_json(runtime)
     if receipt_secret.hex() in encoded or "trusted_keys" in encoded:
@@ -285,19 +303,24 @@ def main(seed_path: str) -> None:
 
     # A descendant without the external authority surface cannot self-authorize.
     unverified_descendant = restore_json(encoded)
-    if unverified_descendant.world_axis_summary(
-        selected_axis.axis_id,
+    unverified_action = action_policy.select(
+        cycle.intervention_proposals,
+        unverified_descendant.world_coupling,
         context_id=discovery_world.context_id,
-    ).routing_score != 0.0:
+    )
+    if unverified_action.status != "EXPLORE_ONLY_NO_WORLD_SUPPORTED_ACTION" or unverified_action.proposal is not None:
         raise AssertionError("descendant used external evidence without re-verification")
 
     descendant = restore_json(encoded, world_verifier=verifier)
-    descendant_ranked = descendant.rank_intervention_proposals(
-        ranking_input,
+    descendant_action = action_policy.select(
+        cycle.intervention_proposals,
+        descendant.world_coupling,
         context_id=discovery_world.context_id,
     )
-    if descendant_ranked[0].axis_id != selected_axis.axis_id:
-        raise AssertionError("reverified descendant did not inherit world-caused intervention preference")
+    if descendant_action.status != "WORLD_SUPPORTED_ACTION" or descendant_action.proposal is None:
+        raise AssertionError("reverified descendant did not recover world-supported action authority")
+    if descendant_action.proposal.axis_id != selected_axis.axis_id:
+        raise AssertionError("reverified descendant did not inherit generated-representation action preference")
     descendant_summary = descendant.world_axis_summary(
         selected_axis.axis_id,
         context_id=discovery_world.context_id,
@@ -306,7 +329,7 @@ def main(seed_path: str) -> None:
         raise AssertionError("world-caused representation evidence changed across descendant reconstruction")
 
     print(json.dumps({
-        "status": "PASS_BOUNDED_RAW_RESIDUAL_TO_REVERIFIED_DESCENDANT_WORLD_GENESIS",
+        "status": "PASS_BOUNDED_RAW_RESIDUAL_TO_REVERIFIED_DESCENDANT_WORLD_GENESIS_WITH_ACTION_TRANSITION",
         "generated_axis_family": selected_axis.family,
         "generated_axis_id": selected_axis.axis_id,
         "generated_axis_coefficients": list(selected_axis.coefficients),
@@ -317,12 +340,15 @@ def main(seed_path: str) -> None:
         "bounded_predictive_law_count": len(bounded_laws),
         "generated_experiment_id": selected_proposal.experiment_id,
         "generated_experiment_manipulated_variable": selected_proposal.manipulated_variable,
-        "remove_projection_experiment_count": len(remove_projection_proposals),
+        "remove_projection_intervention_count": len(remove_cycle.intervention_proposals),
+        "before_world_action_status": before_action.status,
+        "after_world_action_status": after_action.status,
+        "after_world_action_axis": after_action.proposal.axis_id,
         "world_effects": observed_effects,
         "independent_world_evidence_classes": summary.independent_evidence_classes,
-        "before_world_top_axis": before_world_top,
-        "after_world_top_axis": after_world_ranked[0].axis_id,
-        "descendant_top_axis": descendant_ranked[0].axis_id,
+        "unverified_descendant_action_status": unverified_action.status,
+        "reverified_descendant_action_status": descendant_action.status,
+        "reverified_descendant_action_axis": descendant_action.proposal.axis_id,
         "authority_reverification_required_after_restart": True,
         "hidden_rule_exposed_to_body": False,
         "post_checkout_random_transform": True,
