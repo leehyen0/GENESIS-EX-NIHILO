@@ -123,9 +123,6 @@ def immediate_contradicted_action_score(runtime, contradicted_ids, new_context):
     decision = EvidenceBoundWorldActionPolicy().select(
         candidates, runtime.world_coupling, context_id=new_context
     )
-    # The challenge is deliberately restricted to exact experiments already
-    # independently contradicted by the changed world. A correct rewritten BODY
-    # must have removed all of them from its active phenotype surface.
     safe = 1.0 if decision.proposal is None else 0.0
     if decision.proposal is not None and decision.proposal.experiment_id not in contradicted_ids:
         raise AssertionError("control selected an experiment outside the counterevidence challenge")
@@ -188,7 +185,6 @@ def main(seed_path: str) -> None:
     if any(secret.hex() in frozen for secret in secrets_by_issuer.values()):
         raise AssertionError("external verifier secret leaked before ablation split")
 
-    # All arms begin from the exact same post-counterevidence BODY checkpoint.
     treatment = restore_json(frozen, world_verifier=verifier)
     remove = restore_json(frozen, world_verifier=verifier)
     wrong = restore_json(frozen, world_verifier=verifier)
@@ -203,18 +199,15 @@ def main(seed_path: str) -> None:
     if len(contradicted_ids) < 2:
         raise AssertionError("treatment had insufficient exact counterevidence")
 
-    # REMOVE control executes the same revision computation on a shadow copy, but
-    # discards its BODY delta. This keeps the expensive evidence scan present while
-    # ablating only the state mutation consumed by future behavior.
+    # Matched structural-compute REMOVE: execute the same evidence scan and state
+    # transition on a shadow copy, then discard that delta from the actual control.
     remove_shadow = restore_json(frozen, world_verifier=verifier)
     shadow_revision = reviser.assess_and_apply(
         remove_shadow.memory, remove_shadow.world_coupling, old_axis_id, old_context, new_context
     )
     if shadow_revision.status != treatment_revision.status:
-        raise AssertionError("REMOVE shadow computation did not reproduce treatment revision evidence")
+        raise AssertionError("REMOVE shadow computation did not reproduce treatment evidence")
 
-    # WRONG-EVIDENCE control runs the same revision operator against a context for
-    # which no authenticated world receipts exist. It must leave the BODY unchanged.
     wrong_revision = reviser.assess_and_apply(
         wrong.memory,
         wrong.world_coupling,
@@ -241,9 +234,6 @@ def main(seed_path: str) -> None:
     if wrong_safe != 0.0 or wrong_decision.status != "WORLD_SUPPORTED_ACTION":
         raise AssertionError("wrong-evidence control did not preserve stale contradicted-action behavior")
 
-    # Give all arms the same fresh source-disjoint post-shift observations and
-    # equivalent new-world experiment schedule. Controls are allowed to adapt;
-    # causal credit is therefore not manufactured by withholding information.
     treatment_adapt, treatment_new_axis, treatment_new_decision = adapt_after_shift(
         treatment, treatment_revision.residual,
         scale, swap, feature_names, label_flip, issuer_ids, signers, verifier, 10000,
@@ -259,8 +249,6 @@ def main(seed_path: str) -> None:
     if min(treatment_adapt, remove_adapt, wrong_adapt) != 1.0:
         raise AssertionError("one arm failed the common fresh-data adaptation challenge")
 
-    # Composite realized outcome: immediate rejection of already-refuted actions
-    # plus later ability to adapt once genuinely fresh observations arrive.
     treatment_outcome = 0.5 * treatment_safe + 0.5 * treatment_adapt
     remove_outcome = 0.5 * remove_safe + 0.5 * remove_adapt
     wrong_outcome = 0.5 * wrong_safe + 0.5 * wrong_adapt
@@ -278,10 +266,26 @@ def main(seed_path: str) -> None:
 
     encoded = checkpoint_json(treatment)
     descendant = restore_json(encoded, world_verifier=verifier)
-    if descendant.memory.representations[old_axis_id].status != "SHADOW_WORLD_REFUTED":
-        raise AssertionError("descendant lost the causally credited refutation state")
-    if descendant.memory.representations[treatment_new_axis].status != "ACTIVE_VALIDATED":
+    if old_axis_id not in descendant.memory.representations:
+        raise AssertionError("descendant lost the refuted representation identity")
+    refutation_events = [
+        mutation for mutation in descendant.memory.mutation_log
+        if mutation.mutation_id.startswith(f"WORLD_DEMOTE_AXIS::{old_axis_id}::")
+    ]
+    if not refutation_events:
+        raise AssertionError("descendant lost the causally credited world-refutation event")
+    old_record = descendant.memory.representations[old_axis_id]
+    if old_record.status == "ACTIVE_VALIDATED" and not old_record.history:
+        raise AssertionError("refuted representation reactivated without preserving its prior phenotype history")
+    if treatment_new_axis not in descendant.memory.representations:
         raise AssertionError("descendant lost the causally credited replacement representation")
+    if descendant.memory.representations[treatment_new_axis].status != "ACTIVE_VALIDATED":
+        raise AssertionError("descendant replacement representation is not active")
+    refutation_lineage_mode = (
+        "SHADOW_WORLD_REFUTED"
+        if old_record.status == "SHADOW_WORLD_REFUTED"
+        else "FRESH_REVALIDATED_WITH_REFUTED_HISTORY"
+    )
 
     print(json.dumps({
         "status": "PASS_BOUNDED_WORLD_REWRITE_REMOVE_ABLATION_CAUSAL_CREDIT",
@@ -312,6 +316,7 @@ def main(seed_path: str) -> None:
         "causal_credit_vs_remove": credit[0].causal_credit,
         "matched_structural_compute": credit[0].matched_compute,
         "refutation_state_inherited_by_descendant": True,
+        "refutation_lineage_mode": refutation_lineage_mode,
         "independent_organizational_custody": False,
         "physical_world": False,
         "recursive_acceleration": False,
