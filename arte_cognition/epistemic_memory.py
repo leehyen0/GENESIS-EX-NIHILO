@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional
+from typing import Dict, Iterable, List, Optional
 
 from .experiment_genesis import InterventionProposal
 from .representation_genesis import RepresentationAxis
@@ -57,6 +57,13 @@ class EpistemicMemory:
     formula and partition. Generated intervention definitions are also retained.
     This prevents descendant checkpoints from depending on parent-process Python
     objects to reconstruct what the BODY had learned.
+
+    World-caused revision is lineage preserving. Strong authenticated
+    counterevidence can demote an active representation phenotype, its generated
+    experiments, and directly dependent concept/law state without deleting any of
+    those objects. A later fresh cycle can only reactivate that axis identity when
+    it generates a materially revised phenotype; reproducing the same refuted
+    object does not silently self-authorize it again.
     """
 
     def __init__(self) -> None:
@@ -172,6 +179,93 @@ class EpistemicMemory:
             )
             self._append_mutation(mutation)
         return record
+
+    def demote_world_refuted_axis(
+        self,
+        axis_id: str,
+        experiment_ids: Iterable[str],
+        evidence_tag: str,
+    ) -> List[RepresentationMutation]:
+        """Demote a generated cognition phenotype after robust world refutation.
+
+        The caller is responsible for the external-evidence gate. Once that gate
+        closes, this method performs the same-BODY state transition while keeping
+        every refuted object addressable for delayed replay and wrong-swap tests.
+        """
+        axis_record = self.representations.get(axis_id)
+        if axis_record is None or axis_record.status != "ACTIVE_VALIDATED":
+            return []
+
+        contradicted = tuple(sorted(set(str(item) for item in experiment_ids)))
+        if not contradicted:
+            return []
+
+        mutations: List[RepresentationMutation] = []
+        axis_record.status = "SHADOW_WORLD_REFUTED"
+        axis_record.revisions += 1
+        axis_mutation = RepresentationMutation(
+            mutation_id=f"WORLD_DEMOTE_AXIS::{axis_id}::{axis_record.revisions}",
+            action="DEMOTE",
+            target=axis_id,
+            reason=(
+                "authenticated independent world counterevidence refuted multiple exact experiments "
+                f"for this representation phenotype; evidence={evidence_tag}"
+            ),
+        )
+        self._append_mutation(axis_mutation)
+        mutations.append(axis_mutation)
+
+        for experiment_id, record in sorted(self.experiments.items()):
+            if record.proposal.axis_id != axis_id:
+                continue
+            if record.status != "PROPOSAL_ONLY":
+                continue
+            record.status = "SHADOW_WORLD_REFUTED"
+            record.revisions += 1
+            mutation = RepresentationMutation(
+                mutation_id=f"WORLD_DEMOTE_EXPERIMENT::{experiment_id}::{record.revisions}",
+                action="DEMOTE",
+                target=experiment_id,
+                reason=(
+                    "parent representation phenotype was refuted by authenticated world counterevidence; "
+                    f"contradicted_exact_experiments={','.join(contradicted)}"
+                ),
+            )
+            self._append_mutation(mutation)
+            mutations.append(mutation)
+
+        for concept_id, concept_record in sorted(self.concepts.items()):
+            if axis_id not in set(concept_record.concept.defining_features):
+                continue
+            if concept_record.status != "ACTIVE_BOUNDED":
+                continue
+            concept_record.status = "SHADOW_WORLD_REFUTED"
+            concept_record.revisions += 1
+            mutation = RepresentationMutation(
+                mutation_id=f"WORLD_DEMOTE_CONCEPT::{concept_id}::{concept_record.revisions}",
+                action="DEMOTE",
+                target=concept_id,
+                reason="directly dependent generated concept lost support when its representation phenotype was world-refuted",
+            )
+            self._append_mutation(mutation)
+            mutations.append(mutation)
+
+            if concept_record.last_law_id:
+                law_record = self.laws.get(concept_record.last_law_id)
+                if law_record is not None and law_record.status == "ACTIVE_BOUNDED":
+                    law_record.status = "DEMOTED_WORLD_REFUTED"
+                    if evidence_tag not in law_record.refutations:
+                        law_record.refutations.append(evidence_tag)
+                    law_mutation = RepresentationMutation(
+                        mutation_id=f"WORLD_DEMOTE_LAW::{law_record.law.law_id}::{evidence_tag}",
+                        action="DEMOTE",
+                        target=law_record.law.law_id,
+                        reason="authenticated world counterevidence invalidated the active representation supporting this bounded law",
+                    )
+                    self._append_mutation(law_mutation)
+                    mutations.append(law_mutation)
+
+        return mutations
 
     def observe(self, row: ResidualObservation) -> List[RepresentationMutation]:
         """Apply a new realized observation against active generated laws."""
