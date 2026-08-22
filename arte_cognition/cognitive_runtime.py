@@ -22,7 +22,13 @@ from .semantic_genesis import (
 from .subgraph_credit import MinimumCausalSubgraphFinder, MinimumSufficientSubgraph, SubgraphEvaluation
 from .topology_learning import CognitionTopologyLearner, MacroCognitionCandidate
 from .validation_matrix import RobustPromotionGate, ValidationGateResult, ValidationObservation
-from .world_coupling import AxisWorldSummary, WorldCouplingEngine, WorldExecutor, WorldOutcomePair
+from .world_coupling import (
+    AxisWorldSummary,
+    WorldCouplingEngine,
+    WorldExecutor,
+    WorldOutcomePair,
+    WorldTransportAssessment,
+)
 
 
 @dataclass
@@ -51,8 +57,9 @@ class PersistentCognitiveRuntime:
     memory, outcome-ablation credit, causal-law staging, robust promotion and a
     context-conditioned world-coupling memory. Externally realized intervention
     consequences can change future experiment ordering in the regime where they
-    were learned, and that change survives BODY checkpoint/restore. Generated
-    objects never become evidence merely by existing.
+    were learned, and global transport is blocked when supported regimes disagree.
+    That state survives BODY checkpoint/restore. Generated objects never become
+    evidence merely by existing.
     """
 
     def __init__(
@@ -239,6 +246,12 @@ class PersistentCognitiveRuntime:
         context_id: Optional[str] = None,
     ) -> AxisWorldSummary:
         return self.world_coupling.summary(axis_id, context_id=context_id)
+
+    def assess_world_transport(
+        self,
+        proposals: Sequence[InterventionProposal],
+    ) -> WorldTransportAssessment:
+        return self.world_coupling.assess_transport(proposals)
 
     def rank_intervention_proposals(
         self,
