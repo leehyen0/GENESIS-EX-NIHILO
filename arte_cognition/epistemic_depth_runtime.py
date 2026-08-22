@@ -6,6 +6,7 @@ from typing import List, Mapping, Optional, Sequence
 from .adaptive_cognition import QueryCandidate, TaskState
 from .body_checkpoint import checkpoint_dict, restore_runtime
 from .causal_model_genesis import CausalModelGenesisEngine, GeneratedCausalModel, InterventionDescriptor
+from .causal_predicate_genesis import BooleanCausalPredicateGenesisEngine, GeneratedPredicateModel
 from .causal_program_genesis import CompositionalCausalProgramGenesisEngine, GeneratedCausalProgram
 from .cognitive_runtime import CognitiveCycle, PersistentCognitiveRuntime
 from .possibility_space import Fact, OperatorSpec
@@ -24,12 +25,14 @@ EPISTEMIC_DEPTH_SCHEMA = "arte.epistemic_depth_same_body/v1"
 
 
 class EpistemicallyDeepPersistentCognitiveRuntime(PersistentCognitiveRuntime):
-    """Same BODY with depth control and staged causal structure generation.
+    """Same BODY with staged causal representation expansion.
 
-    Evidence-conditioned generation returns compatible candidates for immediate
-    reasoning, but the BODY also preserves an evidence-unfiltered bounded shadow
-    candidate pool. Otherwise the *absence* of rejected candidates in a checkpoint
-    would leak external authority into a verifierless descendant.
+    Generation 1 searches named structural families, generation 2 composes causal
+    primitives, and generation 3 synthesizes bounded Boolean activation predicates.
+    Each deeper generation is ancestry-gated by independently grounded failure of
+    the current live model class. Evidence-conditioned active candidates are
+    accompanied by unfiltered bounded shadow candidates to avoid authority leakage
+    through candidate-set absence.
     """
 
     def __init__(
@@ -38,12 +41,14 @@ class EpistemicallyDeepPersistentCognitiveRuntime(PersistentCognitiveRuntime):
         world_models: Optional[WorldModelEcology] = None,
         model_genesis: Optional[CausalModelGenesisEngine] = None,
         program_genesis: Optional[CompositionalCausalProgramGenesisEngine] = None,
+        predicate_genesis: Optional[BooleanCausalPredicateGenesisEngine] = None,
         **kwargs,
     ) -> None:
         super().__init__(*args, **kwargs)
         self.world_models = world_models or WorldModelEcology()
         self.model_genesis = model_genesis or CausalModelGenesisEngine()
         self.program_genesis = program_genesis or CompositionalCausalProgramGenesisEngine()
+        self.predicate_genesis = predicate_genesis or BooleanCausalPredicateGenesisEngine()
         self.last_epistemic_depth = self.world_models.depth_plan()
 
     def register_causal_world_models(self, models: Sequence[CausalWorldModel]) -> None:
@@ -64,20 +69,12 @@ class EpistemicallyDeepPersistentCognitiveRuntime(PersistentCognitiveRuntime):
         variables: Sequence[str],
         descriptors: Sequence[InterventionDescriptor],
     ) -> List[GeneratedCausalModel]:
-        """Generate first-generation active candidates plus bounded shadow alternatives."""
         if self.epistemic_depth_plan().mode != "EXPAND_MODEL_CLASS":
             return []
-        evidence = self.world_models.authoritative_evidence()
         active = self.model_genesis.generate(
-            variables=variables,
-            descriptors=descriptors,
-            residual_evidence=evidence,
+            variables, descriptors, self.world_models.authoritative_evidence()
         )
-        shadow = self.model_genesis.generate(
-            variables=variables,
-            descriptors=descriptors,
-            residual_evidence=(),
-        )
+        shadow = self.model_genesis.generate(variables, descriptors, ())
         self.world_models.register(self._model_union(shadow, active))
         self.last_epistemic_depth = self.world_models.depth_plan()
         return active
@@ -87,30 +84,42 @@ class EpistemicallyDeepPersistentCognitiveRuntime(PersistentCognitiveRuntime):
         variables: Sequence[str],
         descriptors: Sequence[InterventionDescriptor],
     ) -> List[GeneratedCausalProgram]:
-        """Open second-generation composition after first-generation ancestry fails.
-
-        Active candidates are evidence-compatible, while a bounded unfiltered
-        compositional shadow pool is persisted too. Thus a restart without an
-        external verifier retains hypotheses but cannot infer which ones survived
-        earlier external evidence merely from candidate-set membership.
-        """
         if self.epistemic_depth_plan().mode != "EXPAND_MODEL_CLASS":
             return []
         if not any(model.origin == "GENERATED" for model in self.world_models.models.values()):
             return []
         existing = list(self.world_models.models.values())
         active = self.program_genesis.generate_novel(
-            variables=variables,
-            descriptors=descriptors,
-            residual_evidence=self.world_models.authoritative_evidence(),
-            existing_models=existing,
+            variables, descriptors, self.world_models.authoritative_evidence(), existing
         )
-        shadow = self.program_genesis.generate_novel(
-            variables=variables,
-            descriptors=descriptors,
-            residual_evidence=(),
-            existing_models=existing,
+        shadow = self.program_genesis.generate_novel(variables, descriptors, (), existing)
+        self.world_models.register(self._model_union(shadow, active))
+        self.last_epistemic_depth = self.world_models.depth_plan()
+        return active
+
+    def generate_predicate_causal_models(
+        self,
+        variables: Sequence[str],
+        descriptors: Sequence[InterventionDescriptor],
+    ) -> List[GeneratedPredicateModel]:
+        """Open generation 3 only after a compositional lineage is refuted.
+
+        Predicate synthesis searches bounded DNF over observable intervention atoms.
+        It may express negation/disjunction absent from the fixed causal primitive
+        grammar, but it still does not invent the underlying Boolean metalanguage.
+        """
+        if self.epistemic_depth_plan().mode != "EXPAND_MODEL_CLASS":
+            return []
+        if not any(
+            model.origin == "GENERATED_COMPOSITIONAL"
+            for model in self.world_models.models.values()
+        ):
+            return []
+        existing = list(self.world_models.models.values())
+        active = self.predicate_genesis.generate_novel(
+            variables, descriptors, self.world_models.authoritative_evidence(), existing
         )
+        shadow = self.predicate_genesis.generate_novel(variables, descriptors, (), existing)
         self.world_models.register(self._model_union(shadow, active))
         self.last_epistemic_depth = self.world_models.depth_plan()
         return active
@@ -120,13 +129,10 @@ class EpistemicallyDeepPersistentCognitiveRuntime(PersistentCognitiveRuntime):
         descriptors: Sequence[InterventionDescriptor],
         generated: Optional[Sequence[GeneratedCausalModel]] = None,
     ) -> List[QueryCandidate]:
-        if generated is None:
-            models = [
-                model for model in self.world_models.models.values()
-                if model.origin == "GENERATED"
-            ]
-        else:
-            models = [item.model for item in generated]
+        models = (
+            [model for model in self.world_models.models.values() if model.origin == "GENERATED"]
+            if generated is None else [item.model for item in generated]
+        )
         return self.model_genesis.query_candidates(descriptors, models)
 
     def compositional_model_queries(
@@ -134,13 +140,21 @@ class EpistemicallyDeepPersistentCognitiveRuntime(PersistentCognitiveRuntime):
         descriptors: Sequence[InterventionDescriptor],
         generated: Optional[Sequence[GeneratedCausalProgram]] = None,
     ) -> List[QueryCandidate]:
-        if generated is None:
-            models = [
-                model for model in self.world_models.models.values()
-                if model.origin == "GENERATED_COMPOSITIONAL"
-            ]
-        else:
-            models = [item.model for item in generated]
+        models = (
+            [model for model in self.world_models.models.values() if model.origin == "GENERATED_COMPOSITIONAL"]
+            if generated is None else [item.model for item in generated]
+        )
+        return self.model_genesis.query_candidates(descriptors, models)
+
+    def predicate_model_queries(
+        self,
+        descriptors: Sequence[InterventionDescriptor],
+        generated: Optional[Sequence[GeneratedPredicateModel]] = None,
+    ) -> List[QueryCandidate]:
+        models = (
+            [model for model in self.world_models.models.values() if model.origin == "GENERATED_PREDICATE"]
+            if generated is None else [item.model for item in generated]
+        )
         return self.model_genesis.query_candidates(descriptors, models)
 
     def epistemic_depth_plan(self) -> EpistemicDepthPlan:
@@ -167,7 +181,6 @@ class EpistemicallyDeepPersistentCognitiveRuntime(PersistentCognitiveRuntime):
         depth = self.epistemic_depth_plan()
         effective_possibility_budget = int(possibility_budget)
         original_representation = self.representation
-
         if depth.mode != "COMPACT":
             effective_possibility_budget = max(effective_possibility_budget, depth.possibility_budget)
             if depth.representation_axis_budget > self.representation.axis_budget:
@@ -205,8 +218,6 @@ class EpistemicallyDeepPersistentCognitiveRuntime(PersistentCognitiveRuntime):
 
 def epistemic_checkpoint_dict(runtime: EpistemicallyDeepPersistentCognitiveRuntime):
     payload = checkpoint_dict(runtime)
-    # Model definitions, including shadow alternatives and ancestry, persist. Their
-    # posterior authority does not: signed receipts must be externally reverified.
     payload["epistemic_depth_schema"] = EPISTEMIC_DEPTH_SCHEMA
     payload["world_model_ecology"] = {
         "models": [asdict(model) for _, model in sorted(runtime.world_models.models.items())],
@@ -240,10 +251,7 @@ def restore_epistemic_runtime(payload, world_verifier: Optional[WorldReceiptVeri
         models.append(CausalWorldModel(
             model_id=str(item["model_id"]),
             prior=float(item.get("prior", 1.0)),
-            predictions=tuple(
-                (str(key), str(value))
-                for key, value in item.get("predictions", ())
-            ),
+            predictions=tuple((str(key), str(value)) for key, value in item.get("predictions", ())),
             origin=str(item.get("origin", "AUTHORED")),
             family=str(item.get("family", "UNSPECIFIED")),
             structure=tuple(str(value) for value in item.get("structure", ())),
