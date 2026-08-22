@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, Iterable, List, Protocol, Sequence, Tuple
+from typing import Dict, Iterable, List, Optional, Protocol, Sequence, Tuple
 
 from .experiment_genesis import InterventionProposal
 
@@ -50,15 +50,21 @@ class WorldOutcomePair:
         return float(self.high_outcome) - float(self.low_outcome)
 
     @property
-    def independence_key(self) -> Tuple[str, str, str]:
-        # Repeating the same source/challenge does not create new evidence merely
-        # because it was executed again at another epoch.
-        return (self.source_id, self.context_id, self.challenge_id)
+    def independence_key(self) -> Tuple[str, str]:
+        # Context is deliberately excluded. Replaying one evaluator/challenge in
+        # several regimes can teach regime-specific behavior, but must not be
+        # miscounted as several independent evidence sources globally.
+        return (self.source_id, self.challenge_id)
+
+    @property
+    def contextual_evidence_key(self) -> Tuple[str, str, str]:
+        return (self.context_id, self.source_id, self.challenge_id)
 
 
 @dataclass(frozen=True)
 class AxisWorldSummary:
     axis_id: str
+    context_id: Optional[str]
     independent_evidence_classes: int
     mean_effect: float
     mean_abs_effect: float
@@ -78,39 +84,36 @@ class WorldExecutor(Protocol):
 class WorldCouplingEngine:
     """Consume external intervention consequences and change future behavior.
 
-    This is a deliberately narrow world-model locus: it learns which generated
-    representation axes have repeatedly produced consequence-bearing intervention
-    contrasts. Evidence is deduplicated by source/context/challenge class, and
-    unmatched-budget or non-external events cannot steer future experiment order.
-    The state is designed to be checkpointed as part of the same BODY.
+    World value is conditioned on context/regime when one is supplied. This avoids
+    transporting a cognition/intervention preference that was useful in one world
+    regime into another merely because the axis name is the same. Evidence is
+    deduplicated by evaluator/challenge identity; unmatched-budget or non-external
+    events remain auditable but cannot steer future experiment order.
     """
 
     def __init__(self, min_independent_classes: int = 2) -> None:
         self.min_independent_classes = max(1, int(min_independent_classes))
         self.pairs: List[WorldOutcomePair] = []
 
-    def _evidence_keys(self, axis_id: str) -> set[Tuple[str, str, str]]:
+    def _contextual_evidence_keys(self, axis_id: str, context_id: str) -> set[Tuple[str, str, str]]:
         return {
-            pair.independence_key
+            pair.contextual_evidence_key
             for pair in self.pairs
             if pair.axis_id == axis_id
+            and pair.context_id == context_id
             and pair.matched_budget
             and pair.externally_generated
         }
 
     def record_pair(self, pair: WorldOutcomePair) -> bool:
-        if not pair.matched_budget or not pair.externally_generated:
-            # Preserve the receipt for audit, but it is not authority-bearing for
-            # future routing. We still store it once by pair id.
-            if pair.pair_id not in {item.pair_id for item in self.pairs}:
-                self.pairs.append(pair)
-                return True
-            return False
-
-        if pair.independence_key in self._evidence_keys(pair.axis_id):
-            return False
         if pair.pair_id in {item.pair_id for item in self.pairs}:
             return False
+
+        if pair.matched_budget and pair.externally_generated:
+            if pair.contextual_evidence_key in self._contextual_evidence_keys(pair.axis_id, pair.context_id):
+                return False
+
+        # Invalid-for-routing receipts are still retained once for audit.
         self.pairs.append(pair)
         return True
 
@@ -136,7 +139,7 @@ class WorldCouplingEngine:
             raise ValueError("LOW/HIGH receipts must belong to one world challenge")
 
         pair = WorldOutcomePair(
-            pair_id=f"PAIR::{proposal.experiment_id}::{low.source_id}::{low.challenge_id}",
+            pair_id=f"PAIR::{proposal.experiment_id}::{low.context_id}::{low.source_id}::{low.challenge_id}",
             experiment_id=proposal.experiment_id,
             axis_id=proposal.axis_id,
             source_id=low.source_id,
@@ -153,22 +156,23 @@ class WorldCouplingEngine:
         self.record_pair(pair)
         return pair
 
-    def summary(self, axis_id: str) -> AxisWorldSummary:
+    def summary(self, axis_id: str, context_id: Optional[str] = None) -> AxisWorldSummary:
         valid = [
             pair for pair in self.pairs
             if pair.axis_id == axis_id
             and pair.matched_budget
             and pair.externally_generated
+            and (context_id is None or pair.context_id == context_id)
         ]
-        # record_pair already removes repeated independent evidence classes for
-        # valid evidence. Keep the grouping explicit so restored/audited states
-        # remain robust if old checkpoints contain duplicates.
-        by_key: Dict[Tuple[str, str, str], WorldOutcomePair] = {}
+        # Within a regime and globally, one evaluator/challenge contributes at most
+        # one independent evidence class. Context-specific pairs are still retained
+        # so the BODY can learn opposite values in distinct regimes.
+        by_key: Dict[Tuple[str, str], WorldOutcomePair] = {}
         for pair in valid:
             by_key.setdefault(pair.independence_key, pair)
         unique = list(by_key.values())
         if not unique:
-            return AxisWorldSummary(axis_id, 0, 0.0, 0.0, 0.0)
+            return AxisWorldSummary(axis_id, context_id, 0, 0.0, 0.0, 0.0)
         effects = [pair.effect for pair in unique]
         mean_effect = sum(effects) / len(effects)
         mean_abs_effect = sum(abs(value) for value in effects) / len(effects)
@@ -176,6 +180,7 @@ class WorldCouplingEngine:
         routing_score = mean_abs_effect * independence_factor
         return AxisWorldSummary(
             axis_id=axis_id,
+            context_id=context_id,
             independent_evidence_classes=len(unique),
             mean_effect=mean_effect,
             mean_abs_effect=mean_abs_effect,
@@ -185,6 +190,7 @@ class WorldCouplingEngine:
     def rank_proposals(
         self,
         proposals: Sequence[InterventionProposal],
+        context_id: Optional[str] = None,
     ) -> List[InterventionProposal]:
         indexed = list(enumerate(proposals))
         return [
@@ -192,7 +198,7 @@ class WorldCouplingEngine:
             for _, proposal in sorted(
                 indexed,
                 key=lambda item: (
-                    -self.summary(item[1].axis_id).routing_score,
+                    -self.summary(item[1].axis_id, context_id=context_id).routing_score,
                     item[0],
                 ),
             )

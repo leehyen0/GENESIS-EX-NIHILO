@@ -22,9 +22,10 @@ class HiddenWorldExecutor:
     evaluator object and are never passed into the cognition BODY.
     """
 
-    def __init__(self, coefficients, source_id, challenge_id, epoch):
+    def __init__(self, coefficients, source_id, context_id, challenge_id, epoch):
         self._coefficients = dict(coefficients)
         self.source_id = source_id
+        self.context_id = context_id
         self.challenge_id = challenge_id
         self.epoch = epoch
 
@@ -32,17 +33,17 @@ class HiddenWorldExecutor:
         coefficient = float(self._coefficients.get(proposal.axis_id, 0.0))
         outcome = coefficient * float(value)
         return WorldOutcomeReceipt(
-            receipt_id=f"hidden::{self.source_id}::{self.challenge_id}::{proposal.axis_id}::{arm}",
+            receipt_id=f"hidden::{self.context_id}::{self.source_id}::{self.challenge_id}::{proposal.axis_id}::{arm}",
             experiment_id=proposal.experiment_id,
             axis_id=proposal.axis_id,
             arm=arm,
             intervention_value=float(value),
             outcome=outcome,
             source_id=self.source_id,
-            context_id="hidden-software-world",
+            context_id=self.context_id,
             challenge_id=self.challenge_id,
             epoch=self.epoch,
-            budget_token=f"matched::{self.source_id}::{self.challenge_id}",
+            budget_token=f"matched::{self.context_id}::{self.source_id}::{self.challenge_id}",
             externally_generated=True,
         )
 
@@ -61,55 +62,77 @@ def proposal(axis_id):
     )
 
 
+def hidden_coefficients(rng, proposals, active_axis):
+    coefficients = {
+        item.axis_id: rng.uniform(-0.04, 0.04)
+        for item in proposals
+    }
+    coefficients[active_axis] = rng.choice([-1.0, 1.0]) * rng.uniform(1.25, 2.75)
+    return coefficients
+
+
 def main(seed_path):
     seed = int(Path(seed_path).read_text().strip())
     rng = random.Random(seed)
 
     runtime = PersistentCognitiveRuntime()
     proposals = [proposal("AXIS::A"), proposal("AXIS::B"), proposal("AXIS::C")]
-    before = runtime.rank_intervention_proposals(proposals)
+    initial_top = runtime.rank_intervention_proposals(proposals)[0].axis_id
 
-    # The evaluator deliberately chooses an axis that is not initially ranked
-    # first, preventing a hard-coded default order from passing without learning.
-    active_axis = rng.choice([item.axis_id for item in before[1:]])
-    active_magnitude = rng.uniform(1.25, 2.75)
-    active_sign = rng.choice([-1.0, 1.0])
-    coefficients = {
-        item.axis_id: rng.uniform(-0.04, 0.04)
-        for item in proposals
+    # Two hidden regimes require different intervention preferences. At least one
+    # active axis differs from the BODY's initial default, so a static order cannot
+    # satisfy both regimes.
+    axis_ids = [item.axis_id for item in proposals]
+    active_regime_1 = rng.choice([axis for axis in axis_ids if axis != initial_top])
+    active_regime_2 = rng.choice([axis for axis in axis_ids if axis != active_regime_1])
+    regimes = {
+        "hidden-regime-1": (active_regime_1, hidden_coefficients(rng, proposals, active_regime_1)),
+        "hidden-regime-2": (active_regime_2, hidden_coefficients(rng, proposals, active_regime_2)),
     }
-    coefficients[active_axis] = active_sign * active_magnitude
 
-    for index, source_id in enumerate(("hidden-source-1", "hidden-source-2"), start=1):
-        executor = HiddenWorldExecutor(
-            coefficients=coefficients,
-            source_id=source_id,
-            challenge_id=f"hidden-challenge-{index}",
-            epoch=index,
-        )
-        for item in proposals:
-            runtime.execute_world_intervention(item, executor)
+    for context_id, (_, coefficients) in regimes.items():
+        for index in (1, 2):
+            executor = HiddenWorldExecutor(
+                coefficients=coefficients,
+                source_id=f"{context_id}-source-{index}",
+                context_id=context_id,
+                challenge_id=f"{context_id}-challenge-{index}",
+                epoch=index,
+            )
+            for item in proposals:
+                runtime.execute_world_intervention(item, executor)
 
-    after = runtime.rank_intervention_proposals(proposals)
-    if after[0].axis_id != active_axis:
-        raise AssertionError("world outcomes did not change future intervention choice to the consequence-bearing axis")
+    learned = {
+        context_id: runtime.rank_intervention_proposals(proposals, context_id=context_id)[0].axis_id
+        for context_id in regimes
+    }
+    for context_id, (active_axis, _) in regimes.items():
+        if learned[context_id] != active_axis:
+            raise AssertionError(f"world outcomes did not learn the correct intervention preference in {context_id}")
 
     descendant = restore_json(checkpoint_json(runtime))
-    descendant_ranked = descendant.rank_intervention_proposals(proposals)
-    if descendant_ranked[0].axis_id != active_axis:
-        raise AssertionError("world-caused intervention policy did not survive checkpoint/restore")
+    descendant_learned = {
+        context_id: descendant.rank_intervention_proposals(proposals, context_id=context_id)[0].axis_id
+        for context_id in regimes
+    }
+    if descendant_learned != learned:
+        raise AssertionError("context-conditioned world policy did not survive checkpoint/restore")
 
-    summary = descendant.world_axis_summary(active_axis)
-    if summary.independent_evidence_classes < 2:
-        raise AssertionError("hidden challenge did not provide two independent evidence classes")
+    evidence = {
+        context_id: descendant.world_axis_summary(active_axis, context_id=context_id).independent_evidence_classes
+        for context_id, (active_axis, _) in regimes.items()
+    }
+    if min(evidence.values()) < 2:
+        raise AssertionError("hidden regimes did not provide two independent evidence classes each")
 
     print(json.dumps({
-        "status": "PASS_BOUNDED_HIDDEN_SOFTWARE_WORLD_TO_DESCENDANT_BEHAVIOR",
-        "initial_top_axis": before[0].axis_id,
-        "learned_top_axis": after[0].axis_id,
-        "descendant_top_axis": descendant_ranked[0].axis_id,
-        "independent_evidence_classes": summary.independent_evidence_classes,
+        "status": "PASS_BOUNDED_HIDDEN_MULTI_REGIME_WORLD_TO_DESCENDANT_BEHAVIOR",
+        "initial_top_axis": initial_top,
+        "learned_top_by_regime": learned,
+        "descendant_top_by_regime": descendant_learned,
+        "independent_evidence_classes_by_regime": evidence,
         "world_pair_count": len(descendant.world_coupling.pairs),
+        "global_regime_transport_required": False,
         "hidden_mechanism_exposed_to_body": False,
         "independent_organizational_custody": False,
         "physical_world": False,

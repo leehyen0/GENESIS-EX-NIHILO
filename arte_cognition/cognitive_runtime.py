@@ -49,9 +49,10 @@ class PersistentCognitiveRuntime:
     generation, measurable representation-axis genesis, incremental-value gates,
     experiment genesis, residual-driven semantic genesis, reversible epistemic
     memory, outcome-ablation credit, causal-law staging, robust promotion and a
-    narrow world-coupling memory. Externally realized intervention consequences
-    can change the ordering of future experiments and that change survives BODY
-    checkpoint/restore. Generated objects never become evidence merely by existing.
+    context-conditioned world-coupling memory. Externally realized intervention
+    consequences can change future experiment ordering in the regime where they
+    were learned, and that change survives BODY checkpoint/restore. Generated
+    objects never become evidence merely by existing.
     """
 
     def __init__(
@@ -95,6 +96,7 @@ class PersistentCognitiveRuntime:
         operator_spec: Optional[OperatorSpec] = None,
         possibility_budget: int = 32,
         experiment_reference_values: Optional[Mapping[str, float]] = None,
+        world_context_id: Optional[str] = None,
     ) -> CognitiveCycle:
         plan = self.router.compile(task)
         execution_order = self.topology.reorder(plan.active_subgraph)
@@ -124,7 +126,10 @@ class PersistentCognitiveRuntime:
         if experiment_reference_values:
             for axis in semantically_eligible_axes:
                 intervention_proposals.extend(self.experiment.propose(axis, experiment_reference_values))
-        intervention_proposals = self.world_coupling.rank_proposals(intervention_proposals)
+        intervention_proposals = self.world_coupling.rank_proposals(
+            intervention_proposals,
+            context_id=world_context_id,
+        )
 
         concepts = self.semantic.propose_concepts(semantic_rows)
         semantic_queries = self.semantic.propose_queries(semantic_rows, concepts)
@@ -228,11 +233,16 @@ class PersistentCognitiveRuntime:
         """Enact a proposal through an external executor and consume its outcome."""
         return self.world_coupling.execute(proposal, executor)
 
-    def world_axis_summary(self, axis_id: str) -> AxisWorldSummary:
-        return self.world_coupling.summary(axis_id)
+    def world_axis_summary(
+        self,
+        axis_id: str,
+        context_id: Optional[str] = None,
+    ) -> AxisWorldSummary:
+        return self.world_coupling.summary(axis_id, context_id=context_id)
 
     def rank_intervention_proposals(
         self,
         proposals: Sequence[InterventionProposal],
+        context_id: Optional[str] = None,
     ) -> List[InterventionProposal]:
-        return self.world_coupling.rank_proposals(proposals)
+        return self.world_coupling.rank_proposals(proposals, context_id=context_id)
