@@ -73,13 +73,16 @@ class EpistemicallyDeepPersistentCognitiveRuntime(PersistentCognitiveRuntime):
         variables: Sequence[str],
         descriptors: Sequence[InterventionDescriptor],
     ) -> List[GeneratedCausalProgram]:
-        """Open a second structural generation only after the live ecology fails.
+        """Open a second structural generation only after first-generation failure.
 
-        Novelty is relative to every currently registered model prediction
-        signature. Existing generated models become explicit parents in the new
-        compositional phenotype, preserving causal-model ancestry.
+        A compositional search cannot skip directly from the authored class. At
+        least one first-generation `GENERATED` parent must already exist and the
+        *current* ecology must again be independently refuted. Novelty is measured
+        against every registered model prediction signature.
         """
         if self.epistemic_depth_plan().mode != "EXPAND_MODEL_CLASS":
+            return []
+        if not any(model.origin == "GENERATED" for model in self.world_models.models.values()):
             return []
         existing = list(self.world_models.models.values())
         generated = self.program_genesis.generate_novel(
