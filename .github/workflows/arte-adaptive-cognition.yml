@@ -71,6 +71,7 @@ jobs:
           python -m py_compile evaluations/run_world_driven_primitive_genesis.py
           python -m py_compile evaluations/run_falsification_driven_linear_primitive_genesis.py
           python -m py_compile evaluations/run_generic_symbolic_primitive_search.py
+          python -m py_compile evaluations/run_persistent_primitive_developmental_resume.py
       - name: Run cognition tests
         run: python -m unittest discover -s arte_cognition -p 'test_*.py' -v
       - name: Generate evaluator-owned hidden world seeds
@@ -95,6 +96,7 @@ jobs:
           Path('/tmp/arte_primitive_genesis_seed').write_text(str(secrets.randbits(128)))
           Path('/tmp/arte_linear_primitive_seed').write_text(str(secrets.randbits(128)))
           Path('/tmp/arte_symbolic_primitive_seed').write_text(str(secrets.randbits(128)))
+          Path('/tmp/arte_primitive_resume_seed').write_text(str(secrets.randbits(128)))
           PY
       - name: Run hidden software-world descendant evaluation
         run: python evaluations/run_hidden_world_coupling.py /tmp/arte_hidden_world_seed
@@ -130,3 +132,5 @@ jobs:
         run: python evaluations/run_falsification_driven_linear_primitive_genesis.py /tmp/arte_linear_primitive_seed
       - name: Run generic symbolic primitive search evaluation
         run: python evaluations/run_generic_symbolic_primitive_search.py /tmp/arte_symbolic_primitive_seed
+      - name: Run checkpoint-resumed primitive developmental state evaluation
+        run: python evaluations/run_persistent_primitive_developmental_resume.py /tmp/arte_primitive_resume_seed
