@@ -39,6 +39,7 @@ jobs:
           python -m py_compile arte_cognition/cognitive_runtime.py
           python -m py_compile arte_cognition/body_checkpoint.py
           python -m py_compile evaluations/run_hidden_world_coupling.py
+          python -m py_compile evaluations/run_end_to_end_world_genesis.py
       - name: Run cognition tests
         run: python -m unittest discover -s arte_cognition -p 'test_*.py' -v
       - name: Generate evaluator-owned hidden world seed
@@ -47,6 +48,9 @@ jobs:
           import secrets
           from pathlib import Path
           Path('/tmp/arte_hidden_world_seed').write_text(str(secrets.randbits(128)))
+          Path('/tmp/arte_end_to_end_seed').write_text(str(secrets.randbits(128)))
           PY
       - name: Run hidden software-world descendant evaluation
         run: python evaluations/run_hidden_world_coupling.py /tmp/arte_hidden_world_seed
+      - name: Run raw-residual to descendant world-genesis evaluation
+        run: python evaluations/run_end_to_end_world_genesis.py /tmp/arte_end_to_end_seed
