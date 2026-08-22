@@ -46,6 +46,7 @@ jobs:
           python -m py_compile evaluations/run_world_caused_cognition_rewrite.py
           python -m py_compile evaluations/run_world_revision_causal_credit.py
           python -m py_compile evaluations/run_multi_episode_world_rewrite.py
+          python -m py_compile evaluations/run_matched_descendant_search_acceleration.py
       - name: Run cognition tests
         run: python -m unittest discover -s arte_cognition -p 'test_*.py' -v
       - name: Generate evaluator-owned hidden world seeds
@@ -59,6 +60,7 @@ jobs:
           Path('/tmp/arte_world_rewrite_seed').write_text(str(secrets.randbits(128)))
           Path('/tmp/arte_world_rewrite_credit_seed').write_text(str(secrets.randbits(128)))
           Path('/tmp/arte_multi_episode_rewrite_seed').write_text(str(secrets.randbits(128)))
+          Path('/tmp/arte_matched_descendant_accel_seed').write_text(str(secrets.randbits(128)))
           PY
       - name: Run hidden software-world descendant evaluation
         run: python evaluations/run_hidden_world_coupling.py /tmp/arte_hidden_world_seed
@@ -72,3 +74,5 @@ jobs:
         run: python evaluations/run_world_revision_causal_credit.py /tmp/arte_world_rewrite_credit_seed
       - name: Run multi-episode world rewrite persistence evaluation
         run: python evaluations/run_multi_episode_world_rewrite.py /tmp/arte_multi_episode_rewrite_seed
+      - name: Run matched descendant search acceleration evaluation
+        run: python evaluations/run_matched_descendant_search_acceleration.py /tmp/arte_matched_descendant_accel_seed
