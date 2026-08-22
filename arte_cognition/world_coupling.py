@@ -57,6 +57,9 @@ class WorldReceiptVerifier(Protocol):
     def verify(self, receipt: WorldOutcomeReceipt) -> bool:
         ...
 
+    def independence_class(self, receipt: WorldOutcomeReceipt) -> str:
+        ...
+
 
 class HMACWorldReceiptSigner:
     """Reference source-side signer; secret is never BODY checkpoint state."""
@@ -76,13 +79,30 @@ class HMACWorldReceiptSigner:
 
 
 class HMACWorldReceiptVerifier:
-    """LAB-side verifier with a frozen issuer->key trust map."""
+    """LAB-side verifier with frozen authenticity and independence authority.
 
-    def __init__(self, trusted_keys: Mapping[str, bytes]) -> None:
+    `trusted_keys` authenticates exact receipt payloads. `independence_classes`
+    separately controls which authenticated issuers count as genuinely distinct
+    evidence classes. If omitted, each trusted issuer is conservatively one class.
+    Mapping several issuers to the same class collapses them for independence
+    accounting even though each signature remains authentic.
+    """
+
+    def __init__(
+        self,
+        trusted_keys: Mapping[str, bytes],
+        independence_classes: Optional[Mapping[str, str]] = None,
+    ) -> None:
         self._trusted_keys = {
             str(issuer): bytes(secret)
             for issuer, secret in trusted_keys.items()
             if issuer and secret
+        }
+        supplied = dict(independence_classes or {})
+        self._independence_classes = {
+            issuer: str(supplied.get(issuer, issuer))
+            for issuer in self._trusted_keys
+            if str(supplied.get(issuer, issuer))
         }
 
     def verify(self, receipt: WorldOutcomeReceipt) -> bool:
@@ -95,6 +115,11 @@ class HMACWorldReceiptVerifier:
             hashlib.sha256,
         ).hexdigest()
         return hmac.compare_digest(expected, receipt.signature)
+
+    def independence_class(self, receipt: WorldOutcomeReceipt) -> str:
+        if receipt.issuer_id not in self._trusted_keys:
+            return "UNVERIFIED"
+        return self._independence_classes.get(receipt.issuer_id, receipt.issuer_id)
 
 
 @dataclass(frozen=True)
@@ -113,6 +138,7 @@ class WorldOutcomePair:
     matched_budget: bool
     externally_generated: bool
     issuer_id: str = "UNVERIFIED"
+    independence_class_id: str = "UNVERIFIED"
     authority_verified: bool = False
     low_receipt: Optional[WorldOutcomeReceipt] = None
     high_receipt: Optional[WorldOutcomeReceipt] = None
@@ -122,11 +148,16 @@ class WorldOutcomePair:
         return float(self.high_outcome) - float(self.low_outcome)
 
     @property
-    def independence_key(self) -> Tuple[str, str, str]:
-        return (self.issuer_id, self.source_id, self.challenge_id)
+    def independence_key(self) -> str:
+        # Independence is not self-asserted by source/challenge strings. It is a
+        # verifier-derived authority class. One issuer (or several correlated
+        # issuers mapped to one class) contributes at most one independent class.
+        return self.independence_class_id
 
     @property
     def contextual_evidence_key(self) -> Tuple[str, str, str, str]:
+        # Preserve distinct challenge receipts for audit/replay. Independence is
+        # collapsed later by `independence_key`, not by discarding raw evidence.
         return (self.context_id, self.issuer_id, self.source_id, self.challenge_id)
 
 
@@ -162,10 +193,11 @@ class WorldExecutor(Protocol):
 class WorldCouplingEngine:
     """Consume authenticated consequences and preserve re-verifiable evidence.
 
-    Signed raw receipts are retained in the BODY evidence lineage, but the secret
-    trust material is not. On restart, cached `authority_verified` flags are not
-    trusted: a LAB verifier must re-authenticate the stored receipts and their
-    consistency with the derived pair before they regain learning authority.
+    Signed raw receipts are retained in the BODY evidence lineage, but secret
+    trust material and evidence-independence authority are not. On restart,
+    cached `authority_verified` and `independence_class_id` values are ignored: a
+    LAB verifier must re-authenticate receipts and re-derive their independence
+    classes before they regain learning authority.
     """
 
     def __init__(self, min_independent_classes: int = 2) -> None:
@@ -174,7 +206,12 @@ class WorldCouplingEngine:
 
     @staticmethod
     def _authoritative(pair: WorldOutcomePair) -> bool:
-        return bool(pair.matched_budget and pair.externally_generated and pair.authority_verified)
+        return bool(
+            pair.matched_budget
+            and pair.externally_generated
+            and pair.authority_verified
+            and pair.independence_class_id != "UNVERIFIED"
+        )
 
     @staticmethod
     def _pair_matches_receipts(pair: WorldOutcomePair) -> bool:
@@ -223,6 +260,23 @@ class WorldCouplingEngine:
             and bool(pair.externally_generated) == bool(low.externally_generated and high.externally_generated)
             and bool(pair.matched_budget) == bool(low.budget_token and low.budget_token == high.budget_token)
         )
+
+    @staticmethod
+    def _independence_class(
+        verifier: Optional[WorldReceiptVerifier],
+        receipt: WorldOutcomeReceipt,
+    ) -> str:
+        if verifier is None:
+            return "UNVERIFIED"
+        resolver = getattr(verifier, "independence_class", None)
+        if callable(resolver):
+            value = resolver(receipt)
+            if value:
+                return str(value)
+        # Conservative compatibility fallback: a verifier that authenticates an
+        # issuer but has no explicit independence API can contribute only one
+        # class per issuer, never one per self-declared source/challenge.
+        return str(receipt.issuer_id) if receipt.issuer_id else "UNVERIFIED"
 
     def _contextual_evidence_keys(self, axis_id: str, context_id: str) -> set[Tuple[str, str, str, str]]:
         return {
@@ -282,17 +336,29 @@ class WorldCouplingEngine:
             matched_budget=bool(low.budget_token and low.budget_token == high.budget_token),
             externally_generated=bool(low.externally_generated and high.externally_generated),
             issuer_id=low.issuer_id,
+            independence_class_id="UNVERIFIED",
             authority_verified=False,
             low_receipt=low,
             high_receipt=high,
         )
-        authority_verified = bool(
+        signatures_verified = bool(
             verifier is not None
             and verifier.verify(low)
             and verifier.verify(high)
             and self._pair_matches_receipts(provisional)
         )
-        pair = replace(provisional, authority_verified=authority_verified)
+        low_class = self._independence_class(verifier, low) if signatures_verified else "UNVERIFIED"
+        high_class = self._independence_class(verifier, high) if signatures_verified else "UNVERIFIED"
+        authority_verified = bool(
+            signatures_verified
+            and low_class == high_class
+            and low_class != "UNVERIFIED"
+        )
+        pair = replace(
+            provisional,
+            authority_verified=authority_verified,
+            independence_class_id=low_class if authority_verified else "UNVERIFIED",
+        )
         self.record_pair(pair)
         return pair
 
@@ -303,7 +369,7 @@ class WorldCouplingEngine:
             and self._authoritative(pair)
             and (context_id is None or pair.context_id == context_id)
         ]
-        by_key: Dict[Tuple[str, str, str], WorldOutcomePair] = {}
+        by_key: Dict[str, WorldOutcomePair] = {}
         for pair in valid:
             by_key.setdefault(pair.independence_key, pair)
         unique = list(by_key.values())
@@ -396,7 +462,7 @@ class WorldCouplingEngine:
             if raw_pair.pair_id in seen_ids:
                 continue
             seen_ids.add(raw_pair.pair_id)
-            reverified = bool(
+            signatures_verified = bool(
                 verifier is not None
                 and raw_pair.low_receipt is not None
                 and raw_pair.high_receipt is not None
@@ -404,4 +470,23 @@ class WorldCouplingEngine:
                 and verifier.verify(raw_pair.high_receipt)
                 and self._pair_matches_receipts(raw_pair)
             )
-            self.pairs.append(replace(raw_pair, authority_verified=reverified))
+            low_class = (
+                self._independence_class(verifier, raw_pair.low_receipt)
+                if signatures_verified and raw_pair.low_receipt is not None
+                else "UNVERIFIED"
+            )
+            high_class = (
+                self._independence_class(verifier, raw_pair.high_receipt)
+                if signatures_verified and raw_pair.high_receipt is not None
+                else "UNVERIFIED"
+            )
+            reverified = bool(
+                signatures_verified
+                and low_class == high_class
+                and low_class != "UNVERIFIED"
+            )
+            self.pairs.append(replace(
+                raw_pair,
+                authority_verified=reverified,
+                independence_class_id=low_class if reverified else "UNVERIFIED",
+            ))
