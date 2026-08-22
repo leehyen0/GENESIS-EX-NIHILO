@@ -27,13 +27,18 @@ OLD_TRAIN = (
     ("ob3", 0.04, -0.02), ("ob4", -0.02, 0.04),
 )
 OLD_HELDOUT = (("oh1", -0.20, 0.10), ("oh2", 0.20, -0.10))
+
+# Same marginal x distribution as the old regime, but y is reflected. Neither
+# raw variable alone cleanly separates the labels; x-y does. This ensures the
+# changed-world task genuinely requires a relational representation rather than
+# allowing a raw parent feature to solve it by itself.
 NEW_TRAIN = (
-    ("na1", -1.00, 0.50), ("na2", -0.50, 1.00),
-    ("na3", -0.04, 0.02), ("na4", -0.02, 0.04),
-    ("nb1", 1.00, -0.50), ("nb2", 0.50, -1.00),
-    ("nb3", 0.04, -0.02), ("nb4", 0.02, -0.04),
+    ("na1", -1.00, -0.50), ("na2", 0.50, 1.00),
+    ("na3", -0.04, -0.02), ("na4", 0.02, 0.04),
+    ("nb1", 1.00, 0.50), ("nb2", -0.50, -1.00),
+    ("nb3", 0.04, 0.02), ("nb4", -0.02, -0.04),
 )
-NEW_HELDOUT = (("nh1", -0.20, 0.10), ("nh2", 0.20, -0.10))
+NEW_HELDOUT = (("nh1", -0.20, -0.10), ("nh2", 0.20, 0.10))
 
 
 class HiddenRegimeWorld:
@@ -209,10 +214,6 @@ def main(seed_path):
     if any(r.status == "PROPOSAL_ONLY" and r.proposal.axis_id == old_axis.axis_id for r in runtime.memory.experiments.values()):
         raise AssertionError("old experiments remained actionable")
 
-    # The DIFF regime is now parsimoniously captured by the built-in DIFFERENCE
-    # operator. The projection is intentionally quotiented out when both induce the
-    # same partition; this is a minimum-sufficient contraction, not a failure to
-    # regenerate cognition.
     new_world = HiddenRegimeWorld(scale, swap, feature_names, "DIFF", new_context, "new-observation-source", "new-observation-challenge", 9000, signers[issuer_ids[1]])
     new_measurements, new_residuals = build_observations(new_world, NEW_TRAIN, NEW_HELDOUT, label_flip)
     regeneration_residuals = [revision.residual] + new_residuals
