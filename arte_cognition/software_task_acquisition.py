@@ -93,6 +93,35 @@ class _SingleMutationTransformer(ast.NodeTransformer):
         return node
 
 
+class _MutationSiteCollector(ast.NodeVisitor):
+    """Enumerate repair sites in exactly the transformer's mutation order.
+
+    `ast.walk()` is breadth-first while `NodeTransformer.generic_visit()` is
+    depth-first. The old generator numbered sites with the former and applied them
+    with the latter, which stayed hidden on shallow microprograms but drifted on
+    real production ASTs. This collector deliberately mirrors the transformer's
+    post-order `generic_visit` sequence so `site_index` is one stable semantic
+    identity across enumeration and regeneration.
+    """
+
+    def __init__(self) -> None:
+        self.operator_ids: List[str] = []
+
+    def visit_Compare(self, node: ast.Compare):
+        self.generic_visit(node)
+        if len(node.ops) != 1:
+            return
+        mutation = _COMPARE_MUTATIONS.get(type(node.ops[0]))
+        if mutation is not None:
+            self.operator_ids.append(mutation[1])
+
+    def visit_BoolOp(self, node: ast.BoolOp):
+        self.generic_visit(node)
+        mutation = _BOOL_MUTATIONS.get(type(node.op))
+        if mutation is not None:
+            self.operator_ids.append(mutation[1])
+
+
 class PythonASTRepairGenerator:
     """Generate one-node Python AST repairs without consuming test outcomes.
 
@@ -104,18 +133,9 @@ class PythonASTRepairGenerator:
 
     @staticmethod
     def _site_operator_ids(source: str) -> Tuple[str, ...]:
-        tree = ast.parse(source)
-        operator_ids: List[str] = []
-        for node in ast.walk(tree):
-            if isinstance(node, ast.Compare) and len(node.ops) == 1:
-                mutation = _COMPARE_MUTATIONS.get(type(node.ops[0]))
-                if mutation is not None:
-                    operator_ids.append(mutation[1])
-            elif isinstance(node, ast.BoolOp):
-                mutation = _BOOL_MUTATIONS.get(type(node.op))
-                if mutation is not None:
-                    operator_ids.append(mutation[1])
-        return tuple(operator_ids)
+        collector = _MutationSiteCollector()
+        collector.visit(ast.parse(source))
+        return tuple(collector.operator_ids)
 
     @staticmethod
     def _source_hash(source: str) -> str:
