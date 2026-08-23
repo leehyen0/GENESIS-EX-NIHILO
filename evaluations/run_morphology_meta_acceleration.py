@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 import random
 import sys
-from dataclasses import asdict
 from pathlib import Path
 from typing import Dict, Iterable, Sequence, Tuple
 
@@ -29,7 +28,6 @@ def _token(rng: random.Random, prefix: str) -> str:
 
 def make_world(seed: int, label: str) -> Tuple[MorphologyGenome, Tuple[MorphologyResidual, ...], Dict[str, object]]:
     rng = random.Random((seed << 7) ^ sum(ord(ch) for ch in label))
-    sources = []
     primary = []
     alternate = []
     edges = []
@@ -41,7 +39,6 @@ def make_world(seed: int, label: str) -> Tuple[MorphologyGenome, Tuple[Morpholog
         a = _token(rng, f"alternate{index}")
         artifact = _token(rng, f"evidence{index}")
         edge_id = _token(rng, f"edge{index}")
-        sources.append(source)
         primary.append(p)
         alternate.append(a)
         organs.extend(
@@ -141,9 +138,7 @@ def programs_for_world(
         budget=5000,
         beam_width=len(pool),
     )
-    expected_complete = sum(
-        _permutations(len(pool), depth) for depth in range(1, max_depth + 1)
-    )
+    expected_complete = sum(_permutations(len(pool), depth) for depth in range(1, max_depth + 1))
     if len(programs) != expected_complete:
         raise AssertionError(f"mutation-program universe incomplete: {len(programs)} != {expected_complete}")
     return genome, hidden, programs, len(pool)
@@ -225,8 +220,6 @@ def main(seed_path: str) -> int:
     lower_depth_failure_costs = []
     heldout_program_ids = []
 
-    # G1->G2, G2->G3, G3->G4: each deeper language is opened only by two
-    # independent complete lower-depth failures, then tested on a fresh world.
     for required_depth in (2, 3, 4):
         state, failure_counts = open_next_depth(seed, state, strategy, required_depth)
         lower_depth_failure_costs.append(failure_counts)
@@ -236,37 +229,38 @@ def main(seed_path: str) -> int:
             strategy,
             state.max_depth,
         )
-        success, evaluated, program_id, effect = evaluate_programs(
-            genome, hidden, programs, required_depth
-        )
+        success, evaluated, program_id, effect = evaluate_programs(genome, hidden, programs, required_depth)
         if not success or effect < 1.0:
             raise AssertionError(f"depth-{required_depth} descendant failed fresh heldout world")
         frontier.append(required_depth)
         heldout_search_costs.append(evaluated)
         heldout_program_ids.append(program_id)
 
-        # Negative controls on the same fresh world.
         fixed_depth_programs = generate_mutation_programs(
-            candidate_pool(genome, (MorphologyResidual(
-                residual_id=f"remove::{required_depth}",
-                pressure=PressureVector(transfer_failure=1.0),
-                failed_edge_ids=tuple(hidden["edge_ids"]),
-                implicated_organ_ids=tuple(hidden["alternate_targets"]),
-            ),)),
+            candidate_pool(
+                genome,
+                (
+                    MorphologyResidual(
+                        residual_id=f"remove::{required_depth}",
+                        pressure=PressureVector(transfer_failure=1.0),
+                        failed_edge_ids=tuple(hidden["edge_ids"]),
+                        implicated_organ_ids=tuple(hidden["alternate_targets"]),
+                    ),
+                ),
+            ),
             strategy,
             max_depth=required_depth - 1,
             budget=5000,
             beam_width=pool_size,
         )
-        remove_success, _, _, _ = evaluate_programs(
-            genome, hidden, fixed_depth_programs, required_depth
-        )
+        remove_success, _, _, _ = evaluate_programs(genome, hidden, fixed_depth_programs, required_depth)
         if remove_success:
             raise AssertionError("REMOVE lower-depth control unexpectedly preserved frontier")
 
         wrong_program = next(
             (
-                program for program in programs
+                program
+                for program in programs
                 if program.depth == required_depth
                 and any(template.operation == "ADD_EDGE" for template in program.templates)
             ),
@@ -285,14 +279,22 @@ def main(seed_path: str) -> int:
     if frontier != [1, 2, 3, 4]:
         raise AssertionError(frontier)
 
-    # This experiment establishes developmental frontier growth, not acceleration.
-    # Search cost is measured and reported rather than tuned to make it monotonic.
-    frontier_per_heldout_eval = tuple(
-        depth / max(1, cost)
-        for depth, cost in zip((2, 3, 4), heldout_search_costs)
+    heldout_only_productivity = tuple(
+        depth / max(1, cost) for depth, cost in zip((2, 3, 4), heldout_search_costs)
     )
-    strictly_accelerating = all(
-        b > a for a, b in zip(frontier_per_heldout_eval, frontier_per_heldout_eval[1:])
+    total_generation_evaluation_costs = tuple(
+        int(sum(failure_counts) + heldout_cost)
+        for failure_counts, heldout_cost in zip(lower_depth_failure_costs, heldout_search_costs)
+    )
+    delta_frontier_per_total_evaluation = tuple(
+        1.0 / max(1, total_cost) for total_cost in total_generation_evaluation_costs
+    )
+    strict_total_meta_productivity_acceleration = all(
+        b > a
+        for a, b in zip(
+            delta_frontier_per_total_evaluation,
+            delta_frontier_per_total_evaluation[1:],
+        )
     )
 
     result = {
@@ -310,8 +312,11 @@ def main(seed_path: str) -> int:
         "lower_depth_complete_failure_evaluation_counts": lower_depth_failure_costs,
         "heldout_search_evaluation_counts": heldout_search_costs,
         "heldout_successful_program_ids": heldout_program_ids,
-        "frontier_per_heldout_evaluation": frontier_per_heldout_eval,
-        "strict_meta_productivity_acceleration_observed": strictly_accelerating,
+        "heldout_only_frontier_per_evaluation": heldout_only_productivity,
+        "total_generation_evaluation_costs": total_generation_evaluation_costs,
+        "delta_frontier_per_total_evaluation": delta_frontier_per_total_evaluation,
+        "strict_total_meta_productivity_acceleration_observed": strict_total_meta_productivity_acceleration,
+        "combinatorial_failure_proof_cost_observed": not strict_total_meta_productivity_acceleration,
         "remove_lower_depth_capability": 0.0,
         "wrong_program_capability": 0.0,
         "post_freeze_human_structural_repairs": 0,
