@@ -108,19 +108,66 @@ def training_examples():
     return tuple(reflective), tuple(named)
 
 
+def cost_only_schema(schema: ReflectiveRewriteSchema) -> ReflectiveRewriteSchema:
+    cost_relation = tuple(
+        relation
+        for relation in schema.relations
+        if relation.token() == "EQ(candidate.cost_hint,edge.priority)"
+    )
+    if len(cost_relation) != 1:
+        raise AssertionError("expected one generated cost/priority relation")
+    return ReflectiveRewriteSchema(
+        schema_id="cost-only-ablation",
+        operation=schema.operation,
+        relations=cost_relation,
+        supporting_contexts=schema.supporting_contexts,
+        supporting_source_classes=schema.supporting_source_classes,
+        supporting_program_ids=schema.supporting_program_ids,
+    )
+
+
+def semantic_wrong_schema(schema: ReflectiveRewriteSchema) -> ReflectiveRewriteSchema:
+    changed = []
+    replaced = 0
+    for relation in schema.relations:
+        if relation.token() == "EQ(candidate.cost_hint,edge.priority)":
+            changed.append(RelationExpression("EQ", FieldRef("candidate", "cost_hint"), FieldRef("source", "cost_hint")))
+            replaced += 1
+        else:
+            changed.append(relation)
+    if replaced != 1:
+        raise AssertionError("expected exactly one cost relation to wrong-swap")
+    return ReflectiveRewriteSchema(
+        schema_id="semantic-wrong-reflective-schema",
+        operation=schema.operation,
+        relations=tuple(changed),
+        supporting_contexts=schema.supporting_contexts,
+        supporting_source_classes=schema.supporting_source_classes,
+        supporting_program_ids=schema.supporting_program_ids,
+    )
+
+
 class ReflectiveRelationGenesisTests(unittest.TestCase):
     def test_named_relation_atom_predecessor_is_completely_inexpressive(self):
         _, named = training_examples()
         self.assertEqual(generate_rewrite_schemas(named), ())
 
-    def test_reflection_generates_previous_unlisted_cross_object_relations(self):
+    def test_reflection_generates_unlisted_relation_and_extra_relation_is_causally_required(self):
         reflective, _ = training_examples()
         schemas = generate_reflective_rewrite_schemas(reflective)
         self.assertTrue(schemas)
-        tokens = tuple(relation.token() for relation in schemas[0].relations)
+        schema = schemas[0]
+        tokens = tuple(relation.token() for relation in schema.relations)
         self.assertIn("EQ(candidate.cost_hint,edge.priority)", tokens)
-        self.assertIn("IN(edge.artifact_type,candidate.consumes)", tokens)
+        self.assertGreaterEqual(len(schema.relations), 2)
         self.assertFalse(any("SAME_KIND_AS_OLD_TARGET" in token for token in tokens))
+
+        # Do not prescribe the syntax of the second relation. Prove it matters:
+        # removing every generated relation except the cost equality must fail on
+        # a training world with deliberate cross-locus cost collisions.
+        example = reflective[1]
+        ablated = apply_reflective_rewrite_schema(example.genome, example.certificate, cost_only_schema(schema))
+        self.assertIsNone(ablated)
 
     def test_reflective_relation_transfers_to_unseen_kind_and_values(self):
         reflective, _ = training_examples()
@@ -132,24 +179,14 @@ class ReflectiveRelationGenesisTests(unittest.TestCase):
         self.assertEqual(application.outcome_evaluations, 0)
         descendant = apply_mutation_program(genome, application.mutation_program)
         self.assertEqual(capability(descendant, loci, good), 1.0)
+        self.assertIsNone(apply_reflective_rewrite_schema(genome, cert, cost_only_schema(schema)))
 
-    def test_semantic_wrong_reflective_relation_selects_distractor(self):
+    def test_semantic_wrong_preserves_generated_localizer_but_loses_capability(self):
         reflective, _ = training_examples()
         schema = generate_reflective_rewrite_schemas(reflective)[0]
         genome, loci, good, bad = world("wrong", 4, OrganKind.GENERATOR, 151.0)
         cert = certificate("wrong", loci)
-        wrong = ReflectiveRewriteSchema(
-            schema_id="wrong-reflective-schema",
-            operation="REWIRE_EDGE",
-            relations=(
-                RelationExpression("EQ", FieldRef("candidate", "cost_hint"), FieldRef("source", "cost_hint")),
-                RelationExpression("IN", FieldRef("edge", "artifact_type"), FieldRef("candidate", "consumes")),
-            ),
-            supporting_contexts=schema.supporting_contexts,
-            supporting_source_classes=schema.supporting_source_classes,
-            supporting_program_ids=schema.supporting_program_ids,
-        )
-        application = apply_reflective_rewrite_schema(genome, cert, wrong)
+        application = apply_reflective_rewrite_schema(genome, cert, semantic_wrong_schema(schema))
         self.assertIsNotNone(application)
         descendant = apply_mutation_program(genome, application.mutation_program)
         self.assertEqual(capability(descendant, loci, good), 0.0)
