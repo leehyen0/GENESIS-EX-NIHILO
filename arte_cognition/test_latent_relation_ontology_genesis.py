@@ -11,6 +11,9 @@ from arte_cognition.latent_relation_ontology_genesis import (
     select_authorized_latent_path,
 )
 from arte_cognition.world_coupling import WorldOutcomePair
+from evaluations.run_latent_relation_ontology_transfer import (
+    main as run_external_latent_relation_ontology_transfer,
+)
 
 
 def _world(context_id: str, prefix: str, domain: str, magnitude: float = 1.0):
@@ -133,6 +136,18 @@ class LatentRelationOntologyGenesisTests(unittest.TestCase):
         verifierless = tuple(_pair(schema.schema_id, p.context_id, "X", 1.0, False) for p in two)
         policy = derive_latent_path_policy((schema,), verifierless, 2, 2)
         self.assertIsNone(select_authorized_latent_path((schema,), policy))
+
+    def test_external_world_derived_ontology_cross_domain_transfer(self):
+        report = run_external_latent_relation_ontology_transfer()
+        self.assertEqual(
+            report["status"],
+            "PASS_BOUNDED_WORLD_DERIVED_LATENT_RELATION_ONTOLOGY_AND_CROSS_DOMAIN_PREOUTCOME_TRANSFER",
+        )
+        self.assertTrue(report["same_exact_schema_transferred_software_to_causal_world"])
+        self.assertEqual(report["treatment_capability"], 1.0)
+        self.assertEqual(report["remove_same_checkpoint_capability"], 0.0)
+        self.assertEqual(report["wrong_short_path_capability"], 0.0)
+        self.assertEqual(report["wrong_relation_token_capability"], 0.0)
 
 
 if __name__ == "__main__":
