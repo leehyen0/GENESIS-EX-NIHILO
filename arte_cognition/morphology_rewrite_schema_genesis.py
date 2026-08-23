@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from itertools import combinations
-from typing import Dict, Iterable, Mapping, Optional, Sequence, Tuple
+from typing import Dict, Mapping, Optional, Sequence, Tuple
 import hashlib
 import json
 
@@ -19,6 +19,7 @@ RELATION_ATOMS: Tuple[str, ...] = (
     "ENABLED",
     "CONSUMES_EDGE_ARTIFACT",
     "SAME_KIND_AS_OLD_TARGET",
+    "DIFFERENT_KIND_FROM_OLD_TARGET",
     "SAME_CONSUMES_SIGNATURE_AS_OLD_TARGET",
     "SAME_PRODUCES_SIGNATURE_AS_OLD_TARGET",
     "SAME_IMPLEMENTATION_REF_AS_OLD_TARGET",
@@ -93,6 +94,8 @@ def _organ_atom_truth(
         return edge.artifact_type in candidate.consumes
     if atom == "SAME_KIND_AS_OLD_TARGET":
         return candidate.kind == old_target.kind
+    if atom == "DIFFERENT_KIND_FROM_OLD_TARGET":
+        return candidate.kind != old_target.kind
     if atom == "SAME_CONSUMES_SIGNATURE_AS_OLD_TARGET":
         return tuple(candidate.consumes) == tuple(old_target.consumes)
     if atom == "SAME_PRODUCES_SIGNATURE_AS_OLD_TARGET":
