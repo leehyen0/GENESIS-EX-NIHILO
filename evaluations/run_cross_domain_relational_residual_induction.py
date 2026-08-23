@@ -6,7 +6,7 @@ import secrets
 import subprocess
 import sys
 from dataclasses import asdict
-from typing import Dict, Iterable, Optional, Sequence, Tuple
+from typing import Dict, Optional, Sequence, Tuple
 
 from arte_cognition.relational_residual_induction import (
     GeneratedRelationalPathSchema,
@@ -21,6 +21,25 @@ from arte_cognition.world_coupling import WorldOutcomePair
 
 
 STATUS = "PASS_BOUNDED_CROSS_DOMAIN_RELATIONAL_RESIDUAL_INDUCTION_AND_PREOUTCOME_TRANSFER"
+
+SOFTWARE_CAUSAL_STEPS = (
+    "FUNCTION-[PRODUCES]->MAPPING",
+    "MAPPING-[BOUND_AS]->BINDING",
+    "BINDING-[UNPACKED_INTO]->CALL",
+)
+SOFTWARE_DISTRACTOR_STEPS = (
+    "FUNCTION-[DECORATED_BY]->NAME",
+    "NAME-[MENTIONS]->CALL",
+)
+CAUSAL_WORLD_STEPS = (
+    "INTERVENTION-[EMITS]->SIGNAL",
+    "SIGNAL-[MEDIATED_BY]->STATE",
+    "STATE-[REACHES]->OUTCOME",
+)
+CAUSAL_DISTRACTOR_STEPS = (
+    "INTERVENTION-[TAGGED_BY]->CONTEXT",
+    "CONTEXT-[COEXISTS]->OUTCOME",
+)
 
 
 def _suffix() -> str:
@@ -77,17 +96,26 @@ def _hash_context(context: RelationalContext) -> str:
 def _external_execute(
     context: RelationalContext,
     schema: Optional[GeneratedRelationalPathSchema],
+    evaluator_causal_steps: Tuple[str, ...],
 ) -> float:
-    """Evaluate in a fresh Python subprocess that does not import the ARTE inducer."""
+    """Fresh subprocess world: structural existence is not sufficient for success.
+
+    The BODY receives the structural context before selection, but the evaluator's
+    causal-success path is supplied only to this external execution surface after
+    candidate generation. This prevents a merely present distractor path from
+    becoming authoritative without positive world consequence.
+    """
     payload = {
         "context": _context_payload(context),
         "steps": list(schema.steps) if schema is not None else [],
+        "causal_steps": list(evaluator_causal_steps),
     }
     child = r'''
 import json, sys
 p = json.loads(sys.stdin.read())
 c = p["context"]
 steps = tuple(p["steps"])
+causal_steps = tuple(p["causal_steps"])
 if not steps:
     print("0")
     raise SystemExit(0)
@@ -109,7 +137,7 @@ def walk(node, visited, path):
             found.add(nxt)
         walk(e["target"], visited + (e["target"],), nxt)
 walk(c["source_anchor"], (c["source_anchor"],), ())
-print("1" if steps in found else "0")
+print("1" if steps in found and steps == causal_steps else "0")
 '''
     result = subprocess.run(
         [sys.executable, "-c", child],
@@ -158,19 +186,20 @@ def _freeze_candidates(
     if assessment.status != "RELATIONAL_RESIDUAL_OPEN_INDUCTION":
         raise AssertionError("repeated residual gate did not open")
     schemas = inducer.generate_candidates(assessment, contexts)
-    if not schemas:
-        raise AssertionError("no relational schema generated")
+    if len(schemas) < 2:
+        raise AssertionError("evaluator requires a causal path plus a structural distractor")
     return schemas
 
 
 def _authority_pairs(
     schemas: Sequence[GeneratedRelationalPathSchema],
     contexts: Sequence[RelationalContext],
+    causal_steps: Tuple[str, ...],
 ) -> Tuple[WorldOutcomePair, ...]:
     pairs = []
     for schema in schemas:
         for context in contexts:
-            effect = _external_execute(context, schema)
+            effect = _external_execute(context, schema, causal_steps)
             for cls in ("AUTH_A", "AUTH_B"):
                 pairs.append(_pair(schema, context, cls, f"{context.domain.lower()}::{cls}", effect))
     return tuple(pairs)
@@ -180,12 +209,22 @@ def _assert_domain(
     inducer: RelationalResidualInducer,
     train: Sequence[RelationalContext],
     heldout: RelationalContext,
-) -> Tuple[GeneratedRelationalPathSchema, int, int, Tuple[WorldOutcomePair, ...]]:
+    causal_steps: Tuple[str, ...],
+    distractor_steps: Tuple[str, ...],
+) -> Tuple[
+    GeneratedRelationalPathSchema,
+    GeneratedRelationalPathSchema,
+    int,
+    Tuple[WorldOutcomePair, ...],
+]:
     schemas = _freeze_candidates(inducer, train)
     frozen_ids = tuple(schema.schema_id for schema in schemas)
+    schema_by_steps = {schema.steps: schema for schema in schemas}
+    if causal_steps not in schema_by_steps or distractor_steps not in schema_by_steps:
+        raise AssertionError("expected causal/distractor structural candidates not generated")
 
-    # Candidate freeze occurs before any training outcome is produced.
-    pairs = _authority_pairs(schemas, train)
+    # Only now are candidate consequences exposed by the external world.
+    pairs = _authority_pairs(schemas, train, causal_steps)
     if tuple(schema.schema_id for schema in schemas) != frozen_ids:
         raise AssertionError("candidate set changed after world outcomes")
 
@@ -211,14 +250,17 @@ def _assert_domain(
 
     policy = derive_relational_path_policy(schemas, pairs, 2, 2)
     selected = select_authorized_relational_path_schema(schemas, policy)
-    if selected is None:
-        raise AssertionError("authoritative repeated evidence did not select a relation path")
+    if selected is None or selected.steps != causal_steps:
+        raise AssertionError("world consequences did not select the causal path")
 
-    # Freeze the heldout action before exposing heldout execution outcome.
-    selected_before_heldout_outcome = int(inducer.matches(selected, heldout))
-    if selected_before_heldout_outcome != 1:
-        raise AssertionError("learned relation path did not transfer structurally to heldout")
-    return selected, len(schemas), selected_before_heldout_outcome, pairs
+    distractor = schema_by_steps[distractor_steps]
+    if not inducer.matches(distractor, heldout):
+        raise AssertionError("distractor must remain structurally valid on heldout")
+    if not inducer.matches(selected, heldout):
+        raise AssertionError("learned causal path did not transfer structurally to heldout")
+
+    # Both actions are frozen before any heldout outcome is exposed.
+    return selected, distractor, len(schemas), pairs
 
 
 def main() -> Dict[str, object]:
@@ -233,51 +275,67 @@ def main() -> Dict[str, object]:
         _causal_context("causal-train-b", _suffix()),
     )
 
-    software_schemas_pre = _freeze_candidates(inducer, software_train)
-    causal_schemas_pre = _freeze_candidates(inducer, causal_train)
-    pre_outcome_freeze = {
-        "software": tuple(schema.schema_id for schema in software_schemas_pre),
-        "causal": tuple(schema.schema_id for schema in causal_schemas_pre),
+    # Freeze both candidate vocabularies before producing any world consequence.
+    software_pre = _freeze_candidates(inducer, software_train)
+    causal_pre = _freeze_candidates(inducer, causal_train)
+    frozen_before_world = {
+        "software": tuple(schema.schema_id for schema in software_pre),
+        "causal": tuple(schema.schema_id for schema in causal_pre),
     }
 
     software_heldout = _software_context("software-heldout", _suffix())
     causal_heldout = _causal_context("causal-heldout", _suffix())
 
-    selected_software, software_count, software_preheldout, software_pairs = _assert_domain(
-        inducer, software_train, software_heldout
+    selected_software, wrong_software, software_count, software_pairs = _assert_domain(
+        inducer,
+        software_train,
+        software_heldout,
+        SOFTWARE_CAUSAL_STEPS,
+        SOFTWARE_DISTRACTOR_STEPS,
     )
-    selected_causal, causal_count, causal_preheldout, causal_pairs = _assert_domain(
-        inducer, causal_train, causal_heldout
+    selected_causal, wrong_causal, causal_count, causal_pairs = _assert_domain(
+        inducer,
+        causal_train,
+        causal_heldout,
+        CAUSAL_WORLD_STEPS,
+        CAUSAL_DISTRACTOR_STEPS,
     )
 
-    if pre_outcome_freeze["software"] != tuple(schema.schema_id for schema in software_schemas_pre):
+    if frozen_before_world["software"] != tuple(schema.schema_id for schema in software_pre):
         raise AssertionError("software candidate freeze changed")
-    if pre_outcome_freeze["causal"] != tuple(schema.schema_id for schema in causal_schemas_pre):
+    if frozen_before_world["causal"] != tuple(schema.schema_id for schema in causal_pre):
         raise AssertionError("causal candidate freeze changed")
 
+    # Heldout consequences are exposed only after Treatment/WRONG actions are frozen.
     treatment = (
-        _external_execute(software_heldout, selected_software),
-        _external_execute(causal_heldout, selected_causal),
+        _external_execute(software_heldout, selected_software, SOFTWARE_CAUSAL_STEPS),
+        _external_execute(causal_heldout, selected_causal, CAUSAL_WORLD_STEPS),
     )
     remove = (
-        _external_execute(software_heldout, None),
-        _external_execute(causal_heldout, None),
+        _external_execute(software_heldout, None, SOFTWARE_CAUSAL_STEPS),
+        _external_execute(causal_heldout, None, CAUSAL_WORLD_STEPS),
     )
-    # Cross-domain wrong-swap is a genuine learned schema with matched execution budget.
-    wrong = (
-        _external_execute(software_heldout, selected_causal),
-        _external_execute(causal_heldout, selected_software),
+    same_domain_wrong = (
+        _external_execute(software_heldout, wrong_software, SOFTWARE_CAUSAL_STEPS),
+        _external_execute(causal_heldout, wrong_causal, CAUSAL_WORLD_STEPS),
+    )
+    cross_domain_wrong = (
+        _external_execute(software_heldout, selected_causal, SOFTWARE_CAUSAL_STEPS),
+        _external_execute(causal_heldout, selected_software, CAUSAL_WORLD_STEPS),
     )
 
-    treatment_capability = sum(treatment) / len(treatment)
-    remove_capability = sum(remove) / len(remove)
-    wrong_capability = sum(wrong) / len(wrong)
+    treatment_capability = sum(treatment) / 2.0
+    remove_capability = sum(remove) / 2.0
+    wrong_capability = sum(same_domain_wrong) / 2.0
+    cross_wrong_capability = sum(cross_domain_wrong) / 2.0
     if treatment_capability != 1.0:
         raise AssertionError(f"treatment capability mismatch: {treatment}")
     if remove_capability != 0.0:
         raise AssertionError(f"REMOVE retained capability: {remove}")
     if wrong_capability != 0.0:
-        raise AssertionError(f"WRONG retained capability: {wrong}")
+        raise AssertionError(f"structurally valid WRONG retained capability: {same_domain_wrong}")
+    if cross_wrong_capability != 0.0:
+        raise AssertionError(f"cross-domain WRONG retained capability: {cross_domain_wrong}")
 
     software_hashes = tuple(_hash_context(context) for context in (*software_train, software_heldout))
     causal_hashes = tuple(_hash_context(context) for context in (*causal_train, causal_heldout))
@@ -291,30 +349,35 @@ def main() -> Dict[str, object]:
         "domains": ["SOFTWARE", "CAUSAL_WORLD"],
         "candidate_generation_uses_world_outcomes": False,
         "candidate_freeze_before_world_outcomes": True,
+        "world_outcomes_discriminate_structurally_valid_paths": True,
         "software_generated_schema_count": software_count,
         "causal_generated_schema_count": causal_count,
         "software_learned_schema_id": selected_software.schema_id,
         "causal_learned_schema_id": selected_causal.schema_id,
         "software_learned_steps": list(selected_software.steps),
         "causal_learned_steps": list(selected_causal.steps),
-        "software_selected_before_heldout_outcome": bool(software_preheldout),
-        "causal_selected_before_heldout_outcome": bool(causal_preheldout),
+        "software_structurally_valid_wrong_steps": list(wrong_software.steps),
+        "causal_structurally_valid_wrong_steps": list(wrong_causal.steps),
+        "heldout_actions_frozen_before_heldout_outcomes": True,
         "software_training_authority_pair_count": len(software_pairs),
         "causal_training_authority_pair_count": len(causal_pairs),
         "one_context_insufficient_for_authority": True,
         "verifierless_policy_authority": False,
         "heldout_source_disjoint": True,
-        "external_execution": "fresh_python_subprocess_independent_path_evaluator",
+        "external_execution": "fresh_python_subprocess_with_evaluator_owned_causal_success_path",
         "treatment_external_execution_count": 2,
         "treatment_capability": treatment_capability,
         "remove_external_execution_count": 2,
         "remove_same_checkpoint_capability": remove_capability,
-        "wrong_external_execution_count": 2,
-        "wrong_cross_domain_schema_swap_capability": wrong_capability,
+        "wrong_structurally_valid_external_execution_count": 2,
+        "wrong_structurally_valid_capability": wrong_capability,
+        "wrong_cross_domain_external_execution_count": 2,
+        "wrong_cross_domain_schema_swap_capability": cross_wrong_capability,
         "edge_relation_vocabulary_human_authored": True,
         "node_kind_vocabulary_human_authored": True,
         "domain_graph_adapters_human_authored": True,
         "path_enumerator_human_authored": True,
+        "evaluator_causal_semantics_human_authored": True,
         "max_depth_human_authored": True,
         "natural_historical_cross_domain_failure": False,
         "unrestricted_meta_language_genesis": False,
