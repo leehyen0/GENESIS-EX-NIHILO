@@ -1,0 +1,30 @@
+name: arte-source-derived-dataflow-path
+
+on:
+  pull_request:
+    paths:
+      - 'arte_cognition/software_selector_dataflow_path_genesis.py'
+      - 'arte_cognition/test_selector_dataflow_path_genesis.py'
+      - 'evaluations/run_source_derived_dataflow_path_genesis.py'
+      - '.github/workflows/arte-source-derived-dataflow-path.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  dataflow-path-frontier:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile new frontier
+        run: |
+          python -m py_compile arte_cognition/software_selector_dataflow_path_genesis.py
+          python -m py_compile arte_cognition/test_selector_dataflow_path_genesis.py
+          if [ -f evaluations/run_source_derived_dataflow_path_genesis.py ]; then python -m py_compile evaluations/run_source_derived_dataflow_path_genesis.py; fi
+      - name: Run focused source-derived dataflow path contract
+        run: python -m unittest arte_cognition.test_selector_dataflow_path_genesis -v
