@@ -53,4 +53,4 @@ jobs:
           Path('/tmp/arte_morphology_meta_acceleration_seed').write_text(str(secrets.randbits(128)))
           PY
       - name: Run hidden morphology meta-acceleration evaluation
-        run: python evaluations/run_morphology_meta_acceleration.py /tmp/arte_morphology_meta_acceleration_seed
+        run: PYTHONPATH=. python evaluations/run_morphology_meta_acceleration.py /tmp/arte_morphology_meta_acceleration_seed
