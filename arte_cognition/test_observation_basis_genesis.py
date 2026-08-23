@@ -13,6 +13,9 @@ from arte_cognition.observation_basis_genesis import (
     select_authorized_observation_schema,
 )
 from arte_cognition.world_coupling import WorldOutcomePair
+from evaluations.run_observation_basis_transfer import (
+    main as run_external_observation_basis_transfer,
+)
 
 
 def _multi_lag_world(
@@ -35,7 +38,6 @@ def _multi_lag_world(
             high = [{node: 0.0 for node in all_nodes} for _ in range(3)]
             high[0][nodes[source_index]] = float(magnitude)
             high[lag][nodes[source_index + 1]] = float(sign) * float(magnitude)
-            # Equal low/high decoy activity is observational clutter, not a relation.
             low[min(2, lag)][decoy] = float(repeat + 1)
             high[min(2, lag)][decoy] = float(repeat + 1)
             rows.append(contrast(
@@ -84,10 +86,7 @@ class ObservationBasisGenesisTests(unittest.TestCase):
             lag=1, min_effect=0.1, min_repeats=2, max_path_depth=8
         )
         assessment = predecessor.assess_residual(worlds, (0, 0), min_contexts=2)
-        self.assertEqual(
-            assessment.status,
-            "OPAQUE_RELATION_ONTOLOGY_RESIDUAL_OPEN",
-        )
+        self.assertEqual(assessment.status, "OPAQUE_RELATION_ONTOLOGY_RESIDUAL_OPEN")
         self.assertEqual(predecessor.generate_candidates(assessment, worlds), ())
         for _ in range(16):
             self.assertEqual(predecessor.generate_candidates(assessment, worlds), ())
@@ -179,6 +178,20 @@ class ObservationBasisGenesisTests(unittest.TestCase):
         )
         policy = derive_observation_basis_policy((schema,), verifierless, 2, 2)
         self.assertIsNone(select_authorized_observation_schema((schema,), policy))
+
+    def test_external_multilag_observation_basis_preoutcome_transfer(self):
+        report = run_external_observation_basis_transfer()
+        self.assertEqual(
+            report["status"],
+            "PASS_BOUNDED_WORLD_DERIVED_OBSERVATION_BASIS_AND_CROSS_DOMAIN_PREOUTCOME_TRANSFER",
+        )
+        self.assertEqual(report["predecessor_selected_count"], 0)
+        self.assertEqual(report["predecessor_more_compute_selected_count"], 0)
+        self.assertEqual(report["generated_observation_lags"], [1, 2])
+        self.assertEqual(report["treatment_capability"], 1.0)
+        self.assertEqual(report["remove_same_checkpoint_capability"], 0.0)
+        self.assertEqual(report["wrong_temporal_basis_capability"], 0.0)
+        self.assertEqual(report["wrong_relation_sign_capability"], 0.0)
 
 
 if __name__ == "__main__":
