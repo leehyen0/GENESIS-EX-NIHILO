@@ -65,6 +65,13 @@ class MutationProgram:
 
 
 @dataclass(frozen=True)
+class MutationProgramDevelopmentState:
+    max_depth: int = 1
+    complete_failure_receipts: Tuple[Tuple[str, str], ...] = ()
+    lineage_hash: str = ""
+
+
+@dataclass(frozen=True)
 class GenerationMetrics:
     generation: int
     body_hash: str
@@ -202,6 +209,7 @@ def generate_mutation_programs(
     strategy: MutationStrategyState,
     max_depth: int = 2,
     budget: int = 128,
+    beam_width: int = 8,
 ) -> Tuple[MutationProgram, ...]:
     """Compose previously generated structural mutations before current outcomes.
 
@@ -210,7 +218,7 @@ def generate_mutation_programs(
     externally verified generations, never from current candidate consequences.
     """
     ranked = MetaMutationLearner.rank(strategy, candidates)
-    templates = tuple(_template(candidate) for candidate in ranked)
+    templates = tuple(_template(candidate) for candidate in ranked[: max(1, int(beam_width))])
     programs: Dict[Tuple[str, ...], MutationProgram] = {}
 
     def add(items: Tuple[MutationTemplate, ...]) -> None:
@@ -227,14 +235,17 @@ def generate_mutation_programs(
             ),
         )
 
-    for item in templates:
-        add((item,))
-    if max_depth >= 2:
-        for left in templates:
-            for right in templates:
-                if left.fingerprint() == right.fingerprint():
-                    continue
-                add((left, right))
+    depth_limit = max(1, int(max_depth))
+
+    def extend(prefix: Tuple[MutationTemplate, ...], remaining: Tuple[MutationTemplate, ...]) -> None:
+        if prefix:
+            add(prefix)
+        if len(prefix) >= depth_limit:
+            return
+        for index, item in enumerate(remaining):
+            extend(prefix + (item,), remaining[:index] + remaining[index + 1 :])
+
+    extend((), templates)
 
     def program_score(program: MutationProgram) -> float:
         return sum(strategy.score(item.operation) for item in program.templates) - 0.05 * max(0, program.depth - 1)
@@ -260,6 +271,57 @@ def apply_mutation_program(genome: MorphologyGenome, program: MutationProgram) -
         )
         current = mutator.apply(current, mutation)
     return current
+
+
+def observe_complete_program_failure(
+    state: MutationProgramDevelopmentState,
+    *,
+    context_id: str,
+    source_class: str,
+    candidate_universe_complete: bool,
+    any_success: bool,
+    authority_verified: bool,
+    benchmark_disjoint: bool,
+    max_depth_cap: int = 8,
+) -> MutationProgramDevelopmentState:
+    """Open a deeper mutation-program language only after repeated complete failure.
+
+    The depth change is a search-policy development event, not action authority. It
+    requires two distinct contexts and two external evidence classes and therefore
+    cannot be opened by a single lucky/failed run or by verifierless feedback.
+    """
+    if (
+        not candidate_universe_complete
+        or any_success
+        or not authority_verified
+        or not benchmark_disjoint
+        or not source_class
+        or source_class == "UNVERIFIED"
+    ):
+        return state
+
+    receipts = set(state.complete_failure_receipts)
+    receipts.add((str(context_id), str(source_class)))
+    contexts = {context for context, _ in receipts}
+    classes = {source for _, source in receipts}
+    open_deeper = len(contexts) >= 2 and len(classes) >= 2 and state.max_depth < max(1, int(max_depth_cap))
+    next_depth = state.max_depth + 1 if open_deeper else state.max_depth
+    retained_receipts = () if open_deeper else tuple(sorted(receipts))
+    payload = {
+        "parent": state.lineage_hash,
+        "old_depth": state.max_depth,
+        "new_depth": next_depth,
+        "receipts": sorted(receipts),
+        "opened": open_deeper,
+    }
+    lineage_hash = hashlib.sha256(
+        json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
+    return MutationProgramDevelopmentState(
+        max_depth=next_depth,
+        complete_failure_receipts=retained_receipts,
+        lineage_hash=lineage_hash,
+    )
 
 
 @dataclass
