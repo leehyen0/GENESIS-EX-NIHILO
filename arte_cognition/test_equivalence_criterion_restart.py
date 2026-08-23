@@ -39,5 +39,24 @@ class EquivalenceCriterionRestartTests(unittest.TestCase):
         self.assertIsNotNone(restored)
         self.assertEqual(restored.criterion_id,selected.criterion_id)
 
+    def test_fresh_unseen_measurement_system_matches_structure_but_cannot_self_authorize(self):
+        training=self._training()
+        descendant=WorldDerivedEquivalenceCriterionInducer(min_repeats=2)
+        criteria=descendant.generate_candidates(
+            descendant.assess_residual(training,(0,0),2),training
+        )
+        self.assertEqual(len(criteria),2)
+
+        # Exponent 3 is absent from both training worlds. Structural transfer must
+        # come from the learned cross-context order/sign quotient, not a reused
+        # candidate object or a named measurement transform.
+        heldout=_world("restart-heldout","gamma_restart",3)
+        self.assertEqual(sum(int(descendant.matches(c,heldout)) for c in criteria),2)
+
+        # Matching a fresh world is not authority. Without externally reverified
+        # receipts no generated criterion may steer selection after restart.
+        policy=derive_equivalence_policy(criteria,(),2,2)
+        self.assertIsNone(select_authorized_equivalence(criteria,policy))
+
 
 if __name__=="__main__": unittest.main()
