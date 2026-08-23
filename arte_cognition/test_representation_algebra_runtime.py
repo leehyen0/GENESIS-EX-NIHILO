@@ -30,12 +30,15 @@ class RepresentationAlgebraRuntimeTests(unittest.TestCase):
         self.assertGreater(len(candidates), 0)
         return candidates[0]
 
-    def test_canonical_checkpoint_uses_most_specific_algebra_runtime_kind(self):
+    def _runtime_with_lineage(self):
         runtime = WorldDrivenRepresentationAlgebraRuntime()
         candidate = self._candidate()
         runtime.world_models.register([candidate.model])
         runtime._remember_composition_laws([candidate])
+        return runtime, candidate
 
+    def test_canonical_checkpoint_uses_most_specific_algebra_runtime_kind(self):
+        runtime, _ = self._runtime_with_lineage()
         payload = checkpoint_dict(runtime)
         self.assertEqual(
             payload["canonical_body"]["runtime_kind"],
@@ -66,15 +69,8 @@ class RepresentationAlgebraRuntimeTests(unittest.TestCase):
         self.assertEqual(restored.raw_observation_memory, {})
 
     def test_algebra_namespace_cannot_be_rehashed_as_primitive_downcast(self):
-        runtime = WorldDrivenRepresentationAlgebraRuntime()
-        candidate = self._candidate()
-        runtime.world_models.register([candidate.model])
-        runtime._remember_composition_laws([candidate])
+        runtime, _ = self._runtime_with_lineage()
         payload = checkpoint_dict(runtime)
-
-        payload.pop("representation_algebra_schema")
-        payload.pop("composition_law_lineage")
-        payload.pop("composition_law_policy")
         payload["canonical_body"]["runtime_kind"] = "WORLD_DRIVEN_PRIMITIVE_RUNTIME"
         payload["canonical_body"]["required_namespaces"] = [
             "policy",
@@ -90,18 +86,18 @@ class RepresentationAlgebraRuntimeTests(unittest.TestCase):
         payload["canonical_body"]["integrity_sha256"] = ""
         payload["canonical_body"]["integrity_sha256"] = integrity_sha256(payload)
 
-        # This payload is internally a valid primitive checkpoint only because the
-        # algebra namespaces were deliberately deleted. The causal protection is
-        # therefore the canonical writer: callers cannot serialize an algebra BODY
-        # through the primitive path in the first place. Verify the unmodified
-        # checkpoint does restore as algebra and does not silently downcast.
-        original = checkpoint_dict(runtime)
-        restored = restore_runtime(original)
-        self.assertIsInstance(restored, WorldDrivenRepresentationAlgebraRuntime)
-        self.assertNotEqual(
-            original["canonical_body"]["runtime_kind"],
-            payload["canonical_body"]["runtime_kind"],
-        )
+        with self.assertRaisesRegex(ValueError, "downcast/schema mismatch"):
+            restore_runtime(payload)
+
+    def test_missing_algebra_lineage_namespace_fails_even_with_recomputed_hash(self):
+        runtime, _ = self._runtime_with_lineage()
+        payload = checkpoint_dict(runtime)
+        payload.pop("composition_law_lineage")
+        payload["canonical_body"]["integrity_sha256"] = ""
+        payload["canonical_body"]["integrity_sha256"] = integrity_sha256(payload)
+
+        with self.assertRaisesRegex(ValueError, "missing required state namespaces"):
+            restore_runtime(payload)
 
 
 if __name__ == "__main__":
