@@ -71,9 +71,6 @@ class _HeldoutKeywordToPositional(ast.NodeTransformer):
                 kept.append(keyword)
         if heldout is None:
             return node
-        # ResidualObservation(residual_id, features, outcome, source_class='OBSERVATION', heldout=False)
-        # Encode the same binding through positional syntax. This is an evaluator-created
-        # syntax-equivalent counterfactual, not a claimed natural historical commit.
         if len(node.args) != 3:
             raise AssertionError("syntax-shift probe expected three positional ResidualObservation arguments")
         node.args = list(node.args) + [ast.Constant(value="OBSERVATION"), ast.Constant(value=True)]
@@ -87,8 +84,8 @@ def _syntax_shift_heldout_binding(source: str) -> str:
     transformer = _HeldoutKeywordToPositional()
     shifted = transformer.visit(tree)
     ast.fix_missing_locations(shifted)
-    if transformer.changed != 1:
-        raise AssertionError(f"expected exactly one heldout syntax shift, got {transformer.changed}")
+    if transformer.changed < 1:
+        raise AssertionError("syntax-shift probe found no heldout=True binding")
     return ast.unparse(shifted) + "\n"
 
 
@@ -149,21 +146,16 @@ def _reconstruct_inherited_authority(body, signers, verifier):
         "random_selector": random_selector,
         "learned_program": learned_program,
         "learned_selector": learned_selector,
-        "selector_proposals": selector_proposals,
     }
 
 
 def _inexpressivity_context(learned_program, learned_selector, source: str, path: str, selector: str, context: str):
     _, stderr, failure_line = _baseline_environment(source, path, selector)
     environment = MinimalUpstreamEnvironment(source, path, selector, failure_line)
-    frontier = generate_upstream_patch_candidates(
-        learned_program, stderr, source, path, max_candidates=256
-    )
+    frontier = generate_upstream_patch_candidates(learned_program, stderr, source, path, max_candidates=256)
     if not frontier:
         raise AssertionError("representation probe lost inherited repair frontier")
-    old_selected = select_upstream_patch(
-        learned_selector, frontier, source, failure_line
-    )
+    old_selected = select_upstream_patch(learned_selector, frontier, source, failure_line)
     return {
         "context": SelectorRepresentationContext(
             context_id=context,
@@ -178,27 +170,12 @@ def _inexpressivity_context(learned_program, learned_selector, source: str, path
     }
 
 
-def _train_representation_context(
-    body,
-    proposals,
-    learned_selector,
-    schema,
-    row,
-    *,
-    context: str,
-    signers,
-    verifier,
-    epoch_base: int,
-):
+def _train_representation_context(body, proposals, learned_selector, schema, row, *, context: str, signers, verifier, epoch_base: int):
     outcomes = []
     for index, item in enumerate(proposals):
         selected = select_upstream_patch_with_representation(
-            learned_selector,
-            item.representation,
-            row["frontier"],
-            row["environment"].source,
-            row["failure_line"],
-            schema,
+            learned_selector, item.representation, row["frontier"],
+            row["environment"].source, row["failure_line"], schema,
         )
         if selected is None:
             outcomes.append((item, None, ()))
@@ -210,10 +187,7 @@ def _train_representation_context(
         outcomes.append((item, selected, effects))
     strong = [item for item in outcomes if item[1] is not None and item[2] and min(item[2]) >= 0.9]
     if len(strong) != 1:
-        detail = [
-            (item[0].representation.mode, None if item[1] is None else item[1].candidate_id, list(item[2]))
-            for item in outcomes
-        ]
+        detail = [(item[0].representation.mode, None if item[1] is None else item[1].candidate_id, list(item[2])) for item in outcomes]
         raise AssertionError(f"representation world evidence did not isolate one candidate: {detail}")
     return {"rows": outcomes, "strong": strong[0]}
 
@@ -225,35 +199,30 @@ def main() -> None:
     learned_program = inherited["learned_program"]
     learned_selector = inherited["learned_selector"]
 
-    # Create a syntax-equivalent counterfactual from the exact historical source and
-    # a source-disjoint randomized context. Both retain the 10-candidate repair frontier,
-    # but #85's surface keyword marker cannot denote any candidate.
     shifted_historical = _syntax_shift_heldout_binding(inherited["historical_source"])
     shifted_random = _syntax_shift_heldout_binding(inherited["random_source"])
     historical_gap = _inexpressivity_context(
-        learned_program, learned_selector,
-        shifted_historical, HISTORICAL_PATH, HISTORICAL_SELECTOR,
+        learned_program, learned_selector, shifted_historical, HISTORICAL_PATH, HISTORICAL_SELECTOR,
         "syntax-shifted-historical-derived",
     )
     random_gap = _inexpressivity_context(
-        learned_program, learned_selector,
-        shifted_random, inherited["random_path"], inherited["random_selector"],
+        learned_program, learned_selector, shifted_random, inherited["random_path"], inherited["random_selector"],
         "syntax-shifted-randomized",
     )
     if historical_gap["old_selected"] is not None or random_gap["old_selected"] is not None:
         raise AssertionError("#85 surface selector unexpectedly survived positional-binding syntax shift")
 
-    old_frontier_hashes = tuple(sorted(item.candidate_id for item in historical_gap["frontier"]))
+    old_frontier_ids = tuple(sorted(item.candidate_id for item in historical_gap["frontier"]))
     for _ in range(16):
-        repeated = _inexpressivity_context(
-            learned_program, learned_selector,
-            shifted_historical, HISTORICAL_PATH, HISTORICAL_SELECTOR,
-            "repeat-not-authority",
+        repeated_frontier = generate_upstream_patch_candidates(
+            learned_program, historical_gap["stderr"], shifted_historical, HISTORICAL_PATH, max_candidates=256
         )
-        if repeated["old_selected"] is not None:
-            raise AssertionError("OLD+MORE_COMPUTE unexpectedly created surface selector applicability")
-        if tuple(sorted(item.candidate_id for item in repeated["frontier"])) != old_frontier_hashes:
+        if tuple(sorted(item.candidate_id for item in repeated_frontier)) != old_frontier_ids:
             raise AssertionError("OLD+MORE_COMPUTE changed inherited repair frontier")
+        if select_upstream_patch(
+            learned_selector, repeated_frontier, shifted_historical, historical_gap["failure_line"]
+        ) is not None:
+            raise AssertionError("OLD+MORE_COMPUTE unexpectedly created surface selector applicability")
 
     assessment = assess_selector_representation_inexpressivity(
         (historical_gap["context"], random_gap["context"]), min_contexts=2
@@ -271,15 +240,13 @@ def main() -> None:
 
     first = _train_representation_context(
         body, proposals, learned_selector, schema, historical_gap,
-        context="binding-representation-historical-derived", signers=signers,
-        verifier=verifier, epoch_base=75000,
+        context="binding-representation-historical-derived", signers=signers, verifier=verifier, epoch_base=75000,
     )
     if organ.policy().status == "REPRODUCED_SELECTOR_REPRESENTATION":
         raise AssertionError("one representation context incorrectly created authority")
     second = _train_representation_context(
         body, proposals, learned_selector, schema, random_gap,
-        context="binding-representation-randomized", signers=signers,
-        verifier=verifier, epoch_base=76000,
+        context="binding-representation-randomized", signers=signers, verifier=verifier, epoch_base=76000,
     )
     if first["strong"][0].representation.representation_id != second["strong"][0].representation.representation_id:
         raise AssertionError("representation support did not reproduce across source-disjoint contexts")
@@ -300,7 +267,6 @@ def main() -> None:
     if reverified_policy != policy or reverified_representation is None:
         raise AssertionError("external reverification failed to reconstruct representation authority")
 
-    # Compatibility: call-binding normalization must preserve #85's keyword-surface choice.
     _, keyword_stderr, keyword_failure_line = _baseline_environment(
         inherited["historical_source"], HISTORICAL_PATH, HISTORICAL_SELECTOR
     )
@@ -317,8 +283,6 @@ def main() -> None:
     if keyword_old is None or keyword_new is None or keyword_old.candidate_id != keyword_new.candidate_id:
         raise AssertionError("binding normalization regressed the inherited keyword-surface selector")
 
-    # Fresh positional-binding heldout. The inherited #85 selector remains inapplicable;
-    # the learned representation freezes one candidate before heldout candidate outcomes.
     heldout_token = secrets.token_hex(4)
     heldout_source_raw, heldout_path, heldout_selector = _randomized_source(heldout_token)
     heldout_source = _syntax_shift_heldout_binding(heldout_source_raw)
@@ -350,29 +314,23 @@ def main() -> None:
     )
     treatment_capability = 1.0 if min(treatment_effects) >= 0.9 else 0.0
 
-    # Full frontier is evaluated only after the treatment was frozen/executed, for audit.
     full_candidates, _, full_successes = _search_program(
         learned_program, heldout_gap["stderr"], heldout_gap["environment"]
     )
     if selected_before_world.candidate_id not in {item.candidate_id for item in full_successes}:
         raise AssertionError("binding-normalized pre-world selection was not genuinely successful")
 
-    # REMOVE: same checkpoint, learned selector/program retained, representation application removed.
     remove_effects = tuple(heldout_gap["environment"].run()[0] for _ in range(len(treatment_effects)))
     remove_capability = max(remove_effects) if remove_effects else 0.0
 
-    wrong_representation = next(
-        item for item in representations if item.representation_id != learned_representation.representation_id
-    )
+    wrong_representation = next(item for item in representations if item.representation_id != learned_representation.representation_id)
     wrong_candidate = select_upstream_patch_with_representation(
         learned_selector, wrong_representation, heldout_gap["frontier"],
         heldout_source, heldout_gap["failure_line"], schema
     )
     if wrong_candidate is None:
         raise AssertionError("wrong representation failed to produce matched one-candidate control")
-    wrong_proposal = next(
-        item for item in proposals if item.representation.representation_id == wrong_representation.representation_id
-    )
+    wrong_proposal = next(item for item in proposals if item.representation.representation_id == wrong_representation.representation_id)
     wrong_body = restore_runtime(checkpoint, world_verifier=verifier)
     wrong_effects = _execute_candidate(
         wrong_body, wrong_proposal, heldout_gap["environment"], wrong_candidate.patched_source,
@@ -390,16 +348,13 @@ def main() -> None:
         "historical_parent_fixture_exact_git_blob": True,
         "historical_source_derived_syntax_counterfactual": True,
         "natural_historical_new_failure": False,
-        "syntax_shift_semantics": "heldout=True keyword -> source_class default plus heldout True positional binding",
+        "syntax_shift_semantics": "all ResidualObservation heldout=True keyword bindings -> explicit positional default source_class plus heldout True",
         "inherited_upstream_program_id": learned_program.program_id,
         "inherited_selector_id": learned_selector.selector_id,
         "inherited_selector_rule": learned_selector.selection_rule,
         "representation_inexpressivity_not_candidate_refutation": True,
         "inexpressive_contexts": list(assessment.inexpressive_contexts),
-        "old_frontier_counts": [
-            historical_gap["context"].inherited_frontier_count,
-            random_gap["context"].inherited_frontier_count,
-        ],
+        "old_frontier_counts": [historical_gap["context"].inherited_frontier_count, random_gap["context"].inherited_frontier_count],
         "old_selected_candidate_counts": [0, 0],
         "old_more_compute_attempts": 16,
         "old_more_compute_selected_candidate_count": 0,
