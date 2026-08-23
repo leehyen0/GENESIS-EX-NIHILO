@@ -1,0 +1,54 @@
+name: arte-large-scale-external-ecology
+
+on:
+  pull_request:
+    paths:
+      - 'arte_cognition/external_ecology.py'
+      - 'arte_cognition/test_external_ecology.py'
+      - 'evaluations/run_large_scale_external_ecology.py'
+      - '.github/workflows/arte-large-scale-external-ecology.yml'
+  push:
+    branches:
+      - arte-large-scale-external-ecology-shadow
+    paths:
+      - 'arte_cognition/external_ecology.py'
+      - 'arte_cognition/test_external_ecology.py'
+      - 'evaluations/run_large_scale_external_ecology.py'
+      - '.github/workflows/arte-large-scale-external-ecology.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  external-ecology:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Compile external ecology cognition layer
+        run: |
+          python -m py_compile arte_cognition/external_ecology.py
+          python -m py_compile arte_cognition/test_external_ecology.py
+          python -m py_compile evaluations/run_large_scale_external_ecology.py
+
+      - name: Run external ecology contracts
+        run: python -m unittest arte_cognition.test_external_ecology -v
+
+      - name: Generate evaluator-owned hidden cohort seed
+        run: |
+          python - <<'PY'
+          import secrets
+          from pathlib import Path
+          Path('/tmp/arte_external_ecology_seed').write_text(str(secrets.randbits(128)))
+          PY
+
+      - name: Run hidden large-scale multi-ecology evaluation
+        run: PYTHONPATH=. python evaluations/run_large_scale_external_ecology.py /tmp/arte_external_ecology_seed
