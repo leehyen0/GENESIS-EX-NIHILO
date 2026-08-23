@@ -1,6 +1,12 @@
 name: arte-reflective-relation-genesis
 
 on:
+  pull_request:
+    paths:
+      - 'arte_cognition/reflective_relation_genesis.py'
+      - 'arte_cognition/test_reflective_relation_genesis.py'
+      - 'evaluations/run_reflective_relation_genesis.py'
+      - '.github/workflows/arte-reflective-relation-genesis.yml'
   push:
     branches:
       - arte-reflective-relation-genesis-shadow
