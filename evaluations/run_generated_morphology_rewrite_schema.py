@@ -128,8 +128,6 @@ def externally_select_successful_program(
             if not isinstance(replacement, dict):
                 continue
             evaluations += 1
-            # The consequence/ground truth is evaluator-owned and used only to
-            # select a prior successful training repair, never heldout generation.
             if str(replacement.get("target", "")) == correct[locus]:
                 matches.append(candidate)
         if len(matches) != 1:
@@ -195,7 +193,8 @@ def main(seed_path: str) -> int:
         rule="FOR_EACH_CERTIFIED_FAILED_EDGE_REWIRE_TO_UNIQUE_COMPATIBLE_ALTERNATIVE",
         supporting_contexts=("old-a", "old-b"),
         supporting_source_classes=("old-class-a", "old-class-b"),
-        training_program_ids=("old-p-a", "old-p-b"),
+        supporting_program_ids=("old-p-a", "old-p-b"),
+        inherited_from_external_outcomes=True,
     )
 
     heldout_depths = (4, 8, 16)
