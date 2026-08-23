@@ -13,6 +13,11 @@ from arte_cognition.software_selector_relation_schema_genesis import (
     propose_binding_schema,
     select_authorized_binding_schema,
 )
+from arte_cognition.software_selector_representation_program_genesis import (
+    assess_representation_program_inexpressivity,
+    generate_selector_representation_programs,
+    normalize_source_with_representation_program,
+)
 from arte_cognition.world_coupling import WorldOutcomePair
 
 
@@ -48,6 +53,20 @@ def _pair(experiment_id: str, context: str, cls: str, *, effect: float = 1.0, so
     )
 
 
+def _normalized_target_call(source: str) -> bool:
+    tree = ast.parse(source)
+    calls = [node for node in ast.walk(tree) if isinstance(node, ast.Call)]
+    if len(calls) != 1:
+        return False
+    call = calls[0]
+    return bool(
+        isinstance(call.func, ast.Name)
+        and call.func.id == TARGET
+        and not any(item.arg is None for item in call.keywords)
+        and "heldout" in {item.arg for item in call.keywords}
+    )
+
+
 class SelectorRelationSchemaGenesisTests(unittest.TestCase):
     def test_requires_repeated_nonempty_inexpressivity(self):
         one = assess_binding_schema_inexpressivity((("a", 10, 0),), min_contexts=2)
@@ -75,18 +94,28 @@ class SelectorRelationSchemaGenesisTests(unittest.TestCase):
             },
         )
 
+    def test_current_fixed_program_family_is_inexpressive_on_local_binding_surface(self):
+        source = _surface("FreshAlias", "fresh_opts", "heldout")
+        old_assessment = assess_representation_program_inexpressivity(
+            (("old-a", 10, 0), ("old-b", 10, 0)), min_contexts=2
+        )
+        old_programs = generate_selector_representation_programs(old_assessment, max_depth=2)
+        self.assertEqual(len(old_programs), 6)
+        self.assertFalse(any(
+            _normalized_target_call(normalize_source_with_representation_program(source, program, TARGET))
+            for program in old_programs
+        ))
+
+        new_schema = GeneratedBindingSchema(("Dict->Call.keywords**", "Name->Call.func"))
+        self.assertTrue(_normalized_target_call(
+            normalize_source_with_binding_schema(source, new_schema, TARGET)
+        ))
+
     def test_composed_generated_schema_normalizes_new_local_bindings(self):
         source = _surface("FreshAlias", "fresh_opts", "heldout")
         schema = GeneratedBindingSchema(("Dict->Call.keywords**", "Name->Call.func"))
         normalized = normalize_source_with_binding_schema(source, schema, TARGET)
-        tree = ast.parse(normalized)
-        calls = [node for node in ast.walk(tree) if isinstance(node, ast.Call)]
-        self.assertEqual(len(calls), 1)
-        call = calls[0]
-        self.assertIsInstance(call.func, ast.Name)
-        self.assertEqual(call.func.id, TARGET)
-        self.assertFalse(any(item.arg is None for item in call.keywords))
-        self.assertIn("heldout", {item.arg for item in call.keywords})
+        self.assertTrue(_normalized_target_call(normalized))
 
         alias_only = normalize_source_with_binding_schema(
             source, GeneratedBindingSchema(("Name->Call.func",)), TARGET
