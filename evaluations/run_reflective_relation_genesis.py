@@ -57,7 +57,7 @@ def make_world(seed: int, label: str, depth: int, kind: OrganKind, base_priority
             (
                 OrganSpec(source, OrganKind.SOURCE, produces=(artifact,), cost_hint=source_cost),
                 # Anti-spurious pressure: old[i].cost collides with edge[i+1].priority,
-                # so cost equality alone cannot identify a local target.
+                # so a cost equality alone cannot identify a local target.
                 OrganSpec(old, kind, consumes=(artifact,), produces=shared_output, implementation_ref=shared_impl, version=2, cost_hint=priority + STEP),
                 OrganSpec(good, kind, consumes=(artifact,), produces=shared_output, implementation_ref=shared_impl, version=2, cost_hint=priority),
                 OrganSpec(bad, kind, consumes=(artifact,), produces=shared_output, implementation_ref=shared_impl, version=2, cost_hint=source_cost),
@@ -144,6 +144,41 @@ def externally_select_program(genome: MorphologyGenome, residual: MorphologyResi
     return program, evaluations
 
 
+def cost_only_schema(schema: ReflectiveRewriteSchema) -> ReflectiveRewriteSchema:
+    cost = tuple(relation for relation in schema.relations if relation.token() == "EQ(candidate.cost_hint,edge.priority)")
+    if len(cost) != 1:
+        raise AssertionError("generated schema must contain one cost/priority relation")
+    return ReflectiveRewriteSchema(
+        schema_id="COST_ONLY_ABLATION",
+        operation=schema.operation,
+        relations=cost,
+        supporting_contexts=schema.supporting_contexts,
+        supporting_source_classes=schema.supporting_source_classes,
+        supporting_program_ids=schema.supporting_program_ids,
+    )
+
+
+def semantic_wrong_schema(schema: ReflectiveRewriteSchema) -> ReflectiveRewriteSchema:
+    changed = []
+    replaced = 0
+    for relation in schema.relations:
+        if relation.token() == "EQ(candidate.cost_hint,edge.priority)":
+            changed.append(RelationExpression("EQ", FieldRef("candidate", "cost_hint"), FieldRef("source", "cost_hint")))
+            replaced += 1
+        else:
+            changed.append(relation)
+    if replaced != 1:
+        raise AssertionError("expected exactly one cost relation to wrong-swap")
+    return ReflectiveRewriteSchema(
+        schema_id="REFLECTIVE_WRONG",
+        operation=schema.operation,
+        relations=tuple(changed),
+        supporting_contexts=schema.supporting_contexts,
+        supporting_source_classes=schema.supporting_source_classes,
+        supporting_program_ids=schema.supporting_program_ids,
+    )
+
+
 def main(seed_path: str) -> int:
     seed = int(Path(seed_path).read_text().strip())
     rng = random.Random(seed)
@@ -171,34 +206,33 @@ def main(seed_path: str) -> int:
         raise AssertionError("reflective relation generator produced no schema")
     schema = schemas[0]
     relation_tokens = [relation.token() for relation in schema.relations]
-    required = {
-        "EQ(candidate.cost_hint,edge.priority)",
-        "IN(edge.artifact_type,candidate.consumes)",
-    }
-    if not required.issubset(set(relation_tokens)):
-        raise AssertionError(f"reflective generator missed required raw-field relations: {required - set(relation_tokens)}")
+    if "EQ(candidate.cost_hint,edge.priority)" not in relation_tokens:
+        raise AssertionError("reflective generator missed cross-object cost/priority relation")
+    if len(schema.relations) < 2:
+        raise AssertionError("anti-spurious training pressure did not force an additional structural relation")
+
+    # Causal representation control: do not prescribe what the second relation
+    # must look like. Remove it and require loss of applicability on the deeper
+    # training world with deliberate cross-locus collisions.
+    training_cost_only = apply_reflective_rewrite_schema(
+        reflective_examples[1].genome,
+        reflective_examples[1].certificate,
+        cost_only_schema(schema),
+    )
+    if training_cost_only is not None:
+        raise AssertionError("cost-only ablation unexpectedly remained applicable under training collision pressure")
 
     heldout_depths = (4, 8, 16)
     remaining_kinds = [kind for kind in KINDS if kind not in training_kinds] or list(KINDS)
     treatment = []
     remove = []
     wrong = []
+    cost_only_applicable = []
     checks = []
     heldout_kinds = []
     heldout_bases = []
     outcome_evaluations = []
-
-    wrong_schema = ReflectiveRewriteSchema(
-        schema_id="REFLECTIVE_WRONG",
-        operation="REWIRE_EDGE",
-        relations=(
-            RelationExpression("EQ", FieldRef("candidate", "cost_hint"), FieldRef("source", "cost_hint")),
-            RelationExpression("IN", FieldRef("edge", "artifact_type"), FieldRef("candidate", "consumes")),
-        ),
-        supporting_contexts=schema.supporting_contexts,
-        supporting_source_classes=schema.supporting_source_classes,
-        supporting_program_ids=schema.supporting_program_ids,
-    )
+    wrong_schema = semantic_wrong_schema(schema)
 
     for generation, depth in enumerate(heldout_depths, start=1):
         kind = remaining_kinds[(generation - 1) % len(remaining_kinds)]
@@ -222,6 +256,11 @@ def main(seed_path: str) -> int:
         outcome_evaluations.append(application.outcome_evaluations)
         checks.append(application.candidate_relation_checks)
 
+        ablated = apply_reflective_rewrite_schema(genome, cert, cost_only_schema(schema))
+        cost_only_applicable.append(ablated is not None)
+        if ablated is not None:
+            raise AssertionError("cost-only ablation unexpectedly survived heldout cross-locus collision")
+
         wrong_application = apply_reflective_rewrite_schema(genome, cert, wrong_schema)
         wrong_effect = 0.0
         if wrong_application is not None:
@@ -241,15 +280,19 @@ def main(seed_path: str) -> int:
         "named_relation_atom_predecessor_candidate_count": len(named_predecessor),
         "generated_schema_id": schema.schema_id,
         "generated_relation_tokens": relation_tokens,
+        "generated_relation_count": len(schema.relations),
+        "cost_only_training_applicable": training_cost_only is not None,
         "heldout_depths": list(heldout_depths),
         "heldout_kinds": heldout_kinds,
         "heldout_priority_bases": heldout_bases,
         "heldout_capabilities": treatment,
         "remove_capabilities": remove,
         "semantic_wrong_capabilities": wrong,
+        "cost_only_heldout_applicable": cost_only_applicable,
         "heldout_outcome_evaluations_for_generation_or_application": outcome_evaluations,
         "candidate_relation_checks": checks,
         "anti_spurious_cross_locus_collision_present": True,
+        "evaluator_prescribes_exact_second_relation_syntax": False,
         "concrete_identifier_values_embedded_in_schema": False,
         "concrete_priority_values_embedded_in_schema": False,
         "named_domain_relation_atoms_supplied": False,
