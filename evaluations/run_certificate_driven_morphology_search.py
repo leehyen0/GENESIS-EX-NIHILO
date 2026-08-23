@@ -4,7 +4,7 @@ import json
 import random
 import sys
 from pathlib import Path
-from typing import Dict, Sequence, Tuple
+from typing import Dict, Tuple
 
 from arte_cognition.executable_morphology import EdgeSpec, MorphologyGenome, OrganKind, OrganSpec, PressureVector
 from arte_cognition.meta_acceleration import (
@@ -29,7 +29,7 @@ def token(rng: random.Random, prefix: str) -> str:
     return f"{prefix}_{rng.randrange(10_000_000, 99_999_999)}"
 
 
-def make_world(seed: int, label: str, required_depth: int, total_edges: int = 4):
+def make_world(seed: int, label: str, required_depth: int, total_edges: int = 8):
     rng = random.Random((seed << 5) ^ sum(ord(c) for c in label))
     organs = []
     edges = []
@@ -51,7 +51,12 @@ def make_world(seed: int, label: str, required_depth: int, total_edges: int = 4)
         edges.append(EdgeSpec(edge_id, source, primary, artifact))
         alternates.append(alternate)
         primaries.append(primary)
-    organs.extend((OrganSpec(token(rng, "governor"), OrganKind.GOVERNOR), OrganSpec(token(rng, "archive"), OrganKind.ARCHIVE)))
+    organs.extend(
+        (
+            OrganSpec(token(rng, "governor"), OrganKind.GOVERNOR),
+            OrganSpec(token(rng, "archive"), OrganKind.ARCHIVE),
+        )
+    )
     genome = MorphologyGenome(tuple(organs), tuple(edges), tuple(o.organ_id for o in organs))
     failed = tuple(edge.edge_id for edge in edges[:required_depth])
     residual = MorphologyResidual(
@@ -65,6 +70,8 @@ def make_world(seed: int, label: str, required_depth: int, total_edges: int = 4)
         "required_depth": required_depth,
         "failed_edge_ids": failed,
         "alternate_targets": tuple(alternates[:required_depth]),
+        "all_edge_ids": tuple(edge.edge_id for edge in edges),
+        "all_alternate_targets": tuple(alternates),
     }
     return genome, residual, hidden
 
@@ -95,7 +102,10 @@ def train_prior(seed: int) -> MutationStrategyState:
         rows = []
         for candidate in candidates:
             from arte_cognition.meta_acceleration import generate_mutation_programs
-            program = generate_mutation_programs((candidate,), strategy, max_depth=1, budget=1, beam_width=1)[0]
+
+            program = generate_mutation_programs(
+                (candidate,), strategy, max_depth=1, budget=1, beam_width=1
+            )[0]
             try:
                 effect = capability(apply_mutation_program(genome, program), hidden)
             except ValueError:
@@ -143,9 +153,14 @@ def main(seed_path: str) -> int:
     exhaustive_failure_search_controls = []
     speedups = []
     program_ids = []
+    wrong_effects = []
 
     for generation, required_depth in enumerate((2, 3, 4), start=1):
-        genome, residual, hidden = make_world(seed + 1000 * generation, f"certificate-heldout-{generation}", required_depth)
+        genome, residual, hidden = make_world(
+            seed + 1000 * generation,
+            f"certificate-heldout-{generation}",
+            required_depth,
+        )
         candidates = pool(genome, residual)
         receipts = (
             StructuralDiagnosticReceipt(
@@ -167,7 +182,9 @@ def main(seed_path: str) -> int:
                 evaluator_independent=False,
             ),
         )
-        certificate = derive_structural_failure_certificate(receipts, max_obligations_repaired_per_primitive=1)
+        certificate = derive_structural_failure_certificate(
+            receipts, max_obligations_repaired_per_primitive=1
+        )
         if certificate is None:
             raise AssertionError("failed to derive structural certificate")
         if certificate.lower_bound_program_depth != required_depth:
@@ -177,7 +194,9 @@ def main(seed_path: str) -> int:
         if state.max_depth != required_depth:
             raise AssertionError(f"certificate failed to open depth {required_depth}")
 
-        compilation = compile_program_from_certificate(genome, candidates, strategy, certificate)
+        compilation = compile_program_from_certificate(
+            genome, candidates, strategy, certificate
+        )
         if compilation.program is None or compilation.unresolved_locus_ids:
             raise AssertionError("certificate compiler left unresolved obligations")
         if compilation.program.depth != required_depth:
@@ -190,27 +209,76 @@ def main(seed_path: str) -> int:
         if effect != 1.0:
             raise AssertionError("certificate-compiled descendant failed heldout world")
 
-        wrong_candidates = [candidate for candidate in candidates if candidate.operation_family == "ADD_EDGE"]
-        if not wrong_candidates:
-            raise AssertionError("missing wrong structural alternatives")
-        wrong_strategy = MutationStrategyState(operation_scores=(("ADD_EDGE", 5.0), ("REWIRE_EDGE", 0.0)), lineage_hash="wrong")
-        wrong_compilation = compile_program_from_certificate(genome, candidates, wrong_strategy, certificate)
+        # Semantic WRONG: same certificate schema, same depth, two apparent
+        # independent source classes, but the failed-locus set is swapped to a
+        # disjoint equally-sized set. This preserves form/resources while changing
+        # the causal content that should guide mutation.
+        all_edge_ids = tuple(hidden["all_edge_ids"])
+        wrong_loci = tuple(
+            all_edge_ids[required_depth : required_depth * 2]
+        )
+        if len(wrong_loci) != required_depth:
+            raise AssertionError("insufficient disjoint loci for semantic WRONG")
+        wrong_receipts = (
+            StructuralDiagnosticReceipt(
+                receipt_id=f"wrong-diag::{generation}::a",
+                context_id=f"wrong-certificate-context-{generation}",
+                source_class=f"wrong-certificate-class-{generation}-a",
+                failed_locus_ids=wrong_loci,
+                authority_verified=True,
+                benchmark_disjoint=True,
+                evaluator_independent=False,
+            ),
+            StructuralDiagnosticReceipt(
+                receipt_id=f"wrong-diag::{generation}::b",
+                context_id=f"wrong-certificate-context-{generation}",
+                source_class=f"wrong-certificate-class-{generation}-b",
+                failed_locus_ids=tuple(reversed(wrong_loci)),
+                authority_verified=True,
+                benchmark_disjoint=True,
+                evaluator_independent=False,
+            ),
+        )
+        wrong_certificate = derive_structural_failure_certificate(
+            wrong_receipts, max_obligations_repaired_per_primitive=1
+        )
+        if wrong_certificate is None or wrong_certificate.lower_bound_program_depth != required_depth:
+            raise AssertionError("semantic WRONG certificate construction failed")
+        wrong_residual = MorphologyResidual(
+            residual_id=f"wrong-residual::{generation}",
+            pressure=PressureVector(transfer_failure=1.0, human_dependency=1.0),
+            failed_edge_ids=wrong_loci,
+            source_refs=(f"wrong-diagnostic::{generation}",),
+        )
+        wrong_candidates = pool(genome, wrong_residual)
+        wrong_compilation = compile_program_from_certificate(
+            genome, wrong_candidates, strategy, wrong_certificate
+        )
         wrong_effect = 0.0
-        if wrong_compilation.program is not None:
+        if wrong_compilation.program is not None and not wrong_compilation.unresolved_locus_ids:
             try:
-                wrong_effect = capability(apply_mutation_program(genome, wrong_compilation.program), hidden)
+                wrong_effect = capability(
+                    apply_mutation_program(genome, wrong_compilation.program), hidden
+                )
             except ValueError:
                 wrong_effect = 0.0
         if wrong_effect != 0.0:
-            raise AssertionError("WRONG certificate prior preserved capability")
+            raise AssertionError("semantic WRONG failure-locus certificate preserved capability")
+        wrong_effects.append(wrong_effect)
 
         remove_depth = required_depth - 1
-        exhaustive_control = exhaustive_lower_depth_program_count(len(candidates), remove_depth)
+        exhaustive_control = exhaustive_lower_depth_program_count(
+            len(candidates), remove_depth
+        )
         if exhaustive_control <= 0:
             raise AssertionError("invalid exhaustive control")
 
         external_cost = 3  # two diagnostic receipts + one fresh heldout consequence
-        high_level_cost = external_cost + compilation.candidate_scan_count + compilation.program.depth
+        high_level_cost = (
+            external_cost
+            + compilation.candidate_scan_count
+            + compilation.program.depth
+        )
         speedup = exhaustive_control / max(1, high_level_cost)
 
         depths.append(required_depth)
@@ -222,10 +290,18 @@ def main(seed_path: str) -> int:
         program_ids.append(compilation.program.program_id)
 
     delta_frontier = (1.0, 1.0, 1.0)
-    delta_per_external_evidence = tuple(delta / cost for delta, cost in zip(delta_frontier, certificate_external_costs))
+    delta_per_external_evidence = tuple(
+        delta / cost
+        for delta, cost in zip(delta_frontier, certificate_external_costs)
+    )
     delta_per_high_level_operation = tuple(
         delta / (external + scan + steps)
-        for delta, external, scan, steps in zip(delta_frontier, certificate_external_costs, candidate_scan_counts, mutation_step_counts)
+        for delta, external, scan, steps in zip(
+            delta_frontier,
+            certificate_external_costs,
+            candidate_scan_counts,
+            mutation_step_counts,
+        )
     )
 
     result = {
@@ -247,7 +323,7 @@ def main(seed_path: str) -> int:
         "strict_recursive_meta_productivity_acceleration": False,
         "reason_recursive_acceleration_false": "certificate removes combinatorial external search but candidate scan plus mutation application still grow with structural frontier",
         "remove_certificate_or_depth_jump_capability_under_same_depth": 0.0,
-        "wrong_structural_prior_capability": 0.0,
+        "semantic_wrong_failure_locus_certificate_capabilities": wrong_effects,
         "post_freeze_human_structural_repairs": 0,
         "primitive_impact_bound_human_authored": True,
         "obligation_locus_schema_human_authored": True,
