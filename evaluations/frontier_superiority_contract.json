@@ -1,0 +1,49 @@
+{
+  "contract_version": "arte.frontier_superiority/v1",
+  "frozen_at_utc": "2026-08-23T12:33:00Z",
+  "canonical_parent": "f3840760cfc0b5b7eac1e03b4d0f9874b0d1d6b0",
+  "objective": "STRUCTURAL_CAPABILITY_AND_EXTERNAL_FRONTIER_SUPERIORITY",
+  "primary_budget_mode": "OPEN_BUDGET_CAPABILITY_PRIMARY",
+  "cost_may_increase": true,
+  "cost_efficiency_is_promotion_gate": false,
+  "human_research_cost_may_increase_before_benchmark_freeze": true,
+  "post_freeze_human_structural_intervention_allowed": false,
+  "hidden_outcome_generation_allowed": false,
+  "minimum_external_frontier_providers": 3,
+  "minimum_absolute_score_margin": 0.02,
+  "retained_competence_floor": 0.95,
+  "calibration_floor": 0.80,
+  "live_same_task_external_receipts_required": true,
+  "published_vendor_or_leaderboard_scores_alone_authorize_arte_superiority": false,
+  "benchmark_task_contract_must_match_exactly": true,
+  "benchmark_must_be_hidden_until_all_actions_are_frozen": true,
+  "external_frontier_targets_as_of_2026_08_23": [
+    {
+      "provider": "OpenAI",
+      "model": "GPT-5.6 Sol",
+      "effort": "max"
+    },
+    {
+      "provider": "Anthropic",
+      "model": "Claude Fable 5",
+      "effort": "max"
+    },
+    {
+      "provider": "Google",
+      "model": "Gemini 3.7 Flash",
+      "effort": "high"
+    }
+  ],
+  "required_arte_structural_delta": {
+    "world_caused_mutation_receipt": true,
+    "parent_child_body_hash_change": true,
+    "minimum_generated_structure_count": 1,
+    "minimum_structural_frontier_delta": 0.0,
+    "strictly_positive_structural_frontier_delta": true
+  },
+  "primary_pass_status": "PASS_EXTERNAL_FRONTIER_SUPERIORITY_WITH_STRUCTURAL_ASCENT",
+  "AGI": false,
+  "ASI": false,
+  "global_recursive_acceleration_self_certification": false,
+  "note": "This contract intentionally permits ARTE to spend more compute or money than frontier baselines. Cost remains diagnostic only. A superiority claim requires live same-task external receipts and a world-caused structural ascent, not lower cost."
+}
