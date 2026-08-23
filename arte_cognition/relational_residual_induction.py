@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, Iterable, List, Sequence, Tuple
+from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 import hashlib
+
+from .world_coupling import WorldOutcomePair
 
 
 @dataclass(frozen=True, order=True)
@@ -43,6 +45,14 @@ class RelationalResidualAssessment:
     context_ids: Tuple[str, ...]
     domains: Tuple[str, ...]
     repeated_failure: bool
+
+
+@dataclass(frozen=True)
+class RelationalPathPolicy:
+    allowed_schema_ids: Tuple[str, ...]
+    supporting_contexts: Tuple[Tuple[str, Tuple[str, ...]], ...]
+    min_independent_classes: int
+    min_contexts: int
 
 
 class RelationalResidualInducer:
@@ -136,6 +146,59 @@ class RelationalResidualInducer:
 
     def matches(self, schema: GeneratedRelationalPathSchema, context: RelationalContext) -> bool:
         return schema.steps in set(self._paths(context))
+
+
+def derive_relational_path_policy(
+    schemas: Sequence[GeneratedRelationalPathSchema],
+    pairs: Sequence[WorldOutcomePair],
+    min_independent_classes: int = 2,
+    min_contexts: int = 2,
+) -> RelationalPathPolicy:
+    min_classes = max(1, int(min_independent_classes))
+    min_ctx = max(1, int(min_contexts))
+    allowed: List[str] = []
+    support_rows: List[Tuple[str, Tuple[str, ...]]] = []
+
+    for schema in schemas:
+        by_context: Dict[str, set[str]] = {}
+        for pair in pairs:
+            if pair.experiment_id != schema.schema_id:
+                continue
+            if not (
+                pair.matched_budget
+                and pair.externally_generated
+                and pair.authority_verified
+                and pair.independence_class_id != "UNVERIFIED"
+                and pair.effect > 0.0
+            ):
+                continue
+            by_context.setdefault(pair.context_id, set()).add(pair.independence_class_id)
+        ready_contexts = tuple(sorted(
+            context_id
+            for context_id, classes in by_context.items()
+            if len(classes) >= min_classes
+        ))
+        if len(ready_contexts) >= min_ctx:
+            allowed.append(schema.schema_id)
+            support_rows.append((schema.schema_id, ready_contexts))
+
+    return RelationalPathPolicy(
+        allowed_schema_ids=tuple(sorted(allowed)),
+        supporting_contexts=tuple(sorted(support_rows)),
+        min_independent_classes=min_classes,
+        min_contexts=min_ctx,
+    )
+
+
+def select_authorized_relational_path_schema(
+    schemas: Sequence[GeneratedRelationalPathSchema],
+    policy: RelationalPathPolicy,
+) -> Optional[GeneratedRelationalPathSchema]:
+    allowed = set(policy.allowed_schema_ids)
+    for schema in sorted(schemas, key=lambda item: item.schema_id):
+        if schema.schema_id in allowed:
+            return schema
+    return None
 
 
 def make_context(
