@@ -5,6 +5,7 @@ on:
     paths:
       - 'arte_cognition/relational_residual_induction.py'
       - 'arte_cognition/test_relational_residual_induction.py'
+      - 'evaluations/run_cross_domain_relational_residual_induction.py'
       - '.github/workflows/arte-cross-domain-relational-induction.yml'
   workflow_dispatch:
 
@@ -23,5 +24,6 @@ jobs:
         run: |
           python -m py_compile arte_cognition/relational_residual_induction.py
           python -m py_compile arte_cognition/test_relational_residual_induction.py
+          python -m py_compile evaluations/run_cross_domain_relational_residual_induction.py
       - name: Run focused cross-domain contract
         run: python -m unittest arte_cognition.test_relational_residual_induction -v
