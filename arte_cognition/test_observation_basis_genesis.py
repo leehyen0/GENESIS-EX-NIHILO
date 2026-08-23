@@ -121,6 +121,27 @@ class ObservationBasisGenesisTests(unittest.TestCase):
         heldout = _multi_lag_world("c", "omega", "CAUSAL_WORLD", 3.25)
         self.assertTrue(inducer.matches(schema, heldout))
 
+    def test_fresh_inducer_reconstructs_same_basis_without_candidate_object_reuse(self):
+        training = (
+            _multi_lag_world("s1", "alpha", "SOFTWARE", 1.0),
+            _multi_lag_world("s2", "beta", "SOFTWARE", 6.0),
+        )
+        parent = WorldDerivedObservationBasisInducer(min_repeats=2)
+        parent_schema = parent.generate_candidates(
+            parent.assess_residual(training, (0, 0), 2), training
+        )[0]
+
+        # Fresh instance receives only the raw worlds and predecessor residual state;
+        # no generated basis/schema object is reused across the reconstruction boundary.
+        descendant = WorldDerivedObservationBasisInducer(min_repeats=2)
+        descendant_schema = descendant.generate_candidates(
+            descendant.assess_residual(training, (0, 0), 2), training
+        )[0]
+        self.assertIsNot(parent_schema, descendant_schema)
+        self.assertEqual(parent_schema.basis_id, descendant_schema.basis_id)
+        self.assertEqual(parent_schema.schema_id, descendant_schema.schema_id)
+        self.assertEqual(parent_schema.profile_tokens, descendant_schema.profile_tokens)
+
     def test_wrong_temporal_basis_and_wrong_sign_are_not_equivalent(self):
         inducer = WorldDerivedObservationBasisInducer(min_repeats=2)
         training = (
