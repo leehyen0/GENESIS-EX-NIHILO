@@ -7,10 +7,12 @@ from arte_cognition.meta_acceleration import (
     GenerationMetrics,
     MetaAccelerationLedger,
     MetaMutationLearner,
+    MutationProgramDevelopmentState,
     MutationStrategyState,
     apply_mutation_program,
     choose_meta_improvement_target,
     generate_mutation_programs,
+    observe_complete_program_failure,
 )
 from arte_cognition.morphology_genesis import MorphologyEvaluation, MorphologyGenesisEngine, MorphologyResidual
 
@@ -83,6 +85,65 @@ class MetaAccelerationTests(unittest.TestCase):
         descendant = apply_mutation_program(body(), program)
         self.assertGreaterEqual(len(descendant.edges), len(body().edges) + 2)
         self.assertNotEqual(descendant.fingerprint(), body().fingerprint())
+
+    def test_program_generator_can_expand_to_depth_three_without_current_outcomes(self):
+        pool = [candidate for candidate in candidates() if candidate.operation_family == "ADD_EDGE"][:3]
+        strategy = MutationStrategyState(operation_scores=(("ADD_EDGE", 1.0),), lineage_hash="prior")
+        programs = generate_mutation_programs(pool, strategy, max_depth=3, budget=64, beam_width=3)
+        self.assertTrue(any(program.depth == 3 for program in programs))
+        self.assertTrue(all(not program.generation_uses_current_outcomes for program in programs))
+
+    def test_program_depth_does_not_open_from_one_failure(self):
+        state = MutationProgramDevelopmentState()
+        state = observe_complete_program_failure(
+            state,
+            context_id="ctx-a",
+            source_class="class-a",
+            candidate_universe_complete=True,
+            any_success=False,
+            authority_verified=True,
+            benchmark_disjoint=True,
+        )
+        self.assertEqual(state.max_depth, 1)
+        self.assertEqual(len(state.complete_failure_receipts), 1)
+
+    def test_two_independent_complete_failures_open_deeper_mutator_language(self):
+        state = MutationProgramDevelopmentState()
+        state = observe_complete_program_failure(
+            state,
+            context_id="ctx-a",
+            source_class="class-a",
+            candidate_universe_complete=True,
+            any_success=False,
+            authority_verified=True,
+            benchmark_disjoint=True,
+        )
+        state = observe_complete_program_failure(
+            state,
+            context_id="ctx-b",
+            source_class="class-b",
+            candidate_universe_complete=True,
+            any_success=False,
+            authority_verified=True,
+            benchmark_disjoint=True,
+        )
+        self.assertEqual(state.max_depth, 2)
+        self.assertEqual(state.complete_failure_receipts, ())
+        self.assertTrue(state.lineage_hash)
+
+    def test_verifierless_or_incomplete_failure_cannot_expand_mutator(self):
+        state = MutationProgramDevelopmentState()
+        for verified, complete in ((False, True), (True, False)):
+            next_state = observe_complete_program_failure(
+                state,
+                context_id="ctx",
+                source_class="class-a",
+                candidate_universe_complete=complete,
+                any_success=False,
+                authority_verified=verified,
+                benchmark_disjoint=True,
+            )
+            self.assertEqual(next_state, state)
 
     def test_acceleration_requires_three_real_transitions_not_one_cheap_success(self):
         ledger = MetaAccelerationLedger()
