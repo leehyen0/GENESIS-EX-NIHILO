@@ -1,0 +1,30 @@
+name: arte-source-derived-binding-schema
+
+on:
+  pull_request:
+    paths:
+      - 'arte_cognition/software_selector_relation_schema_genesis.py'
+      - 'arte_cognition/test_selector_relation_schema_genesis.py'
+      - 'evaluations/run_source_derived_binding_schema_genesis.py'
+      - '.github/workflows/arte-source-derived-binding-schema.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  binding-schema-frontier:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile new frontier
+        run: |
+          python -m py_compile arte_cognition/software_selector_relation_schema_genesis.py
+          python -m py_compile evaluations/run_source_derived_binding_schema_genesis.py
+          python -m py_compile arte_cognition/test_selector_relation_schema_genesis.py
+      - name: Run focused source-derived schema contract
+        run: python -m unittest arte_cognition.test_selector_relation_schema_genesis -v
