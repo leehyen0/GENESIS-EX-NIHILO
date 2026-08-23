@@ -10,6 +10,9 @@ from arte_cognition.response_partition_genesis import (
     select_authorized_response_schema,
 )
 from arte_cognition.world_coupling import WorldOutcomePair
+from evaluations.run_response_partition_transfer import (
+    main as run_external_response_partition_transfer,
+)
 
 
 def _parallel_profile_world(
@@ -42,8 +45,6 @@ def _parallel_profile_world(
                 f"{context_id}:{source}:{repeat}", source, low, high
             ))
 
-    # Two concrete root->target routes have identical peak lag/sign but different
-    # complete temporal response shapes.
     add_source(root, ((fast, fast_tail), (slow, slow_tail)))
     add_source(fast, ((target, fast_tail),))
     add_source(slow, ((target, slow_tail),))
@@ -109,7 +110,6 @@ class ResponsePartitionGenesisTests(unittest.TestCase):
         )
         multiplicities = tuple(_concrete_peak_schema_multiplicity(world) for world in worlds)
         self.assertEqual(multiplicities, (2, 2))
-
         predecessor = WorldDerivedObservationBasisInducer(min_repeats=2)
         assessment = predecessor.assess_residual(worlds, (0, 0), 2)
         schemas = predecessor.generate_candidates(assessment, worlds)
@@ -123,10 +123,7 @@ class ResponsePartitionGenesisTests(unittest.TestCase):
         partition = inducer.derive_partition(world)
         self.assertIsNotNone(partition)
         self.assertEqual(len(partition.profile_tokens), 2)
-        self.assertEqual(
-            set(partition.profile_shapes),
-            {(1.0, 0.25), (1.0, 0.75)},
-        )
+        self.assertEqual(set(partition.profile_shapes), {(1.0, 0.25), (1.0, 0.75)})
 
     def test_response_partition_generates_two_candidate_paths_before_outcomes(self):
         inducer = WorldDerivedResponsePartitionInducer(min_repeats=2)
@@ -152,7 +149,6 @@ class ResponsePartitionGenesisTests(unittest.TestCase):
         schemas = inducer.generate_candidates(inducer.assess_residual(training, (2, 2)), training)
         heldout = _parallel_profile_world("c", "omega", "CAUSAL_WORLD", 4.0)
         self.assertEqual(sum(int(inducer.matches(schema, heldout)) for schema in schemas), 2)
-
         wrong = _parallel_profile_world(
             "w", "wrong", "CAUSAL_WORLD", 4.0, fast_tail=0.50, slow_tail=0.90
         )
@@ -193,13 +189,25 @@ class ResponsePartitionGenesisTests(unittest.TestCase):
         )
         self.assertIsNotNone(selected)
         self.assertEqual(selected.schema_id, schema.schema_id)
-
         verifierless = tuple(
             _pair(schema.schema_id, pair.context_id, "X", 1.0, False) for pair in two
         )
         self.assertIsNone(select_authorized_response_schema(
             schemas, derive_response_partition_policy(schemas, verifierless, 2, 2)
         ))
+
+    def test_external_response_partition_preoutcome_transfer(self):
+        report = run_external_response_partition_transfer()
+        self.assertEqual(
+            report["status"],
+            "PASS_BOUNDED_WORLD_DERIVED_RESPONSE_PARTITION_AND_CROSS_DOMAIN_PREOUTCOME_TRANSFER",
+        )
+        self.assertEqual(report["predecessor_peak_sign_concrete_path_multiplicity"], [2, 2])
+        self.assertEqual(report["generated_candidate_path_count"], 2)
+        self.assertEqual(report["treatment_capability"], 1.0)
+        self.assertEqual(report["remove_same_checkpoint_capability"], 0.0)
+        self.assertEqual(report["wrong_structurally_valid_profile_capability"], 0.0)
+        self.assertEqual(report["shifted_regime_capability"], 0.0)
 
 
 if __name__ == "__main__":
