@@ -1,6 +1,12 @@
 name: arte-parametric-morphology-macro
 
 on:
+  pull_request:
+    paths:
+      - 'arte_cognition/parametric_morphology_macro.py'
+      - 'arte_cognition/test_parametric_morphology_macro.py'
+      - 'evaluations/run_parametric_morphology_macro_transfer.py'
+      - '.github/workflows/arte-parametric-morphology-macro.yml'
   push:
     branches:
       - arte-parametric-morphology-macro-shadow
