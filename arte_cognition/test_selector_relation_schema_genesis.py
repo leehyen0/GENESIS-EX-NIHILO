@@ -19,6 +19,7 @@ from arte_cognition.software_selector_representation_program_genesis import (
     normalize_source_with_representation_program,
 )
 from arte_cognition.world_coupling import WorldOutcomePair
+from evaluations.run_source_derived_binding_schema_genesis import main as run_external_binding_schema
 
 
 TARGET = "ResidualObservation"
@@ -165,6 +166,9 @@ class SelectorRelationSchemaGenesisTests(unittest.TestCase):
         ]
         collapsed_policy = derive_binding_schema_policy((proposal,), collapsed, min_independent_classes=2)
         self.assertIsNone(select_authorized_binding_schema((schema,), collapsed_policy))
+
+    def test_external_executable_schema_genesis_and_preoutcome_transfer(self):
+        run_external_binding_schema()
 
 
 if __name__ == "__main__":
