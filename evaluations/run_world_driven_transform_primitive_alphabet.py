@@ -89,19 +89,74 @@ def old_values(programs,left,right):
     return {p.apply(left,right) for p in programs if p.apply(left,right) is not None}
 
 
+def _valid_bracket(primitive, old_depth4, all_primitives, left, right, require_not_first=False):
+    left=round(float(left),6); right=round(float(right),6)
+    target=primitive.apply(left,right)
+    if target is None:
+        return None
+    if any(abs(float(v)-target)<=1e-9 for v in old_values(old_depth4,left,right)):
+        return None
+    primitive_values=sorted({
+        p.apply(left,right) for p in all_primitives if p.apply(left,right) is not None
+    })
+    if require_not_first and primitive_values and abs(float(primitive_values[0])-target)<=1e-9:
+        return None
+    colliders=[
+        p.program_id for p in all_primitives
+        if p.apply(left,right) is not None and abs(float(p.apply(left,right))-target)<=1e-9
+    ]
+    if len(colliders)!=1:
+        return None
+    return (left,right,target)
+
+
+def deterministic_bracket(primitive, old_depth4, all_primitives, require_not_first=False):
+    """Exhaust a fixed outcome-free bracket grid before declaring impossibility.
+
+    The previous hidden evaluation retried 5,000 random brackets and could fail
+    simply because the randomly chosen primitive was the globally lowest power
+    mean, making `require_not_first=True` impossible for every positive bracket.
+    This grid is used both to exclude impossible hidden states before reveal and
+    as a deterministic fallback when a valid state exists but random sampling
+    misses it. It does not inspect any world outcome.
+    """
+    left_values=tuple(round(1.5+0.5*i,6) for i in range(22))
+    ratio_values=tuple(round(2.2+0.25*i,6) for i in range(18))
+    for left in left_values:
+        for ratio in ratio_values:
+            candidate=_valid_bracket(
+                primitive,old_depth4,all_primitives,left,left*ratio,require_not_first
+            )
+            if candidate is not None:
+                return candidate
+    return None
+
+
+def eligible_hidden_primitives(old_depth4, all_primitives):
+    """Return primitives for which the preregistered heldout constraint is realizable."""
+    return tuple(
+        primitive for primitive in all_primitives
+        if deterministic_bracket(
+            primitive,old_depth4,all_primitives,require_not_first=True
+        ) is not None
+    )
+
+
 def choose_bracket(rng, primitive, old_depth4, all_primitives, require_not_first=False):
     for _ in range(5000):
         left=round(rng.uniform(1.5,12.0),6)
         right=round(left*rng.uniform(2.2,6.5),6)
-        target=primitive.apply(left,right)
-        if target is None: continue
-        if any(abs(float(v)-target)<=1e-9 for v in old_values(old_depth4,left,right)): continue
-        primitive_values=sorted({p.apply(left,right) for p in all_primitives if p.apply(left,right) is not None})
-        if require_not_first and primitive_values and abs(primitive_values[0]-target)<=1e-9: continue
-        colliders=[p.program_id for p in all_primitives if p.apply(left,right) is not None and abs(p.apply(left,right)-target)<=1e-9]
-        if len(colliders)!=1: continue
-        return (left,right,target)
-    raise AssertionError("failed to sample primitive-novel bracket")
+        candidate=_valid_bracket(
+            primitive,old_depth4,all_primitives,left,right,require_not_first
+        )
+        if candidate is not None:
+            return candidate
+    fallback=deterministic_bracket(
+        primitive,old_depth4,all_primitives,require_not_first=require_not_first
+    )
+    if fallback is not None:
+        return fallback
+    raise AssertionError("no realizable primitive-novel bracket satisfies the frozen constraints")
 
 
 def falsify_old(body, brackets, primitive, rng, signers, verifier, epoch_base):
@@ -148,7 +203,10 @@ def main(seed_path):
     old_depth4=generate_projection_transform_programs(
         max_transform_depth=4,signature_anchors=DEEP_TRANSFORM_SIGNATURE_ANCHORS
     )
-    hidden=rng.choice(primitives)
+    hidden_pool=eligible_hidden_primitives(old_depth4,primitives)
+    if not hidden_pool:
+        raise AssertionError("no power primitive can satisfy the frozen heldout constraint")
+    hidden=rng.choice(hidden_pool)
 
     samples=[choose_bracket(rng,hidden,old_depth4,primitives,require_not_first=(i==4)) for i in range(5)]
     wrong_candidates=[]
@@ -211,16 +269,18 @@ def main(seed_path):
         "old_alphabet":["LOG","INV"],"old_depth":3,"old_depth_program_count":assessment.current_program_count,
         "old_alphabet_falsified_contexts":len(assessment.falsified_contexts),
         "old_alphabet_missing_programs":sum(len(x.missing_program_ids) for x in assessment.context_assessments),
-        "primitive_shadow_program_count":len(primitives),"learned_primitive_id":learned.primitive_id,
-        "learned_exponent":learned.exponent,"learned_alpha":learned.alpha,
+        "primitive_shadow_program_count":len(primitives),"eligible_hidden_primitive_count":len(hidden_pool),
+        "learned_primitive_id":learned.primitive_id,"learned_exponent":learned.exponent,"learned_alpha":learned.alpha,
         "heldout_bracket":[heldout_left,heldout_right],"heldout_target":heldout_target,
+        "heldout_constraint_realizability_prechecked":True,
         "target_absent_from_old_alphabet_depth4":True,"treatment_candidate_count":len(tf.candidates),
         "remove_candidate_count":len(rf.candidates),"treatment_capability":treatment_cap,
         "remove_same_checkpoint_capability":remove_cap,"wrong_learned_primitive_id":wrong_policy.primitive_id,
         "wrong_capability":wrong_cap,"verifierless_primitive_authority":False,
-        "candidate_primitive_generation_uses_world_outcomes":False,"power_schema_human_authored":True,
-        "unrestricted_operator_invention":False,"foundation_weight_change":False,"physical_world":False,
-        "independent_organizational_custody":False,"global_recursive_acceleration":False,"AGI":False,"ASI":False,
+        "candidate_primitive_generation_uses_world_outcomes":False,"hidden_eligibility_uses_world_outcomes":False,
+        "power_schema_human_authored":True,"unrestricted_operator_invention":False,"foundation_weight_change":False,
+        "physical_world":False,"independent_organizational_custody":False,"global_recursive_acceleration":False,
+        "AGI":False,"ASI":False,
     }
     print(json.dumps(result,sort_keys=True))
 
