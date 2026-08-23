@@ -132,7 +132,8 @@ class RewriteSchemaGenesisTests(unittest.TestCase):
             rule="FOR_EACH_CERTIFIED_FAILED_EDGE_REWIRE_TO_UNIQUE_COMPATIBLE_ALTERNATIVE",
             supporting_contexts=("alpha", "beta"),
             supporting_source_classes=("source-alpha", "source-beta"),
-            training_program_ids=("p1", "p2"),
+            supporting_program_ids=("p1", "p2"),
+            inherited_from_external_outcomes=True,
         )
         self.assertIsNone(apply_parametric_macro(genome, cert, predecessor))
 
