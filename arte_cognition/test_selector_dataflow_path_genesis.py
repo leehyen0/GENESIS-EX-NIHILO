@@ -19,6 +19,9 @@ from arte_cognition.software_selector_relation_schema_genesis import (
     normalize_source_with_binding_schema,
 )
 from arte_cognition.world_coupling import WorldOutcomePair
+from evaluations.run_source_derived_dataflow_path_genesis import (
+    main as run_external_dataflow_path,
+)
 
 
 TARGET = "ResidualObservation"
@@ -159,6 +162,9 @@ class SelectorDataflowPathGenesisTests(unittest.TestCase):
         selected = select_authorized_dataflow_path_schema((schema,), policy)
         self.assertIsNotNone(selected)
         self.assertEqual(selected.schema_id, schema.schema_id)
+
+    def test_external_executable_dataflow_path_genesis_and_preoutcome_transfer(self):
+        run_external_dataflow_path()
 
 
 if __name__ == "__main__":
