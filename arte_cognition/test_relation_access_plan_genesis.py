@@ -40,6 +40,49 @@ class RelationAccessPlanGenesisTests(unittest.TestCase):
         self.assertEqual(len(plan.clauses), len(schema.relations))
         self.assertTrue(all(clause.source_relation_token for clause in plan.clauses))
 
+    def test_current_canonical_parent_reconstructs_same_plan_without_object_reuse(self):
+        first_examples, _ = training_examples()
+        second_examples, _ = training_examples()
+        first_schema = generate_reflective_rewrite_schemas(first_examples)[0]
+        second_schema = generate_reflective_rewrite_schemas(second_examples)[0]
+        self.assertIsNot(first_schema, second_schema)
+        self.assertEqual(first_schema.schema_id, second_schema.schema_id)
+        self.assertEqual(
+            tuple(relation.token() for relation in first_schema.relations),
+            tuple(relation.token() for relation in second_schema.relations),
+        )
+
+        first_plan = compile_relation_access_plan(first_schema)
+        second_plan = compile_relation_access_plan(second_schema)
+        self.assertIsNotNone(first_plan)
+        self.assertIsNotNone(second_plan)
+        self.assertIsNot(first_plan, second_plan)
+        self.assertEqual(first_plan.plan_id, second_plan.plan_id)
+        self.assertEqual(first_plan.schema_id, first_schema.schema_id)
+        self.assertEqual(second_plan.schema_id, second_schema.schema_id)
+        self.assertEqual(
+            tuple(clause.token() for clause in first_plan.clauses),
+            tuple(clause.token() for clause in second_plan.clauses),
+        )
+
+        genome, loci, good, _ = world("canonical-parent-fresh", 9, OrganKind.MEMORY, 731.0)
+        cert = certificate("canonical-parent-fresh", loci)
+        scan = apply_reflective_rewrite_schema(genome, cert, second_schema)
+        indexed = apply_relation_access_plan(genome, cert, second_schema, second_plan)
+        self.assertIsNotNone(scan)
+        self.assertIsNotNone(indexed)
+        self.assertEqual(indexed.outcome_evaluations, 0)
+        self.assertEqual(
+            capability(apply_mutation_program(genome, scan.mutation_program), loci, good),
+            1.0,
+        )
+        self.assertEqual(
+            capability(apply_mutation_program(genome, indexed.mutation_program), loci, good),
+            1.0,
+        )
+        indexed_work = indexed.index_build_field_reads + indexed.index_lookup_count + indexed.candidate_intersection_count
+        self.assertLess(indexed_work, scan.candidate_relation_checks)
+
     def test_index_plan_preserves_capability_and_reduces_structural_work(self):
         schema = self.schema()
         plan = compile_relation_access_plan(schema)
