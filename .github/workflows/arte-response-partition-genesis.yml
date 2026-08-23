@@ -1,0 +1,35 @@
+name: arte-response-partition-genesis
+
+on:
+  pull_request:
+    paths:
+      - 'arte_cognition/response_partition_genesis.py'
+      - 'arte_cognition/test_response_partition_genesis.py'
+      - 'arte_cognition/test_response_partition_restart.py'
+      - 'evaluations/run_response_partition_transfer.py'
+      - '.github/workflows/arte-response-partition-genesis.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  response-partition-frontier:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile response partition frontier
+        run: |
+          python -m py_compile arte_cognition/response_partition_genesis.py
+          python -m py_compile arte_cognition/test_response_partition_genesis.py
+          python -m py_compile arte_cognition/test_response_partition_restart.py
+          if [ -f evaluations/run_response_partition_transfer.py ]; then
+            python -m py_compile evaluations/run_response_partition_transfer.py
+          fi
+      - name: Run focused response partition contract
+        run: |
+          python -m unittest arte_cognition.test_response_partition_genesis -v
+          python -m unittest arte_cognition.test_response_partition_restart -v
