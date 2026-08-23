@@ -1,0 +1,33 @@
+name: arte-comparison-functional-genesis
+
+on:
+  pull_request:
+    paths:
+      - 'arte_cognition/comparison_functional_genesis.py'
+      - 'arte_cognition/test_comparison_functional_genesis.py'
+      - 'arte_cognition/test_comparison_functional_restart.py'
+      - 'evaluations/run_comparison_functional_transfer.py'
+      - '.github/workflows/arte-comparison-functional-genesis.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  comparison-functional-frontier:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile comparison functional frontier
+        run: |
+          python -m py_compile arte_cognition/comparison_functional_genesis.py
+          python -m py_compile arte_cognition/test_comparison_functional_genesis.py
+          python -m py_compile arte_cognition/test_comparison_functional_restart.py
+          python -m py_compile evaluations/run_comparison_functional_transfer.py
+      - name: Run focused comparison functional contract
+        run: |
+          python -m unittest arte_cognition.test_comparison_functional_genesis -v
+          python -m unittest arte_cognition.test_comparison_functional_restart -v
