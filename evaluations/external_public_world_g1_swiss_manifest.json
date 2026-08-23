@@ -1,0 +1,47 @@
+{
+  "artifact_type": "arte.external_public_world_residual/v1",
+  "canonical_parent": "f3840760cfc0b5b7eac1e03b4d0f9874b0d1d6b0",
+  "external_repository": "malkreide/swiss-environment-mcp",
+  "external_commit": "03df957ea316050dffa59168069688e142851818",
+  "external_issue": 90,
+  "external_issue_title": "Live-Tests gegen waldbrandgefahr.ch / environment.ld.admin.ch rot (2026-08-23)",
+  "external_issue_comments_at_freeze": 0,
+  "prior_external_workflow_run": 32618143967,
+  "prior_external_workflow_job": 97142068278,
+  "prior_external_state": "finding",
+  "prior_external_observation": {
+    "tests_total": 23,
+    "tests_failed": 2,
+    "tests_errors": 0,
+    "observed_failures": [
+      "tests/test_integration.py::test_nabel_current",
+      "tests/test_integration.py::test_bafu_datasets"
+    ]
+  },
+  "reproduction_contract": {
+    "python": "3.11",
+    "install": "pip install -e .[dev]",
+    "test": "pytest -m live -v --junitxml=live-report.xml",
+    "network": "live external source access required"
+  },
+  "authority": {
+    "public_exposed_development_experience": true,
+    "heldout_authority": false,
+    "independent_organizational_custody": false,
+    "solution_or_root_cause_supplied_in_issue": false,
+    "human_fix_supplied_to_body": false
+  },
+  "precommitted_outcomes": {
+    "pytest_green": "EXTERNAL_WORLD_RECOVERED_OR_TRANSIENT_FAILURE",
+    "pytest_red_with_valid_junit": "EXTERNAL_RESIDUAL_PERSISTS",
+    "install_or_collection_failure_without_live_comparison": "EXTERNAL_OBSERVATION_UNAVAILABLE"
+  },
+  "promotion_rule": "No cognition promotion from this observation alone. A persistent residual must alter a frozen BODY representation/probe/mutation, survive REMOVE/WRONG and a source-disjoint fresh task before promotion.",
+  "claims": {
+    "AGI": false,
+    "ASI": false,
+    "global_recursive_acceleration": false,
+    "physical_world_closure": false,
+    "foundation_weight_change": false
+  }
+}
