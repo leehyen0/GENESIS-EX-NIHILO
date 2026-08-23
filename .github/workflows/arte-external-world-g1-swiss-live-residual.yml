@@ -1,0 +1,93 @@
+name: arte-external-world-g1-swiss-live-residual
+
+on:
+  pull_request:
+    paths:
+      - "evaluations/external_public_world_g1_swiss_manifest.json"
+      - "evaluations/classify_external_public_world_residual.py"
+      - "evaluations/test_classify_external_public_world_residual.py"
+      - ".github/workflows/arte-external-world-g1-swiss-live-residual.yml"
+  workflow_dispatch: {}
+
+# The external checkout and its package code are untrusted public inputs.
+# No write authority or repository secrets are required for this observation.
+permissions:
+  contents: read
+
+jobs:
+  external-world-g1:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout ARTE evaluator only
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Verify fail-closed observation classifier
+        run: python -m unittest evaluations.test_classify_external_public_world_residual -v
+
+      - name: Fetch frozen external world source
+        run: |
+          set -euxo pipefail
+          git clone --filter=blob:none https://github.com/malkreide/swiss-environment-mcp.git external-world
+          cd external-world
+          git checkout --detach 03df957ea316050dffa59168069688e142851818
+          test "$(git rev-parse HEAD)" = "03df957ea316050dffa59168069688e142851818"
+
+      - name: Install frozen external source
+        id: install
+        continue-on-error: true
+        shell: bash
+        run: |
+          set +e
+          cd external-world
+          python -m pip install -e ".[dev]" 2>&1 | tee ../external-install.log
+          code=${PIPESTATUS[0]}
+          echo "exit_code=$code" >> "$GITHUB_OUTPUT"
+          exit "$code"
+
+      - name: Observe current live world
+        id: live
+        if: always() && steps.install.outputs.exit_code == '0'
+        continue-on-error: true
+        shell: bash
+        run: |
+          set +e
+          cd external-world
+          python -m pytest -m live -v --junitxml=../external-live-report.xml 2>&1 | tee ../external-live-output.txt
+          code=${PIPESTATUS[0]}
+          echo "exit_code=$code" >> "$GITHUB_OUTPUT"
+          exit "$code"
+
+      - name: Classify without turning infrastructure failure into world evidence
+        if: always()
+        shell: bash
+        run: |
+          install_exit="${{ steps.install.outputs.exit_code }}"
+          pytest_exit="${{ steps.live.outputs.exit_code }}"
+          if [ -z "$install_exit" ]; then install_exit=99; fi
+          if [ -z "$pytest_exit" ]; then pytest_exit=99; fi
+          python evaluations/classify_external_public_world_residual.py \
+            --manifest evaluations/external_public_world_g1_swiss_manifest.json \
+            --junit external-live-report.xml \
+            --install-exit "$install_exit" \
+            --pytest-exit "$pytest_exit" | tee external-world-observation.json
+          cat external-world-observation.json >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Preserve observation logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: arte-external-world-g1-swiss-live-residual
+          if-no-files-found: ignore
+          path: |
+            external-install.log
+            external-live-output.txt
+            external-live-report.xml
+            external-world-observation.json
