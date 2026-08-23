@@ -1,0 +1,38 @@
+name: arte-composition-law-body
+
+on:
+  pull_request:
+    paths:
+      - 'arte_cognition/composition_law_genesis.py'
+      - 'arte_cognition/representation_algebra_runtime.py'
+      - 'arte_cognition/canonical_body_checkpoint.py'
+      - 'arte_cognition/test_composition_law_genesis.py'
+      - 'arte_cognition/test_representation_algebra_runtime.py'
+      - 'evaluations/run_composition_law_body_transfer.py'
+      - '.github/workflows/arte-composition-law-body.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  composition-law-body-frontier:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile generated algebra BODY frontier
+        run: |
+          python -m py_compile arte_cognition/composition_law_genesis.py
+          python -m py_compile arte_cognition/representation_algebra_runtime.py
+          python -m py_compile arte_cognition/canonical_body_checkpoint.py
+          python -m py_compile arte_cognition/test_composition_law_genesis.py
+          python -m py_compile arte_cognition/test_representation_algebra_runtime.py
+          python -m py_compile evaluations/run_composition_law_body_transfer.py
+      - name: Run focused generated algebra BODY contract
+        run: |
+          python -m unittest arte_cognition.test_composition_law_genesis -v
+          python -m unittest arte_cognition.test_representation_algebra_runtime -v
+          PYTHONPATH=. python evaluations/run_composition_law_body_transfer.py

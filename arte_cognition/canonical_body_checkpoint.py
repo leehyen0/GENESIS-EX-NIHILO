@@ -13,10 +13,14 @@ from .epistemic_depth_runtime import (
     restore_epistemic_runtime,
 )
 from .primitive_genesis_runtime import (
-    PRIMITIVE_DEVELOPMENT_SCHEMA,
     WorldDrivenPrimitiveRuntime,
     primitive_checkpoint_dict,
     restore_world_driven_primitive_runtime,
+)
+from .representation_algebra_runtime import (
+    WorldDrivenRepresentationAlgebraRuntime,
+    representation_algebra_checkpoint_dict,
+    restore_world_driven_representation_algebra_runtime,
 )
 from .raw_observation_authority import RawObservationVerifier
 from .world_coupling import WorldReceiptVerifier
@@ -26,6 +30,7 @@ CANONICAL_BODY_SCHEMA = "arte.canonical_developmental_body/v1"
 KIND_BASE = "PERSISTENT_COGNITIVE_RUNTIME"
 KIND_EPISTEMIC = "EPISTEMICALLY_DEEP_RUNTIME"
 KIND_PRIMITIVE = "WORLD_DRIVEN_PRIMITIVE_RUNTIME"
+KIND_REPRESENTATION_ALGEBRA = "WORLD_DRIVEN_REPRESENTATION_ALGEBRA_RUNTIME"
 
 _REQUIRED_NAMESPACES = {
     KIND_BASE: ("policy", "topology", "world_coupling", "memory"),
@@ -48,11 +53,27 @@ _REQUIRED_NAMESPACES = {
         "raw_observation_receipts",
         "primitive_genesis_policy",
     ),
+    KIND_REPRESENTATION_ALGEBRA: (
+        "policy",
+        "topology",
+        "world_coupling",
+        "memory",
+        "epistemic_depth_schema",
+        "world_model_ecology",
+        "primitive_development_schema",
+        "raw_observation_receipts",
+        "primitive_genesis_policy",
+        "representation_algebra_schema",
+        "composition_law_lineage",
+        "composition_law_policy",
+    ),
 }
 
 
 def _runtime_kind(runtime: PersistentCognitiveRuntime) -> str:
-    # Most-specific-first is deliberate. Primitive BODY is also an epistemic BODY.
+    # Most-specific-first is deliberate. Algebra BODY is also primitive+epistemic.
+    if isinstance(runtime, WorldDrivenRepresentationAlgebraRuntime):
+        return KIND_REPRESENTATION_ALGEBRA
     if isinstance(runtime, WorldDrivenPrimitiveRuntime):
         return KIND_PRIMITIVE
     if isinstance(runtime, EpistemicallyDeepPersistentCognitiveRuntime):
@@ -99,13 +120,15 @@ def _assert_required_namespaces(payload: Dict[str, Any], kind: str) -> None:
 def checkpoint_dict(runtime: PersistentCognitiveRuntime) -> Dict[str, Any]:
     """Serialize the deepest developmental state owned by this exact BODY.
 
-    Calling this one function on a G5-G7 runtime cannot silently fall back to the
-    shallower epistemic/base checkpoint contracts. The runtime type selects the
-    most-specific serializer, then the canonical envelope records which state
-    namespaces are mandatory for future reconstruction.
+    Calling this one function on a deep runtime cannot silently fall back to a
+    shallower checkpoint contract. The runtime type selects the most-specific
+    serializer, then the canonical envelope records which state namespaces are
+    mandatory for future reconstruction.
     """
     kind = _runtime_kind(runtime)
-    if kind == KIND_PRIMITIVE:
+    if kind == KIND_REPRESENTATION_ALGEBRA:
+        payload = representation_algebra_checkpoint_dict(runtime)
+    elif kind == KIND_PRIMITIVE:
         payload = primitive_checkpoint_dict(runtime)
     elif kind == KIND_EPISTEMIC:
         payload = epistemic_checkpoint_dict(runtime)
@@ -138,6 +161,8 @@ def checkpoint_json(runtime: PersistentCognitiveRuntime) -> str:
 
 
 def _inferred_kind(payload: Dict[str, Any]) -> str:
+    if payload.get("representation_algebra_schema") is not None:
+        return KIND_REPRESENTATION_ALGEBRA
     if payload.get("primitive_development_schema") is not None:
         return KIND_PRIMITIVE
     if payload.get("epistemic_depth_schema") is not None:
@@ -178,7 +203,13 @@ def restore_runtime(
 ) -> PersistentCognitiveRuntime:
     """Restore the deepest runtime represented by the checkpoint, fail-closed."""
     kind = _validate_canonical_envelope(payload)
-    if kind == KIND_PRIMITIVE:
+    if kind == KIND_REPRESENTATION_ALGEBRA:
+        runtime = restore_world_driven_representation_algebra_runtime(
+            payload,
+            world_verifier=world_verifier,
+            raw_observation_verifier=raw_observation_verifier,
+        )
+    elif kind == KIND_PRIMITIVE:
         runtime = restore_world_driven_primitive_runtime(
             payload,
             world_verifier=world_verifier,
