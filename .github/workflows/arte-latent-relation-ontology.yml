@@ -1,0 +1,31 @@
+name: arte-latent-relation-ontology
+
+on:
+  pull_request:
+    paths:
+      - 'arte_cognition/latent_relation_ontology_genesis.py'
+      - 'arte_cognition/test_latent_relation_ontology_genesis.py'
+      - 'evaluations/run_latent_relation_ontology_transfer.py'
+      - '.github/workflows/arte-latent-relation-ontology.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  latent-relation-ontology:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile latent ontology frontier
+        run: |
+          python -m py_compile arte_cognition/latent_relation_ontology_genesis.py
+          python -m py_compile arte_cognition/test_latent_relation_ontology_genesis.py
+          if [ -f evaluations/run_latent_relation_ontology_transfer.py ]; then
+            python -m py_compile evaluations/run_latent_relation_ontology_transfer.py
+          fi
+      - name: Run focused latent ontology contract
+        run: python -m unittest arte_cognition.test_latent_relation_ontology_genesis -v
