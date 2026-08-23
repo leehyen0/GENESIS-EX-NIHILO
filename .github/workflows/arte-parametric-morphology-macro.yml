@@ -1,0 +1,40 @@
+name: arte-parametric-morphology-macro
+
+on:
+  push:
+    branches:
+      - arte-parametric-morphology-macro-shadow
+    paths:
+      - 'arte_cognition/parametric_morphology_macro.py'
+      - 'arte_cognition/test_parametric_morphology_macro.py'
+      - 'evaluations/run_parametric_morphology_macro_transfer.py'
+      - '.github/workflows/arte-parametric-morphology-macro.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  macro-transfer:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile parametric morphology macro
+        run: |
+          python -m py_compile arte_cognition/parametric_morphology_macro.py
+          python -m py_compile arte_cognition/test_parametric_morphology_macro.py
+          python -m py_compile evaluations/run_parametric_morphology_macro_transfer.py
+      - name: Run parametric morphology macro contracts
+        run: python -m unittest arte_cognition.test_parametric_morphology_macro -v
+      - name: Generate evaluator-owned hidden seed
+        run: |
+          python - <<'PY'
+          import secrets
+          from pathlib import Path
+          Path('/tmp/arte_parametric_macro_seed').write_text(str(secrets.randbits(128)))
+          PY
+      - name: Run hidden cross-scale macro transfer evaluation
+        run: PYTHONPATH=. python evaluations/run_parametric_morphology_macro_transfer.py /tmp/arte_parametric_macro_seed
