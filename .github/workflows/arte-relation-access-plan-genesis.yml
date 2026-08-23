@@ -1,0 +1,46 @@
+name: arte-relation-access-plan-genesis
+
+on:
+  pull_request:
+    paths:
+      - 'arte_cognition/relation_access_plan_genesis.py'
+      - 'arte_cognition/test_relation_access_plan_genesis.py'
+      - 'evaluations/run_relation_access_plan_genesis.py'
+      - '.github/workflows/arte-relation-access-plan-genesis.yml'
+  push:
+    branches:
+      - arte-generated-relation-access-plan-shadow
+    paths:
+      - 'arte_cognition/relation_access_plan_genesis.py'
+      - 'arte_cognition/test_relation_access_plan_genesis.py'
+      - 'evaluations/run_relation_access_plan_genesis.py'
+      - '.github/workflows/arte-relation-access-plan-genesis.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  relation-access-plan:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile generated relation access plan
+        run: |
+          python -m py_compile arte_cognition/relation_access_plan_genesis.py
+          python -m py_compile arte_cognition/test_relation_access_plan_genesis.py
+          python -m py_compile evaluations/run_relation_access_plan_genesis.py
+      - name: Run relation access-plan contracts
+        run: python -m unittest arte_cognition.test_relation_access_plan_genesis -v
+      - name: Generate evaluator-owned hidden seed
+        run: |
+          python - <<'PY'
+          import secrets
+          from pathlib import Path
+          Path('/tmp/arte_relation_access_plan_seed').write_text(str(secrets.randbits(128)))
+          PY
+      - name: Run hidden relation access-plan evaluation
+        run: PYTHONPATH=. python evaluations/run_relation_access_plan_genesis.py /tmp/arte_relation_access_plan_seed
