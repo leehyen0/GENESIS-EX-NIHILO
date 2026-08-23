@@ -5,6 +5,7 @@ on:
     paths:
       - 'arte_cognition/polynomial_relation_genesis.py'
       - 'arte_cognition/test_polynomial_relation_genesis.py'
+      - 'arte_cognition/test_polynomial_relation_restart.py'
       - 'evaluations/run_polynomial_relation_transfer.py'
       - '.github/workflows/arte-polynomial-relation-genesis.yml'
   workflow_dispatch:
@@ -24,6 +25,9 @@ jobs:
         run: |
           python -m py_compile arte_cognition/polynomial_relation_genesis.py
           python -m py_compile arte_cognition/test_polynomial_relation_genesis.py
+          python -m py_compile arte_cognition/test_polynomial_relation_restart.py
           python -m py_compile evaluations/run_polynomial_relation_transfer.py
       - name: Run focused polynomial relation contract
-        run: python -m unittest arte_cognition.test_polynomial_relation_genesis -v
+        run: |
+          python -m unittest arte_cognition.test_polynomial_relation_genesis -v
+          python -m unittest arte_cognition.test_polynomial_relation_restart -v
