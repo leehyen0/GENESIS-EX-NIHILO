@@ -1,0 +1,164 @@
+name: arte-external-world-g2-daari-live-residual
+
+on:
+  pull_request:
+    paths:
+      - "evaluations/external_public_world_g2_daari_manifest.json"
+      - "evaluations/classify_external_public_world_g2_daari_residual.py"
+      - "evaluations/test_classify_external_public_world_g2_daari_residual.py"
+      - ".github/workflows/arte-external-world-g2-daari-live-residual.yml"
+  push:
+    branches:
+      - arte-external-world-g2-daari-live-residual
+    paths:
+      - "evaluations/external_public_world_g2_daari_manifest.json"
+      - "evaluations/classify_external_public_world_g2_daari_residual.py"
+      - "evaluations/test_classify_external_public_world_g2_daari_residual.py"
+      - ".github/workflows/arte-external-world-g2-daari-live-residual.yml"
+  workflow_dispatch: {}
+
+# External repository code, installer and model are untrusted public inputs.
+# This observation requires no secrets and has read-only repository authority.
+permissions:
+  contents: read
+
+jobs:
+  external-world-g2-daari:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - name: Checkout ARTE evaluator only
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Verify fail-closed observation classifier
+        run: python -m unittest evaluations.test_classify_external_public_world_g2_daari_residual -v
+
+      - name: Fetch frozen daari source
+        run: |
+          set -euxo pipefail
+          git clone --filter=blob:none https://github.com/naveenreddyalka/daari.git external-world
+          cd external-world
+          git checkout --detach b9e678a08630d9fe1fc0197d2a4efe8425cefee6
+          test "$(git rev-parse HEAD)" = "b9e678a08630d9fe1fc0197d2a4efe8425cefee6"
+
+      - name: Install frozen daari source
+        id: install
+        continue-on-error: true
+        shell: bash
+        run: |
+          set +e
+          cd external-world
+          python -m pip install -e ".[dev]" 2>&1 | tee ../daari-install.log
+          code=${PIPESTATUS[0]}
+          echo "exit_code=$code" >> "$GITHUB_OUTPUT"
+          exit "$code"
+
+      - name: Install and start Ollama
+        id: ollama
+        continue-on-error: true
+        shell: bash
+        run: |
+          set +e
+          curl -fsSL https://ollama.com/install.sh -o /tmp/ollama-install.sh
+          curl_code=$?
+          if [ "$curl_code" -ne 0 ]; then
+            echo "exit_code=$curl_code" >> "$GITHUB_OUTPUT"
+            exit "$curl_code"
+          fi
+          sh /tmp/ollama-install.sh 2>&1 | tee ollama-install.log
+          install_code=${PIPESTATUS[0]}
+          if [ "$install_code" -ne 0 ]; then
+            echo "exit_code=$install_code" >> "$GITHUB_OUTPUT"
+            exit "$install_code"
+          fi
+          ollama --version | tee ollama-version.txt
+          nohup ollama serve > ollama-serve.log 2>&1 &
+          ready=1
+          for _ in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:11434/api/tags >/dev/null 2>&1; then
+              ready=0
+              break
+            fi
+            sleep 1
+          done
+          echo "exit_code=$ready" >> "$GITHUB_OUTPUT"
+          exit "$ready"
+
+      - name: Pull exact model tag used by external test
+        id: model
+        if: always() && steps.ollama.outputs.exit_code == '0'
+        continue-on-error: true
+        shell: bash
+        run: |
+          set +e
+          ollama pull llama3.2:3b 2>&1 | tee ollama-pull.log
+          code=${PIPESTATUS[0]}
+          if [ "$code" -eq 0 ]; then
+            ollama list | tee ollama-list.txt
+            ollama show llama3.2:3b --modelfile > ollama-model-modelfile.txt 2>&1 || true
+          fi
+          echo "exit_code=$code" >> "$GITHUB_OUTPUT"
+          exit "$code"
+
+      - name: Prospectively re-observe exact failing test
+        id: live
+        if: always() && steps.install.outputs.exit_code == '0' && steps.ollama.outputs.exit_code == '0' && steps.model.outputs.exit_code == '0'
+        continue-on-error: true
+        shell: bash
+        env:
+          OLLAMA_HOST: http://127.0.0.1:11434
+        run: |
+          set +e
+          cd external-world
+          python -m pytest \
+            tests/integration/test_sampling_live.py::test_max_tokens_actually_truncates \
+            -vv --junitxml=../daari-live-report.xml 2>&1 | tee ../daari-live-output.txt
+          code=${PIPESTATUS[0]}
+          echo "exit_code=$code" >> "$GITHUB_OUTPUT"
+          exit "$code"
+
+      - name: Classify without converting infrastructure drift into cognition evidence
+        if: always()
+        shell: bash
+        run: |
+          install_exit="${{ steps.install.outputs.exit_code }}"
+          ollama_exit="${{ steps.ollama.outputs.exit_code }}"
+          model_pull_exit="${{ steps.model.outputs.exit_code }}"
+          pytest_exit="${{ steps.live.outputs.exit_code }}"
+          if [ -z "$install_exit" ]; then install_exit=99; fi
+          if [ -z "$ollama_exit" ]; then ollama_exit=99; fi
+          if [ -z "$model_pull_exit" ]; then model_pull_exit=99; fi
+          if [ -z "$pytest_exit" ]; then pytest_exit=99; fi
+          python evaluations/classify_external_public_world_g2_daari_residual.py \
+            --manifest evaluations/external_public_world_g2_daari_manifest.json \
+            --junit daari-live-report.xml \
+            --install-exit "$install_exit" \
+            --ollama-exit "$ollama_exit" \
+            --model-pull-exit "$model_pull_exit" \
+            --pytest-exit "$pytest_exit" | tee daari-world-observation.json
+          cat daari-world-observation.json >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Preserve observation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: arte-external-world-g2-daari-live-residual
+          if-no-files-found: ignore
+          path: |
+            daari-install.log
+            ollama-install.log
+            ollama-version.txt
+            ollama-serve.log
+            ollama-pull.log
+            ollama-list.txt
+            ollama-model-modelfile.txt
+            daari-live-output.txt
+            daari-live-report.xml
+            daari-world-observation.json
