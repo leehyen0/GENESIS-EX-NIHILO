@@ -6,6 +6,8 @@ on:
       - 'arte_cognition/external_ecology.py'
       - 'arte_cognition/test_external_ecology.py'
       - 'evaluations/run_large_scale_external_ecology.py'
+      - 'evaluations/large_scale_external_ecology_contract.json'
+      - 'research/ARTE_LARGE_SCALE_EXTERNAL_ECOLOGY_20260823.md'
       - '.github/workflows/arte-large-scale-external-ecology.yml'
   push:
     branches:
@@ -14,6 +16,8 @@ on:
       - 'arte_cognition/external_ecology.py'
       - 'arte_cognition/test_external_ecology.py'
       - 'evaluations/run_large_scale_external_ecology.py'
+      - 'evaluations/large_scale_external_ecology_contract.json'
+      - 'research/ARTE_LARGE_SCALE_EXTERNAL_ECOLOGY_20260823.md'
       - '.github/workflows/arte-large-scale-external-ecology.yml'
   workflow_dispatch:
 
@@ -38,6 +42,21 @@ jobs:
           python -m py_compile arte_cognition/external_ecology.py
           python -m py_compile arte_cognition/test_external_ecology.py
           python -m py_compile evaluations/run_large_scale_external_ecology.py
+
+      - name: Verify frozen large-scale contract
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          c = json.loads(Path('evaluations/large_scale_external_ecology_contract.json').read_text())
+          assert c['canonical_parent'] == 'f3840760cfc0b5b7eac1e03b4d0f9874b0d1d6b0'
+          assert c['candidate_consequences_used_for_acquisition'] is False
+          assert c['hidden_cohort_candidate_count'] == 72
+          assert c['minimum_prospective_transitions'] == 3
+          assert c['minimum_more_compute_repeats_for_external_inexpressibility'] == 16
+          assert c['global_recursive_acceleration_self_certification'] is False
+          assert c['AGI'] is False and c['ASI'] is False
+          PY
 
       - name: Run external ecology contracts
         run: python -m unittest arte_cognition.test_external_ecology -v
