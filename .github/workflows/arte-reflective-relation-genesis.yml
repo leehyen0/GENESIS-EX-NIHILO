@@ -1,0 +1,46 @@
+name: arte-reflective-relation-genesis
+
+on:
+  pull_request:
+    paths:
+      - 'arte_cognition/reflective_relation_genesis.py'
+      - 'arte_cognition/test_reflective_relation_genesis.py'
+      - 'evaluations/run_reflective_relation_genesis.py'
+      - '.github/workflows/arte-reflective-relation-genesis.yml'
+  push:
+    branches:
+      - arte-reflective-relation-genesis-shadow
+    paths:
+      - 'arte_cognition/reflective_relation_genesis.py'
+      - 'arte_cognition/test_reflective_relation_genesis.py'
+      - 'evaluations/run_reflective_relation_genesis.py'
+      - '.github/workflows/arte-reflective-relation-genesis.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  reflective-relation:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile reflective relation genesis
+        run: |
+          python -m py_compile arte_cognition/reflective_relation_genesis.py
+          python -m py_compile arte_cognition/test_reflective_relation_genesis.py
+          python -m py_compile evaluations/run_reflective_relation_genesis.py
+      - name: Run reflective relation contracts
+        run: python -m unittest arte_cognition.test_reflective_relation_genesis -v
+      - name: Generate evaluator-owned hidden seed
+        run: |
+          python - <<'PY'
+          import secrets
+          from pathlib import Path
+          Path('/tmp/arte_reflective_relation_seed').write_text(str(secrets.randbits(128)))
+          PY
+      - name: Run hidden reflective relation evaluation
+        run: PYTHONPATH=. python evaluations/run_reflective_relation_genesis.py /tmp/arte_reflective_relation_seed
