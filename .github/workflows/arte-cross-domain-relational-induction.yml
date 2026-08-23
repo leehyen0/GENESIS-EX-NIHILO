@@ -1,0 +1,27 @@
+name: arte-cross-domain-relational-induction
+
+on:
+  pull_request:
+    paths:
+      - 'arte_cognition/relational_residual_induction.py'
+      - 'arte_cognition/test_relational_residual_induction.py'
+      - '.github/workflows/arte-cross-domain-relational-induction.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  relational-residual-frontier:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile cross-domain inducer
+        run: |
+          python -m py_compile arte_cognition/relational_residual_induction.py
+          python -m py_compile arte_cognition/test_relational_residual_induction.py
+      - name: Run focused cross-domain contract
+        run: python -m unittest arte_cognition.test_relational_residual_induction -v
