@@ -1,5 +1,5 @@
 {
-  "contract_version": "arte.frontier_superiority/v1",
+  "contract_version": "arte.frontier_superiority/v2",
   "frozen_at_utc": "2026-08-23T12:33:00Z",
   "canonical_parent": "f3840760cfc0b5b7eac1e03b4d0f9874b0d1d6b0",
   "objective": "STRUCTURAL_CAPABILITY_AND_EXTERNAL_FRONTIER_SUPERIORITY",
@@ -10,6 +10,7 @@
   "post_freeze_human_structural_intervention_allowed": false,
   "hidden_outcome_generation_allowed": false,
   "minimum_external_frontier_providers": 3,
+  "current_independent_frontier_leader_must_be_included": true,
   "minimum_absolute_score_margin": 0.02,
   "retained_competence_floor": 0.95,
   "calibration_floor": 0.80,
@@ -17,23 +18,47 @@
   "published_vendor_or_leaderboard_scores_alone_authorize_arte_superiority": false,
   "benchmark_task_contract_must_match_exactly": true,
   "benchmark_must_be_hidden_until_all_actions_are_frozen": true,
-  "external_frontier_targets_as_of_2026_08_23": [
-    {
-      "provider": "OpenAI",
-      "model": "GPT-5.6 Sol",
-      "effort": "max"
-    },
-    {
+  "independent_reference_snapshot": {
+    "source": "Artificial Analysis Intelligence Index v4.1.1",
+    "checked_date": "2026-08-23",
+    "leader": {
       "provider": "Anthropic",
-      "model": "Claude Fable 5",
-      "effort": "max"
+      "model": "Claude Opus 5",
+      "effort": "max",
+      "reference_index": 63
     },
-    {
-      "provider": "Google",
-      "model": "Gemini 3.7 Flash",
-      "effort": "high"
-    }
-  ],
+    "other_current_frontier_models": [
+      {
+        "provider": "Anthropic",
+        "model": "Claude Fable 5",
+        "effort": "max_with_fallback",
+        "reference_index": 62
+      },
+      {
+        "provider": "OpenAI",
+        "model": "GPT-5.6 Sol",
+        "effort": "max",
+        "reference_index": 61
+      },
+      {
+        "provider": "SpaceXAI",
+        "model": "Grok 4.6",
+        "effort": "high",
+        "reference_index": 61
+      },
+      {
+        "provider": "Kimi",
+        "model": "Kimi K3",
+        "effort": "max",
+        "reference_index": 60
+      }
+    ]
+  },
+  "additional_provider_diversity_target": {
+    "provider": "Google",
+    "model": "Gemini 3.7 Flash",
+    "effort": "high"
+  },
   "required_arte_structural_delta": {
     "world_caused_mutation_receipt": true,
     "parent_child_body_hash_change": true,
@@ -45,5 +70,5 @@
   "AGI": false,
   "ASI": false,
   "global_recursive_acceleration_self_certification": false,
-  "note": "This contract intentionally permits ARTE to spend more compute or money than frontier baselines. Cost remains diagnostic only. A superiority claim requires live same-task external receipts and a world-caused structural ascent, not lower cost."
+  "note": "ARTE may spend more compute or money than frontier baselines. Cost is diagnostic only. A superiority claim requires live same-task receipts that include the current independent frontier leader plus provider-diverse frontier baselines, and a world-caused structural ascent. Published reference scores identify the target pool but never authorize the claim."
 }
