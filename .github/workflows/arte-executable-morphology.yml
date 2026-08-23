@@ -5,8 +5,12 @@ on:
     paths:
       - 'arte_cognition/executable_morphology.py'
       - 'arte_cognition/test_executable_morphology.py'
+      - 'arte_cognition/morphology_genesis.py'
+      - 'arte_cognition/test_morphology_genesis.py'
       - 'arte_cognition/external_experience.py'
       - 'arte_cognition/test_external_experience.py'
+      - 'arte_cognition/meta_acceleration.py'
+      - 'arte_cognition/test_meta_acceleration.py'
       - 'research/ARTE_SELF_EVOLVING_RESEARCH_BODY_20260823.md'
       - 'research/ARTE_EXTERNAL_RESEARCH_INGEST_20260823.md'
       - '.github/workflows/arte-executable-morphology.yml'
@@ -23,13 +27,19 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Compile morphology and external-experience kernels
+      - name: Compile morphology, genesis, external experience, and acceleration kernels
         run: |
           python -m py_compile arte_cognition/executable_morphology.py
           python -m py_compile arte_cognition/test_executable_morphology.py
+          python -m py_compile arte_cognition/morphology_genesis.py
+          python -m py_compile arte_cognition/test_morphology_genesis.py
           python -m py_compile arte_cognition/external_experience.py
           python -m py_compile arte_cognition/test_external_experience.py
-      - name: Run morphology and external-experience contracts
+          if [ -f arte_cognition/meta_acceleration.py ]; then python -m py_compile arte_cognition/meta_acceleration.py; fi
+          if [ -f arte_cognition/test_meta_acceleration.py ]; then python -m py_compile arte_cognition/test_meta_acceleration.py; fi
+      - name: Run morphology, genesis, and external-experience contracts
         run: |
           python -m unittest arte_cognition.test_executable_morphology -v
+          python -m unittest arte_cognition.test_morphology_genesis -v
           python -m unittest arte_cognition.test_external_experience -v
+          if [ -f arte_cognition/test_meta_acceleration.py ]; then python -m unittest arte_cognition.test_meta_acceleration -v; fi
