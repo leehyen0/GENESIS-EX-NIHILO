@@ -1,0 +1,46 @@
+name: arte-generated-morphology-rewrite-schema
+
+on:
+  pull_request:
+    paths:
+      - 'arte_cognition/morphology_rewrite_schema_genesis.py'
+      - 'arte_cognition/test_morphology_rewrite_schema_genesis.py'
+      - 'evaluations/run_generated_morphology_rewrite_schema.py'
+      - '.github/workflows/arte-generated-morphology-rewrite-schema.yml'
+  push:
+    branches:
+      - arte-generated-morphology-rewrite-schema-shadow
+    paths:
+      - 'arte_cognition/morphology_rewrite_schema_genesis.py'
+      - 'arte_cognition/test_morphology_rewrite_schema_genesis.py'
+      - 'evaluations/run_generated_morphology_rewrite_schema.py'
+      - '.github/workflows/arte-generated-morphology-rewrite-schema.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  rewrite-schema:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile generated rewrite-schema kernels
+        run: |
+          python -m py_compile arte_cognition/morphology_rewrite_schema_genesis.py
+          python -m py_compile arte_cognition/test_morphology_rewrite_schema_genesis.py
+          python -m py_compile evaluations/run_generated_morphology_rewrite_schema.py
+      - name: Run generated rewrite-schema contracts
+        run: python -m unittest arte_cognition.test_morphology_rewrite_schema_genesis -v
+      - name: Generate evaluator-owned hidden seed
+        run: |
+          python - <<'PY'
+          import secrets
+          from pathlib import Path
+          Path('/tmp/arte_generated_rewrite_schema_seed').write_text(str(secrets.randbits(128)))
+          PY
+      - name: Run hidden generated rewrite-schema frontier evaluation
+        run: PYTHONPATH=. python evaluations/run_generated_morphology_rewrite_schema.py /tmp/arte_generated_rewrite_schema_seed
