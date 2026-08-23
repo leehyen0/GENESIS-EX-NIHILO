@@ -35,4 +35,4 @@ jobs:
         run: |
           python -m unittest arte_cognition.test_composition_law_genesis -v
           python -m unittest arte_cognition.test_representation_algebra_runtime -v
-          python evaluations/run_composition_law_body_transfer.py
+          PYTHONPATH=. python evaluations/run_composition_law_body_transfer.py
