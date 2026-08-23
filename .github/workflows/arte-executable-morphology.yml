@@ -11,6 +11,7 @@ on:
       - 'arte_cognition/test_external_experience.py'
       - 'arte_cognition/meta_acceleration.py'
       - 'arte_cognition/test_meta_acceleration.py'
+      - 'evaluations/run_morphology_meta_acceleration.py'
       - 'research/ARTE_SELF_EVOLVING_RESEARCH_BODY_20260823.md'
       - 'research/ARTE_EXTERNAL_RESEARCH_INGEST_20260823.md'
       - '.github/workflows/arte-executable-morphology.yml'
@@ -27,7 +28,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Compile morphology, genesis, external experience, and acceleration kernels
+      - name: Compile morphology, genesis, external experience, acceleration, and evaluator kernels
         run: |
           python -m py_compile arte_cognition/executable_morphology.py
           python -m py_compile arte_cognition/test_executable_morphology.py
@@ -35,11 +36,21 @@ jobs:
           python -m py_compile arte_cognition/test_morphology_genesis.py
           python -m py_compile arte_cognition/external_experience.py
           python -m py_compile arte_cognition/test_external_experience.py
-          if [ -f arte_cognition/meta_acceleration.py ]; then python -m py_compile arte_cognition/meta_acceleration.py; fi
-          if [ -f arte_cognition/test_meta_acceleration.py ]; then python -m py_compile arte_cognition/test_meta_acceleration.py; fi
-      - name: Run morphology, genesis, and external-experience contracts
+          python -m py_compile arte_cognition/meta_acceleration.py
+          python -m py_compile arte_cognition/test_meta_acceleration.py
+          python -m py_compile evaluations/run_morphology_meta_acceleration.py
+      - name: Run morphology, genesis, external-experience, and acceleration contracts
         run: |
           python -m unittest arte_cognition.test_executable_morphology -v
           python -m unittest arte_cognition.test_morphology_genesis -v
           python -m unittest arte_cognition.test_external_experience -v
-          if [ -f arte_cognition/test_meta_acceleration.py ]; then python -m unittest arte_cognition.test_meta_acceleration -v; fi
+          python -m unittest arte_cognition.test_meta_acceleration -v
+      - name: Generate evaluator-owned hidden seed
+        run: |
+          python - <<'PY'
+          import secrets
+          from pathlib import Path
+          Path('/tmp/arte_morphology_meta_acceleration_seed').write_text(str(secrets.randbits(128)))
+          PY
+      - name: Run hidden morphology meta-acceleration evaluation
+        run: python evaluations/run_morphology_meta_acceleration.py /tmp/arte_morphology_meta_acceleration_seed
