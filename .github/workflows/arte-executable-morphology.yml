@@ -5,6 +5,10 @@ on:
     paths:
       - 'arte_cognition/executable_morphology.py'
       - 'arte_cognition/test_executable_morphology.py'
+      - 'arte_cognition/external_experience.py'
+      - 'arte_cognition/test_external_experience.py'
+      - 'research/ARTE_SELF_EVOLVING_RESEARCH_BODY_20260823.md'
+      - 'research/ARTE_EXTERNAL_RESEARCH_INGEST_20260823.md'
       - '.github/workflows/arte-executable-morphology.yml'
   workflow_dispatch:
 
@@ -19,9 +23,13 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Compile morphology kernel
+      - name: Compile morphology and external-experience kernels
         run: |
           python -m py_compile arte_cognition/executable_morphology.py
           python -m py_compile arte_cognition/test_executable_morphology.py
-      - name: Run morphology contract
-        run: python -m unittest arte_cognition.test_executable_morphology -v
+          python -m py_compile arte_cognition/external_experience.py
+          python -m py_compile arte_cognition/test_external_experience.py
+      - name: Run morphology and external-experience contracts
+        run: |
+          python -m unittest arte_cognition.test_executable_morphology -v
+          python -m unittest arte_cognition.test_external_experience -v
