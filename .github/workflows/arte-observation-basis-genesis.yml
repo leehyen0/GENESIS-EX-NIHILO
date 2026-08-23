@@ -1,0 +1,31 @@
+name: arte-observation-basis-genesis
+
+on:
+  pull_request:
+    paths:
+      - 'arte_cognition/observation_basis_genesis.py'
+      - 'arte_cognition/test_observation_basis_genesis.py'
+      - 'evaluations/run_observation_basis_transfer.py'
+      - '.github/workflows/arte-observation-basis-genesis.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  observation-basis-frontier:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile observation basis frontier
+        run: |
+          python -m py_compile arte_cognition/observation_basis_genesis.py
+          python -m py_compile arte_cognition/test_observation_basis_genesis.py
+          if [ -f evaluations/run_observation_basis_transfer.py ]; then
+            python -m py_compile evaluations/run_observation_basis_transfer.py
+          fi
+      - name: Run focused observation basis contract
+        run: python -m unittest arte_cognition.test_observation_basis_genesis -v
