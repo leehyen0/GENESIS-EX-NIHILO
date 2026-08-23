@@ -29,6 +29,7 @@ KINDS = (
     OrganKind.PERCEPTOR,
     OrganKind.GENERATOR,
 )
+STEP = 2.75
 
 
 def token(rng: random.Random, prefix: str) -> str:
@@ -48,14 +49,16 @@ def make_world(seed: int, label: str, depth: int, kind: OrganKind, base_priority
         good = token(rng, f"good{index}")
         bad = token(rng, f"bad{index}")
         edge_id = token(rng, f"edge{index}")
-        priority = base_priority + 2.75 * index
+        priority = base_priority + STEP * index
         shared_output = (token(rng, f"sharedout{index}"),)
         shared_impl = token(rng, f"impl{index}")
         source_cost = priority + 0.5
         organs.extend(
             (
                 OrganSpec(source, OrganKind.SOURCE, produces=(artifact,), cost_hint=source_cost),
-                OrganSpec(old, kind, consumes=(artifact,), produces=shared_output, implementation_ref=shared_impl, version=2, cost_hint=priority + 17.0),
+                # Anti-spurious pressure: old[i].cost collides with edge[i+1].priority,
+                # so cost equality alone cannot identify a local target.
+                OrganSpec(old, kind, consumes=(artifact,), produces=shared_output, implementation_ref=shared_impl, version=2, cost_hint=priority + STEP),
                 OrganSpec(good, kind, consumes=(artifact,), produces=shared_output, implementation_ref=shared_impl, version=2, cost_hint=priority),
                 OrganSpec(bad, kind, consumes=(artifact,), produces=shared_output, implementation_ref=shared_impl, version=2, cost_hint=source_cost),
             )
@@ -168,8 +171,12 @@ def main(seed_path: str) -> int:
         raise AssertionError("reflective relation generator produced no schema")
     schema = schemas[0]
     relation_tokens = [relation.token() for relation in schema.relations]
-    if "EQ(candidate.cost_hint,edge.priority)" not in relation_tokens:
-        raise AssertionError("reflective generator did not recover cross-object cost/priority relation")
+    required = {
+        "EQ(candidate.cost_hint,edge.priority)",
+        "IN(edge.artifact_type,candidate.consumes)",
+    }
+    if not required.issubset(set(relation_tokens)):
+        raise AssertionError(f"reflective generator missed required raw-field relations: {required - set(relation_tokens)}")
 
     heldout_depths = (4, 8, 16)
     remaining_kinds = [kind for kind in KINDS if kind not in training_kinds] or list(KINDS)
@@ -184,7 +191,10 @@ def main(seed_path: str) -> int:
     wrong_schema = ReflectiveRewriteSchema(
         schema_id="REFLECTIVE_WRONG",
         operation="REWIRE_EDGE",
-        relations=(RelationExpression("EQ", FieldRef("candidate", "cost_hint"), FieldRef("source", "cost_hint")),),
+        relations=(
+            RelationExpression("EQ", FieldRef("candidate", "cost_hint"), FieldRef("source", "cost_hint")),
+            RelationExpression("IN", FieldRef("edge", "artifact_type"), FieldRef("candidate", "consumes")),
+        ),
         supporting_contexts=schema.supporting_contexts,
         supporting_source_classes=schema.supporting_source_classes,
         supporting_program_ids=schema.supporting_program_ids,
@@ -215,9 +225,10 @@ def main(seed_path: str) -> int:
         wrong_application = apply_reflective_rewrite_schema(genome, cert, wrong_schema)
         wrong_effect = 0.0
         if wrong_application is not None:
-            wrong_effect = capability(apply_mutation_program(genome, wrong_application.mutation_program), hidden)
-            if capability(apply_mutation_program(genome, wrong_application.mutation_program), hidden, "bad_targets") != 1.0:
-                raise AssertionError("semantic wrong relation did not select intended distractor")
+            wrong_descendant = apply_mutation_program(genome, wrong_application.mutation_program)
+            wrong_effect = capability(wrong_descendant, hidden)
+            if capability(wrong_descendant, hidden, "bad_targets") != 1.0:
+                raise AssertionError("semantic wrong relation did not select intended local distractor")
         if wrong_effect != 0.0:
             raise AssertionError("semantic wrong reflective relation retained target capability")
         wrong.append(wrong_effect)
@@ -238,11 +249,12 @@ def main(seed_path: str) -> int:
         "semantic_wrong_capabilities": wrong,
         "heldout_outcome_evaluations_for_generation_or_application": outcome_evaluations,
         "candidate_relation_checks": checks,
+        "anti_spurious_cross_locus_collision_present": True,
         "concrete_identifier_values_embedded_in_schema": False,
         "concrete_priority_values_embedded_in_schema": False,
         "named_domain_relation_atoms_supplied": False,
         "dataclass_field_reflection_human_authored": True,
-        "generic_relation_operator_vocabulary": list(("EQ", "IN")),
+        "generic_relation_operator_vocabulary": ["EQ", "IN"],
         "generic_relation_operator_vocabulary_human_authored": True,
         "rewire_semantics_human_authored": True,
         "current_hidden_outcomes_used_to_generate_schema": False,
