@@ -1,0 +1,57 @@
+{
+  "artifact_type": "arte.external_public_world_residual/v2",
+  "canonical_parent": "f3840760cfc0b5b7eac1e03b4d0f9874b0d1d6b0",
+  "external_repository": "naveenreddyalka/daari",
+  "external_commit": "b9e678a08630d9fe1fc0197d2a4efe8425cefee6",
+  "external_issue": 217,
+  "external_issue_title": "[autodev] Local E2E regression on main @ b9e678a",
+  "external_issue_comments_at_freeze": 0,
+  "target_test": "tests/integration/test_sampling_live.py::test_max_tokens_actually_truncates",
+  "prior_external_observation": {
+    "machine": "macos-C1JFM4Y52N",
+    "model_tag": "llama3.2:3b",
+    "tests_selected": 9,
+    "tests_failed": 1,
+    "tests_skipped": 2,
+    "failing_assertion": "an 8-token answer cannot have finished counting",
+    "observed_output_contains": "twenty"
+  },
+  "contamination_screen": {
+    "issue_comments_checked": true,
+    "issue_comments": 0,
+    "issue_state_at_freeze": "open",
+    "later_fix_or_solution_observed_before_probe": false,
+    "issue_body_contains_root_cause": false,
+    "issue_body_contains_patch": false,
+    "human_fix_supplied_to_body": false
+  },
+  "reproduction_contract": {
+    "python": "3.12",
+    "install": "python -m pip install -e .[dev]",
+    "ollama_install": "official Linux install script",
+    "ollama_host": "http://127.0.0.1:11434",
+    "model": "llama3.2:3b",
+    "test": "python -m pytest tests/integration/test_sampling_live.py::test_max_tokens_actually_truncates -vv --junitxml=daari-live-report.xml",
+    "network": "GitHub clone + Ollama installer/model registry required"
+  },
+  "environment_uncertainty": {
+    "original_ollama_version_known": false,
+    "original_model_digest_known": false,
+    "original_macos_hardware_reconstructed": false,
+    "therefore_green_means": "not independently reproduced cross-environment, not proof the original world recovered"
+  },
+  "precommitted_outcomes": {
+    "same_assertion_red": "EXTERNAL_RESIDUAL_PERSISTS_CROSS_ENVIRONMENT",
+    "target_green": "EXTERNAL_RESIDUAL_NOT_REPRODUCED_CROSS_ENVIRONMENT",
+    "dependency_model_collection_or_different_failure": "EXTERNAL_OBSERVATION_UNAVAILABLE"
+  },
+  "promotion_rule": "No BODY mutation from this observation alone. Only a persistent semantic residual may proceed to frozen current-BODY expressibility testing. If current BODY returns zero candidates, preserve CURRENT_BODY_LANGUAGE_INEXPRESSIBLE_ON_EXTERNAL_RESIDUAL rather than injecting a human repair.",
+  "claims": {
+    "AGI": false,
+    "ASI": false,
+    "global_recursive_acceleration": false,
+    "physical_world_closure": false,
+    "foundation_weight_change": false,
+    "independent_organizational_custody": false
+  }
+}
