@@ -185,15 +185,21 @@ def _enumerate_generic_expressions(genome: MorphologyGenome, edge_id: str, targe
         for ref in _field_refs_for(role, objects[role])
     )
     expressions = []
-    for left in candidate_refs:
-        for right in context_refs:
-            expressions.append(RelationExpression("EQ", left, right))
+    for candidate_ref in candidate_refs:
+        for context_ref in context_refs:
+            expressions.append(RelationExpression("EQ", candidate_ref, context_ref))
             try:
-                right_value = _value(objects, right)
+                candidate_value = _value(objects, candidate_ref)
+                context_value = _value(objects, context_ref)
             except KeyError:
                 continue
-            if _is_container(right_value):
-                expressions.append(RelationExpression("IN", left, right))
+            # Membership is generated generically in whichever orientation has a
+            # container on the right. This is not a named domain relation such as
+            # CONSUMES_EDGE_ARTIFACT; the relation emerges from raw field shape.
+            if _is_container(context_value):
+                expressions.append(RelationExpression("IN", candidate_ref, context_ref))
+            if _is_container(candidate_value):
+                expressions.append(RelationExpression("IN", context_ref, candidate_ref))
     return tuple(sorted(set(expressions), key=lambda item: item.token()))
 
 
@@ -248,8 +254,6 @@ def generate_reflective_rewrite_schemas(
     for expression in universe:
         if not all(relation_holds(genome, locus, target, expression) for genome, locus, target in rows):
             continue
-        # Do not retain a relation that is true for every alternative in every
-        # training row. It must contribute observable structural discrimination.
         if not any(
             any(
                 not relation_holds(genome, locus, candidate_id, expression)
@@ -272,7 +276,6 @@ def generate_reflective_rewrite_schemas(
     if not valid:
         return ()
 
-    # Behavioral quotient on training selections, then stable lexical choice.
     by_signature: Dict[Tuple[Tuple[str, ...], ...], Tuple[RelationExpression, ...]] = {}
     for relations in valid:
         signature = tuple(
