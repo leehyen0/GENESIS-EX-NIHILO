@@ -44,6 +44,33 @@ def _world(context_id: str, prefix: str, domain: str, magnitude: float = 1.0):
     )
 
 
+def _mixed_sign_world(context_id: str, prefix: str, domain: str):
+    """Same three-edge topology as `_world`, but the middle relation reverses sign."""
+    nodes = [f"{prefix}_{i}" for i in range(4)]
+    zero = {node: 0.0 for node in nodes}
+    contrasts = []
+    for source_index in range(3):
+        signed_effect = -1.0 if source_index == 1 else 1.0
+        for repeat in range(2):
+            low = [dict(zero), dict(zero)]
+            high = [dict(zero), dict(zero)]
+            high[0][nodes[source_index]] = 1.0
+            high[1][nodes[source_index + 1]] = signed_effect
+            contrasts.append(contrast(
+                f"{context_id}:{source_index}:{repeat}",
+                nodes[source_index],
+                low,
+                high,
+            ))
+    return OpaqueInterventionalWorld(
+        context_id=context_id,
+        domain=domain,
+        source_anchor=nodes[0],
+        target_anchor=nodes[-1],
+        contrasts=tuple(contrasts),
+    )
+
+
 def _pair(schema_id: str, context_id: str, cls: str, effect: float, verified: bool = True):
     return WorldOutcomePair(
         pair_id=f"{schema_id}:{context_id}:{cls}",
@@ -98,6 +125,15 @@ class LatentRelationOntologyGenesisTests(unittest.TestCase):
         self.assertEqual(len(set(schema.relation_tokens)), 1)
         heldout = _world("c-heldout", "omega", "CAUSAL_WORLD")
         self.assertTrue(inducer.matches(schema, heldout))
+
+    def test_same_topology_but_reversed_relation_sign_blocks_transfer(self):
+        inducer = WorldDerivedLatentRelationInducer(min_effect=0.1)
+        training = (_world("s1", "alpha", "SOFTWARE"), _world("s2", "beta", "SOFTWARE"))
+        schema = inducer.generate_candidates(inducer.assess_residual(training, (0, 0), 2), training)[0]
+        counterexample = _mixed_sign_world("c-sign-flip", "omega", "CAUSAL_WORLD")
+        counterexample_tokens = tuple(edge.relation_token for edge in inducer.infer_edges(counterexample))
+        self.assertEqual(len(set(counterexample_tokens)), 2)
+        self.assertFalse(inducer.matches(schema, counterexample))
 
     def test_identifier_and_magnitude_invariance_preserve_relation_fingerprint(self):
         inducer = WorldDerivedLatentRelationInducer(min_effect=0.1)
