@@ -44,7 +44,10 @@ def world(label: str, depth: int, kind: OrganKind, base_priority: float):
         organs.extend(
             (
                 OrganSpec(source, OrganKind.SOURCE, produces=(artifact,), cost_hint=priority + 0.5),
-                OrganSpec(old, kind, consumes=(artifact,), produces=shared_output, implementation_ref=shared_impl, version=2, cost_hint=priority + 9.0),
+                # Deliberate cross-locus collision: old[i].cost == edge[i+1].priority.
+                # A naked cost==priority rule therefore fails in training and the
+                # generator must also infer a local structural relation.
+                OrganSpec(old, kind, consumes=(artifact,), produces=shared_output, implementation_ref=shared_impl, version=2, cost_hint=priority + 3.0),
                 OrganSpec(good, kind, consumes=(artifact,), produces=shared_output, implementation_ref=shared_impl, version=2, cost_hint=priority),
                 OrganSpec(bad, kind, consumes=(artifact,), produces=shared_output, implementation_ref=shared_impl, version=2, cost_hint=priority + 0.5),
             )
@@ -110,12 +113,13 @@ class ReflectiveRelationGenesisTests(unittest.TestCase):
         _, named = training_examples()
         self.assertEqual(generate_rewrite_schemas(named), ())
 
-    def test_reflection_generates_previous_unlisted_cross_object_relation(self):
+    def test_reflection_generates_previous_unlisted_cross_object_relations(self):
         reflective, _ = training_examples()
         schemas = generate_reflective_rewrite_schemas(reflective)
         self.assertTrue(schemas)
         tokens = tuple(relation.token() for relation in schemas[0].relations)
         self.assertIn("EQ(candidate.cost_hint,edge.priority)", tokens)
+        self.assertIn("IN(edge.artifact_type,candidate.consumes)", tokens)
         self.assertFalse(any("SAME_KIND_AS_OLD_TARGET" in token for token in tokens))
 
     def test_reflective_relation_transfers_to_unseen_kind_and_values(self):
@@ -137,7 +141,10 @@ class ReflectiveRelationGenesisTests(unittest.TestCase):
         wrong = ReflectiveRewriteSchema(
             schema_id="wrong-reflective-schema",
             operation="REWIRE_EDGE",
-            relations=(RelationExpression("EQ", FieldRef("candidate", "cost_hint"), FieldRef("source", "cost_hint")),),
+            relations=(
+                RelationExpression("EQ", FieldRef("candidate", "cost_hint"), FieldRef("source", "cost_hint")),
+                RelationExpression("IN", FieldRef("edge", "artifact_type"), FieldRef("candidate", "consumes")),
+            ),
             supporting_contexts=schema.supporting_contexts,
             supporting_source_classes=schema.supporting_source_classes,
             supporting_program_ids=schema.supporting_program_ids,
