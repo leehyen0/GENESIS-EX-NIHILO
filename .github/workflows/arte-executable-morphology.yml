@@ -11,7 +11,10 @@ on:
       - 'arte_cognition/test_external_experience.py'
       - 'arte_cognition/meta_acceleration.py'
       - 'arte_cognition/test_meta_acceleration.py'
+      - 'arte_cognition/structural_failure_certificate.py'
+      - 'arte_cognition/test_structural_failure_certificate.py'
       - 'evaluations/run_morphology_meta_acceleration.py'
+      - 'evaluations/run_certificate_driven_morphology_search.py'
       - 'research/ARTE_SELF_EVOLVING_RESEARCH_BODY_20260823.md'
       - 'research/ARTE_EXTERNAL_RESEARCH_INGEST_20260823.md'
       - '.github/workflows/arte-executable-morphology.yml'
@@ -28,7 +31,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Compile morphology, genesis, external experience, acceleration, and evaluator kernels
+      - name: Compile morphology, genesis, external experience, acceleration, certificate, and evaluator kernels
         run: |
           python -m py_compile arte_cognition/executable_morphology.py
           python -m py_compile arte_cognition/test_executable_morphology.py
@@ -38,19 +41,26 @@ jobs:
           python -m py_compile arte_cognition/test_external_experience.py
           python -m py_compile arte_cognition/meta_acceleration.py
           python -m py_compile arte_cognition/test_meta_acceleration.py
+          python -m py_compile arte_cognition/structural_failure_certificate.py
+          python -m py_compile arte_cognition/test_structural_failure_certificate.py
           python -m py_compile evaluations/run_morphology_meta_acceleration.py
-      - name: Run morphology, genesis, external-experience, and acceleration contracts
+          python -m py_compile evaluations/run_certificate_driven_morphology_search.py
+      - name: Run morphology, genesis, external-experience, acceleration, and certificate contracts
         run: |
           python -m unittest arte_cognition.test_executable_morphology -v
           python -m unittest arte_cognition.test_morphology_genesis -v
           python -m unittest arte_cognition.test_external_experience -v
           python -m unittest arte_cognition.test_meta_acceleration -v
+          python -m unittest arte_cognition.test_structural_failure_certificate -v
       - name: Generate evaluator-owned hidden seed
         run: |
           python - <<'PY'
           import secrets
           from pathlib import Path
           Path('/tmp/arte_morphology_meta_acceleration_seed').write_text(str(secrets.randbits(128)))
+          Path('/tmp/arte_certificate_morphology_seed').write_text(str(secrets.randbits(128)))
           PY
       - name: Run hidden morphology meta-acceleration evaluation
         run: PYTHONPATH=. python evaluations/run_morphology_meta_acceleration.py /tmp/arte_morphology_meta_acceleration_seed
+      - name: Run certificate-driven morphology search evaluation
+        run: PYTHONPATH=. python evaluations/run_certificate_driven_morphology_search.py /tmp/arte_certificate_morphology_seed
