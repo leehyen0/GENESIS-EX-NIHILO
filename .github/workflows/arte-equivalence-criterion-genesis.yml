@@ -5,6 +5,7 @@ on:
     paths:
       - 'arte_cognition/equivalence_criterion_genesis.py'
       - 'arte_cognition/test_equivalence_criterion_genesis.py'
+      - 'arte_cognition/test_equivalence_criterion_restart.py'
       - 'evaluations/run_equivalence_criterion_transfer.py'
       - '.github/workflows/arte-equivalence-criterion-genesis.yml'
   workflow_dispatch:
@@ -24,6 +25,9 @@ jobs:
         run: |
           python -m py_compile arte_cognition/equivalence_criterion_genesis.py
           python -m py_compile arte_cognition/test_equivalence_criterion_genesis.py
+          python -m py_compile arte_cognition/test_equivalence_criterion_restart.py
           python -m py_compile evaluations/run_equivalence_criterion_transfer.py
       - name: Run focused equivalence contract
-        run: python -m unittest arte_cognition.test_equivalence_criterion_genesis -v
+        run: |
+          python -m unittest arte_cognition.test_equivalence_criterion_genesis -v
+          python -m unittest arte_cognition.test_equivalence_criterion_restart -v
