@@ -90,6 +90,14 @@ from .body_checkpoint import (
     restore_json,
     restore_runtime,
 )
+from .causal_experiment_germline import (
+    CausalExperimentGermline,
+    GermlineVerification,
+    GitHubSourceBinding,
+    STAGE_ORDER,
+    github_source_set_sha256,
+    verify_descendant_germline,
+)
 
 __all__ = [
     "AdaptiveCognitionCompiler",
@@ -155,4 +163,10 @@ __all__ = [
     "checkpoint_json",
     "restore_json",
     "restore_runtime",
+    "CausalExperimentGermline",
+    "GermlineVerification",
+    "GitHubSourceBinding",
+    "STAGE_ORDER",
+    "github_source_set_sha256",
+    "verify_descendant_germline",
 ]
