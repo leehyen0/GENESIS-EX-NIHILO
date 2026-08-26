@@ -98,6 +98,18 @@ from .causal_experiment_germline import (
     github_source_set_sha256,
     verify_descendant_germline,
 )
+from .native_recursive_research import (
+    NativeResearchCycle,
+    NativeResearchEvaluation,
+    NativeResearchLearner,
+    NativeResearchProblem,
+    NativeRecursiveResearchAssessment,
+    NativeRecursiveResearchLedger,
+    choose_native_meta_target,
+    commit_native_research_to_body,
+    discover_native_research_problems,
+    native_research_experience,
+)
 
 __all__ = [
     "AdaptiveCognitionCompiler",
@@ -169,4 +181,14 @@ __all__ = [
     "STAGE_ORDER",
     "github_source_set_sha256",
     "verify_descendant_germline",
+    "NativeResearchCycle",
+    "NativeResearchEvaluation",
+    "NativeResearchLearner",
+    "NativeResearchProblem",
+    "NativeRecursiveResearchAssessment",
+    "NativeRecursiveResearchLedger",
+    "choose_native_meta_target",
+    "commit_native_research_to_body",
+    "discover_native_research_problems",
+    "native_research_experience",
 ]
