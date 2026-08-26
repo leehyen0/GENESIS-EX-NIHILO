@@ -16,10 +16,13 @@ on:
       - 'arte_cognition/causal_experiment_germline.py'
       - 'arte_cognition/test_causal_experiment_germline.py'
       - 'arte_cognition/test_causal_experiment_body_integration.py'
+      - 'arte_cognition/native_recursive_research.py'
+      - 'arte_cognition/test_native_recursive_research.py'
       - 'arte_cognition/self_evolving_body_checkpoint.py'
       - 'arte_cognition/test_self_evolving_body_checkpoint.py'
       - 'evaluations/run_morphology_meta_acceleration.py'
       - 'evaluations/run_certificate_driven_morphology_search.py'
+      - 'evaluations/run_native_recursive_research.py'
       - 'research/ARTE_SELF_EVOLVING_RESEARCH_BODY_20260823.md'
       - 'research/ARTE_EXTERNAL_RESEARCH_INGEST_20260823.md'
       - '.github/workflows/arte-executable-morphology.yml'
@@ -33,6 +36,8 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
@@ -51,10 +56,13 @@ jobs:
           python -m py_compile arte_cognition/causal_experiment_germline.py
           python -m py_compile arte_cognition/test_causal_experiment_germline.py
           python -m py_compile arte_cognition/test_causal_experiment_body_integration.py
+          python -m py_compile arte_cognition/native_recursive_research.py
+          python -m py_compile arte_cognition/test_native_recursive_research.py
           python -m py_compile arte_cognition/self_evolving_body_checkpoint.py
           python -m py_compile arte_cognition/test_self_evolving_body_checkpoint.py
           python -m py_compile evaluations/run_morphology_meta_acceleration.py
           python -m py_compile evaluations/run_certificate_driven_morphology_search.py
+          python -m py_compile evaluations/run_native_recursive_research.py
       - name: Run self-evolving BODY contracts
         run: |
           python -m unittest arte_cognition.test_executable_morphology -v
@@ -64,7 +72,24 @@ jobs:
           python -m unittest arte_cognition.test_structural_failure_certificate -v
           python -m unittest arte_cognition.test_causal_experiment_germline -v
           python -m unittest arte_cognition.test_causal_experiment_body_integration -v
+          python -m unittest arte_cognition.test_native_recursive_research -v
           python -m unittest arte_cognition.test_self_evolving_body_checkpoint -v
+      - name: Run first native recursive-research cycle
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          mkdir -p evaluation_output
+          PYTHONPATH=. python evaluations/run_native_recursive_research.py \
+            --base-sha "$BASE_SHA" \
+            --output evaluation_output/native_recursive_research_receipt.json
+      - name: Upload native research receipt
+        if: always() && github.event_name == 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: arte-native-research-${{ github.event.pull_request.number }}
+          path: evaluation_output/native_recursive_research_receipt.json
+          if-no-files-found: warn
       - name: Generate evaluator-owned hidden seeds
         run: |
           python - <<'PY'
