@@ -35,9 +35,6 @@ def make_germline() -> CausalExperimentGermline:
         experiment_id="github-native-heredity-contract",
         benchmark_family="SWE_BENCH_FRESH_TRANSFER",
         operator_sha256="1" * 64,
-        task_ref="fresh-task",
-        task_sha256="2" * 64,
-        world_sha256="3" * 64,
         evaluator_sha256="4" * 64,
         source_receipt_sha256="5" * 64,
         freeze_sha256="6" * 64,
@@ -59,6 +56,8 @@ class CausalExperimentBodyIntegrationTests(unittest.TestCase):
         restored = restore_body(payload)
         self.assertEqual(restored.causal_experiment_germline, body.causal_experiment_germline)
         self.assertTrue(restored.causal_experiment_germline.authority_reverification_required)
+        self.assertEqual(restored.causal_experiment_germline.task_ref, "")
+        self.assertEqual(restored.causal_experiment_germline.world_sha256, "")
 
     def test_germline_namespace_removal_fails_even_after_outer_rehash(self):
         body = make_body()
@@ -73,7 +72,7 @@ class CausalExperimentBodyIntegrationTests(unittest.TestCase):
         body = make_body()
         body.causal_experiment_germline = make_germline()
         payload = checkpoint_dict(body)
-        payload["causal_experiment_germline"]["world_sha256"] = "7" * 64
+        payload["causal_experiment_germline"]["operator_sha256"] = "7" * 64
         payload["self_evolving_body"]["integrity_sha256"] = integrity_sha256(payload)
         with self.assertRaisesRegex(ValueError, "germline fingerprint mismatch"):
             restore_body(payload)
