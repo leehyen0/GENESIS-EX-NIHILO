@@ -13,6 +13,9 @@ on:
       - 'arte_cognition/test_meta_acceleration.py'
       - 'arte_cognition/structural_failure_certificate.py'
       - 'arte_cognition/test_structural_failure_certificate.py'
+      - 'arte_cognition/causal_experiment_germline.py'
+      - 'arte_cognition/test_causal_experiment_germline.py'
+      - 'arte_cognition/test_causal_experiment_body_integration.py'
       - 'arte_cognition/self_evolving_body_checkpoint.py'
       - 'arte_cognition/test_self_evolving_body_checkpoint.py'
       - 'evaluations/run_morphology_meta_acceleration.py'
@@ -45,6 +48,9 @@ jobs:
           python -m py_compile arte_cognition/test_meta_acceleration.py
           python -m py_compile arte_cognition/structural_failure_certificate.py
           python -m py_compile arte_cognition/test_structural_failure_certificate.py
+          python -m py_compile arte_cognition/causal_experiment_germline.py
+          python -m py_compile arte_cognition/test_causal_experiment_germline.py
+          python -m py_compile arte_cognition/test_causal_experiment_body_integration.py
           python -m py_compile arte_cognition/self_evolving_body_checkpoint.py
           python -m py_compile arte_cognition/test_self_evolving_body_checkpoint.py
           python -m py_compile evaluations/run_morphology_meta_acceleration.py
@@ -56,6 +62,8 @@ jobs:
           python -m unittest arte_cognition.test_external_experience -v
           python -m unittest arte_cognition.test_meta_acceleration -v
           python -m unittest arte_cognition.test_structural_failure_certificate -v
+          python -m unittest arte_cognition.test_causal_experiment_germline -v
+          python -m unittest arte_cognition.test_causal_experiment_body_integration -v
           python -m unittest arte_cognition.test_self_evolving_body_checkpoint -v
       - name: Generate evaluator-owned hidden seeds
         run: |
