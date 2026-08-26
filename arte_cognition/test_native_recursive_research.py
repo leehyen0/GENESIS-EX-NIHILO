@@ -62,7 +62,9 @@ def sources(native: bool = False):
     if native:
         payload["arte_cognition/native_recursive_research.py"] = (
             "class NativeResearchLearner: pass\n"
-            "def native_research_productivity(row): return 1.0\n"
+            "class Row:\n"
+            "    @property\n"
+            "    def research_productivity(self): return 1.0\n"
         )
     return payload
 
@@ -75,7 +77,7 @@ class NativeRecursiveResearchTests(unittest.TestCase):
             detectors,
             {
                 "EXTERNAL_ONLY_META_CREDIT",
-                "UNCRECREDITED_RESEARCH_INVENTION",
+                "UNCREDITED_RESEARCH_INVENTION",
                 "GENERATOR_MUTATOR_PRESSURE_UNREACHABLE",
             },
         )
