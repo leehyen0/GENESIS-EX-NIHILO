@@ -62,7 +62,7 @@ def main() -> int:
     closed = sorted(set(base_by_detector) - candidate_detectors)
     remaining = sorted(candidate_detectors)
 
-    required_closed = {"EXTERNAL_ONLY_META_CREDIT", "UNCRECREDITED_RESEARCH_INVENTION"}
+    required_closed = {"EXTERNAL_ONLY_META_CREDIT", "UNCREDITED_RESEARCH_INVENTION"}
     if not required_closed.issubset(closed):
         raise SystemExit(f"native credit repair did not close required bottlenecks: closed={closed}")
     if "GENERATOR_MUTATOR_PRESSURE_UNREACHABLE" not in remaining:
