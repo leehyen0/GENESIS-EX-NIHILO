@@ -476,13 +476,13 @@ def discover_native_research_problems(
 
     if (
         "research_invention_score" in meta
-        and "native_research_productivity" not in combined
+        and "research_productivity" not in combined
         and "research_meta_productivity" not in combined
     ):
         out.append(
             _problem(
                 body_hash=body_hash,
-                detector_id="UNCRECREDITED_RESEARCH_INVENTION",
+                detector_id="UNCREDITED_RESEARCH_INVENTION",
                 pressure_kind="theory_blindspot",
                 target_surface="MUTATE_SEARCH_POLICY",
                 statement=(
