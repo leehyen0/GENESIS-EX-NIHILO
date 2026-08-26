@@ -6,8 +6,16 @@ import hashlib
 import json
 import re
 
-from .executable_morphology import ExperienceUnit
+from .executable_morphology import (
+    ExperienceUnit,
+    MorphologyGenome,
+    MorphologyMutation,
+    MorphologyMutator,
+    MutationLevel,
+    OrganKind,
+)
 from .meta_acceleration import MutationStrategyState
+from .morphology_genesis import MorphologyCandidate, MorphologyGenesisEngine, MorphologyResidual
 
 
 _HASH64 = re.compile(r"^[0-9a-f]{64}$")
@@ -114,6 +122,7 @@ class NativeResearchEvaluation:
             and self.evaluator_reverified
             and self.controls_pass
             and self.safe
+            and not self.official_benchmark_used
             and _valid_hash(self.problem_sha256)
             and _valid_hash(self.outcome_receipt_sha256)
             and self.evidence_class not in {"", "UNVERIFIED"}
@@ -136,12 +145,7 @@ class NativeResearchEvaluation:
 
 
 class NativeResearchLearner:
-    """Credit self-hosted research without pretending it is external benchmark authority.
-
-    The output is the existing MutationStrategyState, so learned research pressure is
-    inherited by the existing BODY checkpoint. Native evidence can reorder future
-    research/mutation targets, but it cannot set external authority or AGI/ASI claims.
-    """
+    """Credit self-hosted research without pretending it is external benchmark authority."""
 
     def update(
         self,
@@ -195,6 +199,101 @@ class NativeResearchLearner:
             fossilized_operations=tuple(sorted(fossils)),
             lineage_hash=lineage_hash,
         )
+
+
+class NativeMetaMorphologyGenesisEngine:
+    """Extend the inherited morphology search with L3 shadow candidates under meta pressure.
+
+    These candidates are not capability authority. They make generator/mutator policy
+    replacement reachable and typed; a separate runtime-semantic test must prove that
+    a generated implementation_ref changes executable behavior before capability credit.
+    """
+
+    def __init__(self, candidate_budget: int = 256) -> None:
+        self.candidate_budget = max(1, int(candidate_budget))
+        self.base = MorphologyGenesisEngine(candidate_budget=self.candidate_budget)
+
+    @staticmethod
+    def _l3_candidate(
+        genome: MorphologyGenome,
+        residual: MorphologyResidual,
+        organ_id: str,
+        kind: OrganKind,
+    ) -> MorphologyCandidate:
+        by_id = genome.organ_map()
+        organ = by_id[organ_id]
+        parent_hash = genome.fingerprint()
+        suffix = _sha256(
+            {
+                "parent": parent_hash,
+                "residual": residual.residual_id,
+                "organ": organ_id,
+                "kind": kind.value,
+                "pressure": residual.pressure.normalized().__dict__,
+            }
+        )[:16]
+        policy_ref = f"native-meta://{kind.value.lower()}/{residual.residual_id}/{suffix}"
+        replacement = {
+            "organ_id": organ.organ_id,
+            "kind": organ.kind.value,
+            "consumes": list(organ.consumes),
+            "produces": list(organ.produces),
+            "implementation_ref": policy_ref,
+            "version": organ.version + 1,
+            "cost_hint": organ.cost_hint,
+            "provenance": list(organ.provenance) + [f"native-l3-pressure::{residual.residual_id}"],
+            "enabled": organ.enabled,
+        }
+        operation_family = "CHANGE_GENERATOR_POLICY" if kind == OrganKind.GENERATOR else "CHANGE_MUTATOR_POLICY"
+        mutation = MorphologyMutation(
+            mutation_id="NATIVE_L3_MUTATION::" + suffix,
+            level=MutationLevel.GENERATOR_MUTATOR,
+            operation="REPLACE_ORGAN",
+            payload={"organ": replacement},
+            parent_body_hash=parent_hash,
+            rationale=(
+                f"pressure::{residual.residual_id}",
+                f"human_dependency::{residual.pressure.human_dependency:.6f}",
+                f"theory_blindspot::{residual.pressure.theory_blindspot:.6f}",
+                "shadow_only_until_runtime_semantics_verified",
+            ),
+            reversible=True,
+        )
+        descendant = MorphologyMutator().apply(genome, mutation)
+        candidate_id = "NATIVE_L3_CANDIDATE::" + _sha256(
+            {
+                "mutation": mutation.mutation_id,
+                "descendant": descendant.fingerprint(),
+                "operation_family": operation_family,
+            }
+        )[:20]
+        return MorphologyCandidate(
+            candidate_id=candidate_id,
+            mutation=mutation,
+            descendant_fingerprint=descendant.fingerprint(),
+            origin_residual_ids=(residual.residual_id,),
+            operation_family=operation_family,
+            generation_uses_outcomes=False,
+        )
+
+    def generate(
+        self,
+        genome: MorphologyGenome,
+        residuals: Sequence[MorphologyResidual],
+    ) -> Tuple[MorphologyCandidate, ...]:
+        candidates = list(self.base.generate(genome, residuals))
+        for residual in residuals:
+            pressure = residual.pressure.normalized()
+            if pressure.human_dependency <= 0.0 and pressure.theory_blindspot <= 0.0:
+                continue
+            for organ in genome.organs:
+                if organ.kind in {OrganKind.GENERATOR, OrganKind.MUTATOR}:
+                    candidates.append(self._l3_candidate(genome, residual, organ.organ_id, organ.kind))
+
+        unique: Dict[str, MorphologyCandidate] = {}
+        for candidate in sorted(candidates, key=lambda row: row.candidate_id):
+            unique.setdefault(candidate.descendant_fingerprint, candidate)
+        return tuple(sorted(unique.values(), key=lambda row: row.candidate_id)[: self.candidate_budget])
 
 
 def choose_native_meta_target(
@@ -443,7 +542,7 @@ def discover_native_research_problems(
     *,
     body_hash: str,
 ) -> Tuple[NativeResearchProblem, ...]:
-    """Discover a small set of source-grounded research bottlenecks without an official benchmark."""
+    """Discover source-grounded bottlenecks without requiring an official benchmark."""
     if not _valid_hash(body_hash):
         raise ValueError("body_hash must be sha256")
     combined = "\n".join(str(value) for _, value in sorted(sources.items()))
@@ -499,12 +598,13 @@ def discover_native_research_problems(
 
     morphology = str(sources.get("arte_cognition/morphology_genesis.py", ""))
     executable = str(sources.get("arte_cognition/executable_morphology.py", ""))
-    if (
-        "GENERATOR_MUTATOR" in executable
-        and "human_dependency" in executable
-        and "MutationLevel.GENERATOR_MUTATOR" not in morphology
-        and ".human_dependency" not in morphology
-    ):
+    l3_reachable = bool(
+        "class NativeMetaMorphologyGenesisEngine" in combined
+        and "MutationLevel.GENERATOR_MUTATOR" in combined
+        and ".human_dependency" in combined
+        and "native-meta://" in combined
+    )
+    if "GENERATOR_MUTATOR" in executable and "human_dependency" in executable and not l3_reachable:
         out.append(
             _problem(
                 body_hash=body_hash,
@@ -513,15 +613,38 @@ def discover_native_research_problems(
                 target_surface="GENERATOR_OR_MUTATOR",
                 statement=(
                     "The morphology language declares GENERATOR_MUTATOR-level change and human-dependency pressure, but the "
-                    "current morphology genesis path does not consume that pressure or emit that mutation level."
+                    "current candidate-generation path cannot reach an L3 generator/mutator policy replacement."
                 ),
                 falsifier=(
-                    "A pre-outcome generator/mutator candidate family becomes reachable from human-dependency pressure, has a "
-                    "real executable semantic difference, and survives REMOVE/WRONG plus retained-competence controls."
+                    "A pre-outcome generator/mutator candidate family becomes reachable from human-dependency pressure and "
+                    "produces typed, reversible L3 descendants without using current outcomes."
                 ),
                 evidence_refs=refs,
             )
         )
+
+    if l3_reachable:
+        compiler_block = ""
+        if "class MorphologyCompiler" in executable and "class MorphologyMutator" in executable:
+            compiler_block = executable.split("class MorphologyCompiler", 1)[1].split("class MorphologyMutator", 1)[0]
+        if "implementation_ref" not in compiler_block and "execute_native_meta_policy" not in combined:
+            out.append(
+                _problem(
+                    body_hash=body_hash,
+                    detector_id="L3_POLICY_SEMANTICS_UNBOUND",
+                    pressure_kind="theory_blindspot",
+                    target_surface="COMPILER_RUNTIME_BINDING",
+                    statement=(
+                        "L3 generator/mutator descendants can now change implementation_ref, but the current morphology compiler "
+                        "does not bind that reference to executable policy behavior, so reachability is structural only."
+                    ),
+                    falsifier=(
+                        "A generated native-meta policy reference is compiled into executable behavior whose precommitted probe "
+                        "differs from the parent, while REMOVE restores parent behavior and WRONG policy binding fails the target probe."
+                    ),
+                    evidence_refs=refs,
+                )
+            )
 
     unique = {problem.fingerprint(): problem for problem in out}
     return tuple(sorted(unique.values(), key=lambda problem: problem.problem_id))
