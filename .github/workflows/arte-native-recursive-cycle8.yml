@@ -1,0 +1,71 @@
+name: arte-native-recursive-cycle8
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+
+jobs:
+  native-cycle8:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Compile autonomous meta-mutation selection and credit path
+        run: |
+          python -m py_compile arte_cognition/autonomous_generator_mutation.py
+          python -m py_compile arte_cognition/test_autonomous_generator_mutation.py
+          python -m py_compile evaluations/freeze_native_recursive_cycle8_autonomous_mutation.py
+          python -m py_compile evaluations/run_native_recursive_research_cycle8.py
+
+      - name: Run autonomous mutation selection and credit contracts
+        run: python -m unittest arte_cognition.test_autonomous_generator_mutation -v
+
+      - name: Fetch frozen generation 7 evidence parent
+        run: git fetch origin 8806ce22665c75a091752c4273e7c41429c8cc1f
+
+      - name: Freeze autonomous FULL and WRONG mutation selections before hidden tasks
+        run: |
+          mkdir -p evaluation_output
+          PYTHONPATH=. python evaluations/freeze_native_recursive_cycle8_autonomous_mutation.py \
+            --precommit research/native_research_cycle_008_precommit.json \
+            --cycle6-receipt research/native_research_cycle_006_receipt.json \
+            --cycle7-receipt research/native_research_cycle_007_receipt.json \
+            --candidate-head ${{ github.event.pull_request.head.sha }} \
+            --output evaluation_output/native_cycle8_autonomous_mutation_freeze.json
+
+      - name: Generate evaluator-owned hidden cycle 8 seed
+        run: |
+          python - <<'PY'
+          import secrets
+          from pathlib import Path
+          Path('/tmp/arte_native_cycle8_hidden_seed').write_text(str(secrets.randbits(128)))
+          PY
+
+      - name: Run precommitted hidden native recursive-research cycle 8
+        run: |
+          PYTHONPATH=. python evaluations/run_native_recursive_research_cycle8.py \
+            --parent-head 8806ce22665c75a091752c4273e7c41429c8cc1f \
+            --candidate-head ${{ github.event.pull_request.head.sha }} \
+            --precommit research/native_research_cycle_008_precommit.json \
+            --cycle6-receipt research/native_research_cycle_006_receipt.json \
+            --cycle7-receipt research/native_research_cycle_007_receipt.json \
+            --mutation-freeze evaluation_output/native_cycle8_autonomous_mutation_freeze.json \
+            --hidden-seed-file /tmp/arte_native_cycle8_hidden_seed \
+            --output evaluation_output/native_recursive_research_cycle8_receipt.json
+
+      - name: Upload native cycle 8 receipts
+        uses: actions/upload-artifact@v4
+        with:
+          name: arte-native-cycle8-${{ github.event.pull_request.number }}
+          path: |
+            evaluation_output/native_cycle8_autonomous_mutation_freeze.json
+            evaluation_output/native_recursive_research_cycle8_receipt.json
