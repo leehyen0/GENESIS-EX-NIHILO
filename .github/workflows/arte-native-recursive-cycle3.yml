@@ -1,0 +1,54 @@
+name: arte-native-recursive-cycle3
+
+on:
+  pull_request:
+    paths:
+      - 'arte_cognition/executable_morphology.py'
+      - 'arte_cognition/native_meta_policy_runtime.py'
+      - 'arte_cognition/test_native_meta_policy_compiler_integration.py'
+      - 'evaluations/run_native_recursive_research_cycle3.py'
+      - 'research/native_research_cycle_002_receipt.json'
+      - 'research/native_research_cycle_003_precommit.json'
+      - '.github/workflows/arte-native-recursive-cycle3.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  native-cycle3:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile canonical compiler integration
+        run: |
+          python -m py_compile arte_cognition/executable_morphology.py
+          python -m py_compile arte_cognition/native_meta_policy_runtime.py
+          python -m py_compile arte_cognition/test_native_meta_policy_compiler_integration.py
+          python -m py_compile evaluations/run_native_recursive_research_cycle3.py
+      - name: Run existing executable morphology regressions
+        run: python -m unittest arte_cognition.test_executable_morphology -v
+      - name: Run canonical native-meta compiler controls
+        run: python -m unittest arte_cognition.test_native_meta_policy_compiler_integration -v
+      - name: Fetch frozen generation 2 evidence parent
+        run: git fetch origin 4df70531aea3b620f4a39ce61f0248fdd3737afe
+      - name: Run precommitted native recursive-research cycle 3
+        run: |
+          mkdir -p evaluation_output
+          PYTHONPATH=. python evaluations/run_native_recursive_research_cycle3.py \
+            --parent-head 4df70531aea3b620f4a39ce61f0248fdd3737afe \
+            --precommit research/native_research_cycle_003_precommit.json \
+            --cycle2-receipt research/native_research_cycle_002_receipt.json \
+            --output evaluation_output/native_recursive_research_cycle3_receipt.json
+      - name: Upload native cycle 3 receipt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: arte-native-cycle3-${{ github.event.pull_request.number || github.run_number }}
+          path: evaluation_output/native_recursive_research_cycle3_receipt.json
+          if-no-files-found: warn
