@@ -1,0 +1,57 @@
+name: arte-native-recursive-cycle6
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+
+jobs:
+  native-cycle6:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Compile native representation genesis and evaluator
+        run: |
+          python -m py_compile arte_cognition/native_representation_genesis.py
+          python -m py_compile arte_cognition/test_native_representation_genesis.py
+          python -m py_compile evaluations/run_native_recursive_research_cycle6.py
+
+      - name: Run native representation genesis contracts
+        run: python -m unittest arte_cognition.test_native_representation_genesis -v
+
+      - name: Fetch frozen generation 5 evidence parent
+        run: git fetch origin 7c17fdf34ba399c760cf6ec0cbada2df5b6cf7ad
+
+      - name: Generate evaluator-owned hidden representation task seed
+        run: |
+          python - <<'PY'
+          import secrets
+          from pathlib import Path
+          Path('/tmp/arte_native_cycle6_hidden_seed').write_text(str(secrets.randbits(128)))
+          PY
+
+      - name: Run precommitted hidden native recursive-research cycle 6
+        run: |
+          mkdir -p evaluation_output
+          PYTHONPATH=. python evaluations/run_native_recursive_research_cycle6.py \
+            --parent-head 7c17fdf34ba399c760cf6ec0cbada2df5b6cf7ad \
+            --candidate-head ${{ github.event.pull_request.head.sha }} \
+            --precommit research/native_research_cycle_006_precommit.json \
+            --cycle5-receipt research/native_research_cycle_005_receipt.json \
+            --hidden-seed-file /tmp/arte_native_cycle6_hidden_seed \
+            --output evaluation_output/native_recursive_research_cycle6_receipt.json
+
+      - name: Upload native cycle 6 receipt
+        uses: actions/upload-artifact@v4
+        with:
+          name: arte-native-cycle6-${{ github.event.pull_request.number }}
+          path: evaluation_output/native_recursive_research_cycle6_receipt.json
