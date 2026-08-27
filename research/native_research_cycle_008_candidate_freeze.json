@@ -1,0 +1,15 @@
+{
+  "schema": "arte.native_research_candidate_freeze/v1",
+  "generation": 8,
+  "precommit_head_sha": "4c591f0afa6d07f3a0fd5dedd964fcb568147e70",
+  "implementation_complete_head_sha": "dcf1c2a0130565f367812da29e5ca2ded6861232",
+  "hidden_task_seed_generated_after_this_freeze": true,
+  "frozen_candidate_surface": [
+    "arte_cognition/autonomous_generator_mutation.py",
+    "arte_cognition/test_autonomous_generator_mutation.py",
+    "evaluations/freeze_native_recursive_cycle8_autonomous_mutation.py",
+    "evaluations/run_native_recursive_research_cycle8.py",
+    ".github/workflows/arte-native-recursive-cycle8.yml"
+  ],
+  "claim_boundary": "Autonomous proposal compiler, causal-credit path and evaluator are frozen before hidden seed generation. Result-driven source edits belong to a later generation."
+}
