@@ -1,0 +1,20 @@
+{
+  "schema": "arte.native_research_reverify_precommit/v1",
+  "generation": 1,
+  "attempt": 1,
+  "parent_attempt_failure_commit": "58a46df527395c9c4fd650139795595e37064afa",
+  "frozen_research_parent_head_sha": "e3dbe4687491b838cb254517332edce4ba6db73a",
+  "candidate_core_body_sha256": "5c1b1b8f4324297b3e5eda23fd10c860686d2276b4d5283a3e347767f4915743",
+  "research_claim_under_reverification": "GENERATOR_MUTATOR_PRESSURE_UNREACHABLE is structurally closed under FULL/REMOVE/WRONG controls",
+  "instrument_hypothesis": "The attempt-0 failure was caused by a lexical frontier detector false negative, not by failure of L3 candidate reachability.",
+  "falsifier": "FAIL if the frozen candidate no longer emits both generator and mutator L3 families, if REMOVE or WRONG emits any L3 family, if candidate generation uses current outcomes, or if AST inspection shows MorphologyCompiler.compile actually consumes OrganSpec.implementation_ref or an executable native-meta policy resolver already exists.",
+  "post_outcome_evaluator_repair": true,
+  "eligible_for_recursive_acceleration_ledger": false,
+  "eligible_claim_if_pass": "BOUNDED_L3_STRUCTURAL_REACHABILITY_REVERIFIED_ONLY",
+  "runtime_semantics_claim_allowed": false,
+  "capability_improvement_claim_allowed": false,
+  "official_benchmark_used": false,
+  "external_claim_authority": false,
+  "AGI": false,
+  "ASI": false
+}
