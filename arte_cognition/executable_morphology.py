@@ -244,11 +244,55 @@ class ExperienceArchive:
         self.fossils[str(object_id)] = str(reason)
 
 
+@dataclass(frozen=True)
+class CompiledNativeMetaPolicyBinding:
+    organ_id: str
+    target_kind: OrganKind
+    implementation_ref: str
+    residual_id: str
+    policy_fingerprint: str
+    preferred_operation_family: str
+    candidate_budget_bonus: int
+
+    def fingerprint(self) -> str:
+        payload = {
+            "organ_id": self.organ_id,
+            "target_kind": self.target_kind.value,
+            "implementation_ref": self.implementation_ref,
+            "residual_id": self.residual_id,
+            "policy_fingerprint": self.policy_fingerprint,
+            "preferred_operation_family": self.preferred_operation_family,
+            "candidate_budget_bonus": self.candidate_budget_bonus,
+        }
+        return hashlib.sha256(
+            json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        ).hexdigest()
+
+
+@dataclass(frozen=True)
+class CompiledMorphologyRuntime:
+    event_order: Tuple[str, ...]
+    native_meta_policies: Tuple[CompiledNativeMetaPolicyBinding, ...] = ()
+
+    def fingerprint(self) -> str:
+        payload = {
+            "event_order": list(self.event_order),
+            "native_meta_policies": [row.fingerprint() for row in self.native_meta_policies],
+        }
+        return hashlib.sha256(
+            json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        ).hexdigest()
+
+
 class MorphologyCompiler:
     """Compile a typed cognitive hypergraph without a hard-coded G1->G8 ladder."""
 
     @staticmethod
-    def compile(genome: MorphologyGenome) -> Tuple[str, ...]:
+    def compile_runtime(
+        genome: MorphologyGenome,
+        *,
+        expected_residual_id: Optional[str] = None,
+    ) -> CompiledMorphologyRuntime:
         errors = genome.validate()
         if errors:
             raise ValueError("INVALID_MORPHOLOGY::" + ",".join(errors))
@@ -257,7 +301,43 @@ class MorphologyCompiler:
             raise ValueError("MISSING_GOVERNOR")
         if not any(o.kind == OrganKind.ARCHIVE for o in active):
             raise ValueError("MISSING_ARCHIVE")
-        return tuple(genome.event_order or tuple(o.organ_id for o in active))
+
+        bindings = []
+        native = [o for o in active if str(o.implementation_ref).startswith("native-meta://")]
+        if native:
+            # Local import avoids a module-import cycle while making the canonical
+            # compile path consume and validate generated L3 implementation refs.
+            from .native_meta_policy_runtime import compile_native_meta_policy
+
+            for organ in sorted(native, key=lambda row: row.organ_id):
+                if organ.kind not in {OrganKind.GENERATOR, OrganKind.MUTATOR}:
+                    raise ValueError("NATIVE_META_POLICY_UNSUPPORTED_ORGAN_KIND")
+                program = compile_native_meta_policy(
+                    organ.implementation_ref,
+                    target_kind=organ.kind,
+                    expected_residual_id=expected_residual_id,
+                )
+                bindings.append(
+                    CompiledNativeMetaPolicyBinding(
+                        organ_id=organ.organ_id,
+                        target_kind=organ.kind,
+                        implementation_ref=organ.implementation_ref,
+                        residual_id=program.residual_id,
+                        policy_fingerprint=program.fingerprint(),
+                        preferred_operation_family=program.preferred_operation_family,
+                        candidate_budget_bonus=program.candidate_budget_bonus,
+                    )
+                )
+
+        event_order = tuple(genome.event_order or tuple(o.organ_id for o in active))
+        return CompiledMorphologyRuntime(
+            event_order=event_order,
+            native_meta_policies=tuple(bindings),
+        )
+
+    @staticmethod
+    def compile(genome: MorphologyGenome) -> Tuple[str, ...]:
+        return MorphologyCompiler.compile_runtime(genome).event_order
 
 
 class MorphologyMutator:
