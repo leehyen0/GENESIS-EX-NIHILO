@@ -1,0 +1,40 @@
+{
+  "schema": "arte.native_recursive_research_cycle1_reverify/v1",
+  "generation": 1,
+  "attempt": 1,
+  "github_run_id": 33025465355,
+  "github_job_id": 98365616182,
+  "github_artifact_id": 9628199394,
+  "github_artifact_zip_sha256": "61bba47f788394258f36c8b23ee55eacc58fb1b5c9f21bb0c4daea193edb5cfd",
+  "measurement_scope": "POST_OUTCOME_EVALUATOR_REPAIR_STRUCTURAL_REVERIFY_NOT_ACCELERATION_EVIDENCE",
+  "parent_head_sha": "e3dbe4687491b838cb254517332edce4ba6db73a",
+  "parent_body_hash": "5c1b1b8f4324297b3e5eda23fd10c860686d2276b4d5283a3e347767f4915743",
+  "candidate_body_hash": "abb0ad4dd895cbce5844e521664938b69e2b85ee288de453d368881aa177dc71",
+  "attempt0_failure_preserved": "research/native_research_cycle_001_attempt0_failure.json",
+  "legacy_detector_false_negative_reproduced": true,
+  "structural_l3_reachability_reverified": true,
+  "full_l3_candidate_count": 2,
+  "full_l3_operation_families": [
+    "CHANGE_GENERATOR_POLICY",
+    "CHANGE_MUTATOR_POLICY"
+  ],
+  "remove_l3_candidate_count": 0,
+  "wrong_l3_candidate_count": 0,
+  "generation_uses_current_outcomes": false,
+  "compiler_compile_reads_implementation_ref": false,
+  "native_meta_resolver_exists": false,
+  "next_problem_detectors": [
+    "L3_POLICY_SEMANTICS_UNBOUND"
+  ],
+  "eligible_claim": "BOUNDED_L3_STRUCTURAL_REACHABILITY_REVERIFIED_ONLY",
+  "post_outcome_evaluator_repair": true,
+  "eligible_for_recursive_acceleration_ledger": false,
+  "runtime_semantics_established": false,
+  "capability_improvement_established": false,
+  "recursive_acceleration_established": false,
+  "official_benchmark_used": false,
+  "external_claim_authority": false,
+  "AGI": false,
+  "ASI": false,
+  "outcome_receipt_sha256": "611b6fcf12676a284b6340d74c587db4a7f959a423dbaab70450e89a6b4d947f"
+}
