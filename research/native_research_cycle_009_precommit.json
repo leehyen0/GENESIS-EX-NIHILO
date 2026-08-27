@@ -1,0 +1,44 @@
+{
+  "schema": "arte.native_research_precommit/v1",
+  "generation": 9,
+  "trajectory_generations": [9, 10, 11, 12],
+  "parent_generation": 8,
+  "parent_evidence_head_sha": "9e23db38aad20f85cc7db935005079d371746087",
+  "parent_outcome_receipt_sha256": "5bd783050d2c14011b03436fae5cdf53720b946b7a2d5fcc8c0e0e4fd5c156ef",
+  "parent_problem": "AUTONOMOUS_GENERATOR_MUTATION_CREDIT_UNPROVEN",
+  "problem_detector": "META_MUTATION_COMPILER_SELF_IMPROVEMENT_UNPROVEN",
+  "source_grounded_observation": "Cycle 8 moved structural proposal selection and post-outcome credit into a native BODY compiler, but its proposal scoring logic remained fixed source code. Therefore the meta-mutation compiler itself did not inherit and improve a mutable decision policy.",
+  "hypothesis": "A frozen generic meta-compiler substrate can store its routing policy in the nonvolatile COMPILER organ, learn diagnostic-signal-to-structural-proposal relations solely from prior fresh outcomes, checkpoint/restore between generations, and show three consecutive prospective gains on disjoint fresh hidden tasks without any source-code or workflow edits between generations 9, 10, 11 and 12.",
+  "hidden_world_contract": "After candidate source freeze, evaluator-owned randomness permutes four opaque diagnostic signal slots onto four causal intervention regimes: GENERATOR_LANGUAGE, MUTATOR_POLICY, TOPOLOGY_REWIRE and ABSTAIN. Fresh task instances are generated independently for training and validation. Source code cannot know the permutation before hidden seed creation.",
+  "proposal_execution_contract": "Each routed family must execute a real existing BODY intervention path: generator-language replaces GENERATOR with the compositional representation policy; mutator-policy uses NativeMetaMorphologyGenesisEngine to replace MUTATOR; topology-rewire uses MorphologyGenesisEngine to repair a typed failed edge; abstain performs no structural change. Regime success is determined by the corresponding behavioral invariant, not by route-name equality alone.",
+  "learning_contract": "The initial mutable compiler policy contains no hidden signal mapping and fails closed to ABSTAIN. In each transition, one previously unresolved non-abstain hidden diagnostic regime is evaluated across competing structural proposals; only those past outcome scores may add one routing rule through an L6 COMPILER_RUNTIME mutation. The updated BODY is checkpointed/restored before the next fresh validation batch.",
+  "trajectory_contract": "Evaluate four BODY states P0,P1,P2,P3 on fresh balanced validation batches. P0 is the frozen unlearned compiler. P1/P2/P3 each inherit exactly one additional causally credited routing rule from the preceding generation. No current-generation validation outcome may be consumed by that generation's policy.",
+  "required_growth": {
+    "strict_distinct_regime_frontier": [1, 2, 3, 4],
+    "strict_validation_useful_rate": [0.25, 0.5, 0.75, 1.0],
+    "external_structural_intervention": [1.0, 0.0, 0.0, 0.0],
+    "retained_learned_regime_competence_floor": 1.0,
+    "calibration_floor": 1.0
+  },
+  "controls": {
+    "remove": "Keep P0 compiler policy frozen across all four validation generations; frontier must not grow.",
+    "wrong": "Apply each learned outcome to a different opaque diagnostic slot; useful rate must remain below FULL and no bounded acceleration candidate may be credited.",
+    "shuffle": "Shuffle causal outcome records before compiler-policy update; useful rate must remain below FULL.",
+    "restart": "Every compiler-policy generation must survive independent SelfEvolvingResearchBody checkpoint/restore with identical policy fingerprint, morphology fingerprint, archive and selection behavior."
+  },
+  "resource_contract": {
+    "validation_tasks_per_regime_per_generation": 8,
+    "training_tasks_per_new_regime": 4,
+    "proposal_budget_per_training_task": 4,
+    "generation_compute_cost": 1.0,
+    "generation_evidence_cost": 1.0
+  },
+  "eligible_claim_if_pass": "PASS_BOUNDED_INTERNAL_RECURSIVE_META_COMPILER_ACCELERATION_CANDIDATE",
+  "bounded_internal_recursive_meta_acceleration_candidate_claim_allowed": true,
+  "global_recursive_acceleration_claim_allowed": false,
+  "external_independent_authority_claim_allowed": false,
+  "source_code_autonomous_self_modification_claim_allowed": false,
+  "official_benchmark_used": false,
+  "AGI": false,
+  "ASI": false
+}
