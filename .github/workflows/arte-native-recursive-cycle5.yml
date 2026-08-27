@@ -1,0 +1,63 @@
+name: arte-native-recursive-cycle5
+
+on:
+  pull_request:
+    paths:
+      - 'arte_cognition/body_policy_generation.py'
+      - 'arte_cognition/test_contextual_body_policy_generation.py'
+      - 'evaluations/run_native_recursive_research_cycle5.py'
+      - 'research/native_research_cycle_004_receipt.json'
+      - 'research/native_research_cycle_005_precommit.json'
+      - 'research/native_research_cycle_005_candidate_freeze.json'
+      - '.github/workflows/arte-native-recursive-cycle5.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  native-cycle5:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile contextual BODY policy experiment
+        run: |
+          python -m py_compile arte_cognition/body_policy_generation.py
+          python -m py_compile arte_cognition/test_contextual_body_policy_generation.py
+          python -m py_compile evaluations/run_native_recursive_research_cycle5.py
+      - name: Run contextual BODY policy contracts
+        run: python -m unittest arte_cognition.test_contextual_body_policy_generation -v
+      - name: Fetch frozen parent and candidate implementation heads
+        run: |
+          git fetch origin 9ab8f334a74860d23f08f8977c281db6911f168d
+          git fetch origin d4f060b0b887775df7d1528bf9acfc1296f9401f
+      - name: Generate evaluator-owned hidden fresh-task seed
+        run: |
+          python - <<'PY'
+          import secrets
+          from pathlib import Path
+          Path('/tmp/arte_native_cycle5_hidden_seed').write_text(str(secrets.randbits(128)))
+          PY
+      - name: Run precommitted hidden native recursive-research cycle 5
+        run: |
+          mkdir -p evaluation_output
+          PYTHONPATH=. python evaluations/run_native_recursive_research_cycle5.py \
+            --parent-head 9ab8f334a74860d23f08f8977c281db6911f168d \
+            --candidate-freeze-head d4f060b0b887775df7d1528bf9acfc1296f9401f \
+            --precommit research/native_research_cycle_005_precommit.json \
+            --candidate-freeze research/native_research_cycle_005_candidate_freeze.json \
+            --cycle4-receipt research/native_research_cycle_004_receipt.json \
+            --hidden-seed-file /tmp/arte_native_cycle5_hidden_seed \
+            --output evaluation_output/native_recursive_research_cycle5_receipt.json
+      - name: Upload native cycle 5 receipt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: arte-native-cycle5-${{ github.event.pull_request.number || github.run_number }}
+          path: evaluation_output/native_recursive_research_cycle5_receipt.json
+          if-no-files-found: warn
