@@ -1,0 +1,50 @@
+name: arte-native-recursive-cycle4
+
+on:
+  pull_request:
+    paths:
+      - 'arte_cognition/body_policy_generation.py'
+      - 'arte_cognition/test_body_policy_generation.py'
+      - 'evaluations/run_native_recursive_research_cycle4.py'
+      - 'research/native_research_cycle_003_receipt.json'
+      - 'research/native_research_cycle_004_precommit.json'
+      - '.github/workflows/arte-native-recursive-cycle4.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  native-cycle4:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile BODY policy generation path
+        run: |
+          python -m py_compile arte_cognition/body_policy_generation.py
+          python -m py_compile arte_cognition/test_body_policy_generation.py
+          python -m py_compile evaluations/run_native_recursive_research_cycle4.py
+      - name: Run BODY policy generation controls
+        run: python -m unittest arte_cognition.test_body_policy_generation -v
+      - name: Fetch frozen generation 3 evidence parent
+        run: git fetch origin 5e5293de398fb5c316f846b1c2f64fb1ddedf232
+      - name: Run precommitted native recursive-research cycle 4
+        run: |
+          mkdir -p evaluation_output
+          PYTHONPATH=. python evaluations/run_native_recursive_research_cycle4.py \
+            --parent-head 5e5293de398fb5c316f846b1c2f64fb1ddedf232 \
+            --precommit research/native_research_cycle_004_precommit.json \
+            --cycle3-receipt research/native_research_cycle_003_receipt.json \
+            --output evaluation_output/native_recursive_research_cycle4_receipt.json
+      - name: Upload native cycle 4 receipt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: arte-native-cycle4-${{ github.event.pull_request.number || github.run_number }}
+          path: evaluation_output/native_recursive_research_cycle4_receipt.json
+          if-no-files-found: warn
