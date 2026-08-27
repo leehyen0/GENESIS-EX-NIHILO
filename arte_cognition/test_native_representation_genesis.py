@@ -91,7 +91,7 @@ class NativeRepresentationGenesisTests(unittest.TestCase):
 
     def test_representation_survives_body_checkpoint_and_cold_execution(self):
         rows = (
-            RepresentationSupportExample((5, 2), 1287),
+            RepresentationSupportExample((5, 2), 519),
             RepresentationSupportExample((2, 9), 523),
             RepresentationSupportExample((7, 3), 778),
             RepresentationSupportExample((1, 4), 261),
