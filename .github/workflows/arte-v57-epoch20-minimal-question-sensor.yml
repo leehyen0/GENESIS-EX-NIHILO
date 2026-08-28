@@ -1,0 +1,57 @@
+name: arte-v57-epoch20-minimal-question-sensor
+on:
+  push:
+    paths:
+      - '.github/workflows/arte-v57-epoch20-minimal-question-sensor.yml'
+  workflow_dispatch:
+jobs:
+  epoch20:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile runner
+        run: python -m py_compile arte_external_replay/v57_epoch20_minimal_question_sensor_runner.py
+      - name: Run one-bit missing-sensor experiment
+        run: python arte_external_replay/v57_epoch20_minimal_question_sensor_runner.py
+      - name: Verify conservative evidence boundary
+        run: |
+          python - <<'PY'
+          import json, hashlib
+          q=json.load(open('v57_output/question_precommit.json'))
+          s=json.load(open('v57_output/sensor_response.json'))
+          p=json.load(open('v57_output/prediction_precommit.json'))
+          e=json.load(open('v57_output/external_evaluation.json'))
+          c=json.load(open('v57_output/checkpoint_state.json'))
+          r=json.load(open('v57_output/epoch_receipt.json'))
+          m=json.load(open('v57_output/hash_manifest.json'))
+          assert q['max_bits_per_case']==1
+          assert q['target_field_parsed_before_question_precommit'] is False
+          assert q['proof_state_parsed_before_question_precommit'] is False
+          assert q['raw_test_file_contains_target_and_proof_columns'] is True
+          assert s['target_field_parsed'] is False
+          assert p['target_field_parsed'] is False
+          assert e['minimum_bits']==1
+          assert e['transfer_validation_accuracy']==1.0
+          assert e['question_precommit_before_sensor_parse'] is True
+          assert e['prediction_precommit_before_target_parse'] is True
+          assert e['software_stage_separation_not_independent_custody'] is True
+          assert e['full_clutrr_task_promotion'] is False
+          assert e['claim_flags']['independent_custody_proof'] is False
+          assert e['claim_flags']['external_recursive_acceleration'] is False
+          assert e['claim_flags']['AGI'] is False and e['claim_flags']['ASI'] is False
+          assert r['full_task_promotion'] is False
+          assert c['epoch_completed']==20
+          assert c['synergy_credit_details']['CLUTRR_MINIMUM_QUESTION_SENSOR']['full_task_promotion'] is False
+          for f in m['files']:
+              assert hashlib.sha256(open('v57_output/'+f['name'],'rb').read()).hexdigest()==f['sha256']
+          print(json.dumps({'success':e['success'],'n':e['fresh_test_question_cases'],'q_acc':e['question_accuracy'],'baseline_acc':e['baseline_answered_accuracy'],'child':c['state_sha256']},sort_keys=True))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: arte-v57-epoch20-minimal-question-sensor
+          path: v57_output
