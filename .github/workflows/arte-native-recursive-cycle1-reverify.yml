@@ -1,0 +1,45 @@
+name: arte-native-recursive-cycle1-reverify
+
+on:
+  pull_request:
+    paths:
+      - 'evaluations/run_native_recursive_research_cycle1_reverify.py'
+      - 'research/native_research_cycle_001_attempt0_failure.json'
+      - 'research/native_research_cycle_001_reverify_precommit.json'
+      - 'arte_cognition/native_recursive_research.py'
+      - 'arte_cognition/executable_morphology.py'
+      - 'arte_cognition/morphology_genesis.py'
+      - '.github/workflows/arte-native-recursive-cycle1-reverify.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  reverify-cycle1:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile AST re-verifier
+        run: python -m py_compile evaluations/run_native_recursive_research_cycle1_reverify.py
+      - name: Fetch frozen cycle 0 parent
+        run: git fetch origin e3dbe4687491b838cb254517332edce4ba6db73a
+      - name: Reverify bounded L3 structural reachability
+        run: |
+          mkdir -p evaluation_output
+          PYTHONPATH=. python evaluations/run_native_recursive_research_cycle1_reverify.py \
+            --cycle0-head e3dbe4687491b838cb254517332edce4ba6db73a \
+            --cycle0-receipt research/native_research_cycle_000_receipt.json \
+            --output evaluation_output/native_recursive_research_cycle1_reverify_receipt.json
+      - name: Upload reverification receipt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: arte-native-cycle1-reverify-${{ github.event.pull_request.number || github.run_number }}
+          path: evaluation_output/native_recursive_research_cycle1_reverify_receipt.json
+          if-no-files-found: warn

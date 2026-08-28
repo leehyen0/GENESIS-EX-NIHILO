@@ -1,0 +1,21 @@
+{
+  "schema": "arte.native_research_precommit/v1",
+  "generation": 1,
+  "parent_generation": 0,
+  "parent_head_sha": "e3dbe4687491b838cb254517332edce4ba6db73a",
+  "parent_body_sha256": "5c1b1b8f4324297b3e5eda23fd10c860686d2276b4d5283a3e347767f4915743",
+  "parent_outcome_receipt_sha256": "7674b5cd7042aaf060748d3be7fe64542d67316ab3fda5e6a1e91ba244ff3dc7",
+  "problem_detector": "GENERATOR_MUTATOR_PRESSURE_UNREACHABLE",
+  "hypothesis": "Human-dependency or theory-blindspot pressure can open pre-outcome typed L3 generator/mutator policy candidates without current outcome access.",
+  "falsifier": "FAIL if FULL does not produce both generator and mutator L3 candidate families, or if REMOVE/base-engine or WRONG/zero-meta-pressure controls still produce L3 candidates.",
+  "expected_next_if_closed": "L3_POLICY_SEMANTICS_UNBOUND",
+  "verification_transport_base": "main",
+  "verification_transport_is_not_causal_parent": true,
+  "official_benchmark_used": false,
+  "external_claim_authority": false,
+  "runtime_semantics_claim_allowed": false,
+  "capability_improvement_claim_allowed": false,
+  "recursive_acceleration_claim_allowed": false,
+  "AGI": false,
+  "ASI": false
+}

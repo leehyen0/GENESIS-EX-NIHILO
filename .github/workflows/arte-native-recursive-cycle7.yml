@@ -1,0 +1,78 @@
+name: arte-native-recursive-cycle7
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+
+jobs:
+  native-cycle7:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Compile inherited representation-generator language
+        run: |
+          python -m py_compile arte_cognition/native_representation_generator_language.py
+          python -m py_compile arte_cognition/test_native_representation_generator_language.py
+          python -m py_compile evaluations/freeze_native_recursive_cycle7_generator.py
+          python -m py_compile evaluations/verify_cycle7_parent_unreachability.py
+          python -m py_compile evaluations/run_native_recursive_research_cycle7.py
+
+      - name: Run representation-generator language contracts
+        run: python -m unittest arte_cognition.test_native_representation_generator_language -v
+
+      - name: Fetch frozen generation 6 evidence parent
+        run: git fetch origin 1c1d719adde98a5546c55cb9881457f09f531ae0
+
+      - name: Freeze generator-policy descendant before hidden tasks
+        run: |
+          mkdir -p evaluation_output
+          PYTHONPATH=. python evaluations/freeze_native_recursive_cycle7_generator.py \
+            --precommit research/native_research_cycle_007_precommit.json \
+            --cycle6-receipt research/native_research_cycle_006_receipt.json \
+            --candidate-head ${{ github.event.pull_request.head.sha }} \
+            --output evaluation_output/native_cycle7_generator_freeze.json
+
+      - name: Generate evaluator-owned hidden expression seed
+        run: |
+          python - <<'PY'
+          import secrets
+          from pathlib import Path
+          Path('/tmp/arte_native_cycle7_hidden_seed').write_text(str(secrets.randbits(128)))
+          PY
+
+      - name: Verify frozen cycle-6 parent remains expression-unreachable under MORE_COMPUTE
+        run: |
+          PYTHONPATH=. python evaluations/verify_cycle7_parent_unreachability.py \
+            --precommit research/native_research_cycle_007_precommit.json \
+            --hidden-seed-file /tmp/arte_native_cycle7_hidden_seed \
+            --output evaluation_output/native_cycle7_parent_unreachability.json
+
+      - name: Run precommitted hidden native recursive-research cycle 7
+        run: |
+          PYTHONPATH=. python evaluations/run_native_recursive_research_cycle7.py \
+            --parent-head 1c1d719adde98a5546c55cb9881457f09f531ae0 \
+            --candidate-head ${{ github.event.pull_request.head.sha }} \
+            --precommit research/native_research_cycle_007_precommit.json \
+            --cycle6-receipt research/native_research_cycle_006_receipt.json \
+            --generator-freeze evaluation_output/native_cycle7_generator_freeze.json \
+            --hidden-seed-file /tmp/arte_native_cycle7_hidden_seed \
+            --output evaluation_output/native_recursive_research_cycle7_receipt.json
+
+      - name: Upload native cycle 7 receipts
+        uses: actions/upload-artifact@v4
+        with:
+          name: arte-native-cycle7-${{ github.event.pull_request.number }}
+          path: |
+            evaluation_output/native_cycle7_generator_freeze.json
+            evaluation_output/native_cycle7_parent_unreachability.json
+            evaluation_output/native_recursive_research_cycle7_receipt.json

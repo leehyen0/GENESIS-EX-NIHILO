@@ -7,6 +7,7 @@ import json
 
 from .canonical_body_checkpoint import checkpoint_dict as canonical_checkpoint_dict
 from .canonical_body_checkpoint import restore_runtime as restore_canonical_runtime
+from .causal_experiment_germline import CausalExperimentGermline
 from .cognitive_runtime import PersistentCognitiveRuntime
 from .executable_morphology import (
     EdgeSpec,
@@ -21,14 +22,16 @@ from .raw_observation_authority import RawObservationVerifier
 from .world_coupling import WorldReceiptVerifier
 
 
-SELF_EVOLVING_BODY_SCHEMA = "arte.self_evolving_research_body/v1"
-_REQUIRED = (
+SELF_EVOLVING_BODY_SCHEMA_V1 = "arte.self_evolving_research_body/v1"
+SELF_EVOLVING_BODY_SCHEMA = "arte.self_evolving_research_body/v2"
+_REQUIRED_V1 = (
     "canonical_runtime",
     "morphology_genome",
     "mutation_strategy",
     "mutation_program_development",
     "experience_archive",
 )
+_REQUIRED = _REQUIRED_V1 + ("causal_experiment_germline",)
 
 
 @dataclass
@@ -38,6 +41,7 @@ class SelfEvolvingResearchBody:
     mutation_strategy: MutationStrategyState
     mutation_program_state: MutationProgramDevelopmentState
     experience_archive: ExperienceArchive
+    causal_experiment_germline: Optional[CausalExperimentGermline] = None
 
 
 def _genome_dict(genome: MorphologyGenome) -> Dict[str, Any]:
@@ -238,20 +242,27 @@ def integrity_sha256(payload: Dict[str, Any]) -> str:
 
 
 def checkpoint_dict(body: SelfEvolvingResearchBody) -> Dict[str, Any]:
+    germline = body.causal_experiment_germline
+    if germline is not None:
+        errors = germline.validate()
+        if errors:
+            raise ValueError("invalid causal experiment germline: " + ",".join(errors))
     payload: Dict[str, Any] = {
         "canonical_runtime": canonical_checkpoint_dict(body.runtime),
         "morphology_genome": _genome_dict(body.morphology),
         "mutation_strategy": _strategy_dict(body.mutation_strategy),
         "mutation_program_development": _program_state_dict(body.mutation_program_state),
         "experience_archive": _archive_dict(body.experience_archive),
+        "causal_experiment_germline": None if germline is None else germline.to_dict(),
     }
     payload["self_evolving_body"] = {
         "schema": SELF_EVOLVING_BODY_SCHEMA,
         "required_namespaces": list(_REQUIRED),
         "integrity_sha256": "",
         "authority_note": (
-            "morphology, strategy, development and experience are inherited state; "
-            "external verifier/certificate authority is not checkpointed and must be re-established"
+            "morphology, strategy, development, experience and causal experiment identity are inherited state; "
+            "GitHub provenance is evidence only; external verifier/world/certificate authority is not checkpointed "
+            "and must be re-established after restore"
         ),
     }
     payload["self_evolving_body"]["integrity_sha256"] = integrity_sha256(payload)
@@ -268,12 +279,15 @@ def restore_body(
     raw_observation_verifier: Optional[RawObservationVerifier] = None,
 ) -> SelfEvolvingResearchBody:
     envelope = dict(payload.get("self_evolving_body", {}))
-    if envelope.get("schema") != SELF_EVOLVING_BODY_SCHEMA:
+    schema = str(envelope.get("schema", ""))
+    if schema not in {SELF_EVOLVING_BODY_SCHEMA_V1, SELF_EVOLVING_BODY_SCHEMA}:
         raise ValueError("unsupported self-evolving BODY checkpoint schema")
+
+    expected_required = _REQUIRED_V1 if schema == SELF_EVOLVING_BODY_SCHEMA_V1 else _REQUIRED
     required = tuple(str(value) for value in envelope.get("required_namespaces", ()))
-    if required != _REQUIRED:
+    if required != expected_required:
         raise ValueError("self-evolving BODY required-namespace contract mismatch")
-    missing = [name for name in _REQUIRED if name not in payload]
+    missing = [name for name in expected_required if name not in payload]
     if missing:
         raise ValueError("self-evolving BODY missing namespaces: " + ",".join(missing))
     expected = str(envelope.get("integrity_sha256", ""))
@@ -289,4 +303,13 @@ def restore_body(
     strategy = _restore_strategy(dict(payload["mutation_strategy"]))
     program_state = _restore_program_state(dict(payload["mutation_program_development"]))
     archive = _restore_archive(dict(payload["experience_archive"]))
-    return SelfEvolvingResearchBody(runtime, morphology, strategy, program_state, archive)
+
+    germline: Optional[CausalExperimentGermline] = None
+    if schema == SELF_EVOLVING_BODY_SCHEMA:
+        germline_payload = payload.get("causal_experiment_germline")
+        if germline_payload is not None:
+            germline = CausalExperimentGermline.from_dict(dict(germline_payload))
+
+    # V1 can be restored for historical continuity, but it cannot gain experiment
+    # identity or authority retroactively. The upgraded runtime remains germline-empty.
+    return SelfEvolvingResearchBody(runtime, morphology, strategy, program_state, archive, germline)

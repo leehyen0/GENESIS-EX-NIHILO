@@ -1,0 +1,14 @@
+{
+  "schema": "arte.native_research_candidate_freeze/v1",
+  "generation": 6,
+  "precommit_head_sha": "f9524e998886ac1e79ea165f4390e0557cb541ed",
+  "implementation_complete_head_sha": "3f9b2d6d0f14d1b65d58dbbdf0c54cb755405306",
+  "hidden_task_seed_generated_after_this_freeze": true,
+  "frozen_candidate_surface": [
+    "arte_cognition/native_representation_genesis.py",
+    "arte_cognition/test_native_representation_genesis.py",
+    "evaluations/run_native_recursive_research_cycle6.py",
+    ".github/workflows/arte-native-recursive-cycle6.yml"
+  ],
+  "claim_boundary": "Candidate code is frozen before the GitHub runner generates hidden task seed; outcome-driven edits require a later generation and cannot be credited to cycle 6."
+}

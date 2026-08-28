@@ -1,0 +1,16 @@
+{
+  "schema": "arte.native_research_candidate_freeze/v1",
+  "generation": 7,
+  "precommit_head_sha": "247020f29bf7744f2f4193fc19fdcb7381ae05f9",
+  "implementation_complete_head_sha": "e9e31c82f076cb15929f7bc5833fa8c71736e488",
+  "hidden_task_seed_generated_after_this_freeze": true,
+  "frozen_candidate_surface": [
+    "arte_cognition/native_representation_generator_language.py",
+    "arte_cognition/test_native_representation_generator_language.py",
+    "evaluations/freeze_native_recursive_cycle7_generator.py",
+    "evaluations/verify_cycle7_parent_unreachability.py",
+    "evaluations/run_native_recursive_research_cycle7.py",
+    ".github/workflows/arte-native-recursive-cycle7.yml"
+  ],
+  "claim_boundary": "Cycle-7 generator-language implementation is frozen before evaluator-owned hidden task seed creation. Any result-driven implementation edit belongs to a later generation and cannot receive cycle-7 credit."
+}

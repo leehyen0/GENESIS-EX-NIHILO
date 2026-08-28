@@ -1,0 +1,23 @@
+{
+  "schema": "arte.native_research_negative_evidence/v1",
+  "generation": 1,
+  "attempt": 0,
+  "github_run_id": 33025221187,
+  "github_job_id": 98364804827,
+  "parent_head_sha": "e3dbe4687491b838cb254517332edce4ba6db73a",
+  "candidate_commit_sha": "b657e27e3dd1b5d448e736fd4e82ef3d3da0310b",
+  "precommitted_problem": "GENERATOR_MUTATOR_PRESSURE_UNREACHABLE",
+  "compile_contracts_passed": true,
+  "body_unit_contracts_passed": true,
+  "frozen_parent_fetch_passed": true,
+  "l3_full_remove_wrong_unit_contracts_passed": true,
+  "evaluation_result": "INVALID_EVALUATOR_INSTRUMENT_FALSE_NEGATIVE",
+  "observed_failure": "cycle1 failed to expose next semantics frontier: []",
+  "diagnosis": "The source-level frontier detector inferred semantic binding from lexical tokens rather than AST-level executable consumption. The original L3 implementation is not changed after this result; only a separate re-verifier may test the already-frozen structural claim.",
+  "retroactive_pass_forbidden": true,
+  "eligible_for_recursive_acceleration_ledger": false,
+  "official_benchmark_used": false,
+  "external_claim_authority": false,
+  "AGI": false,
+  "ASI": false
+}

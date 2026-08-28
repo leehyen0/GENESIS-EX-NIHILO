@@ -1,0 +1,20 @@
+{
+  "schema": "arte.native_research_candidate_freeze/v1",
+  "generation": 5,
+  "precommit_commit_sha": "5344396ae29b59f24d15248f6c37be9d011443fc",
+  "candidate_implementation_head_sha": "d4f060b0b887775df7d1528bf9acfc1296f9401f",
+  "inherited_policy_origin_residual_id": "cycle5-policy-origin-A",
+  "inherited_policy_operation_family": "CHANGE_MUTATOR_POLICY",
+  "fresh_task_seed_known_at_freeze": false,
+  "fresh_task_ids_known_at_freeze": false,
+  "selected_candidate_evaluation_budget_full": 1,
+  "selected_candidate_evaluation_budget_remove": 1,
+  "raw_candidate_generation_budget_full": 64,
+  "raw_candidate_generation_budget_remove": 64,
+  "checkpoint_restore_required_before_fresh_tasks": true,
+  "policy_selection_may_not_change_after_hidden_seed_reveal": true,
+  "official_benchmark_used": false,
+  "external_claim_authority": false,
+  "AGI": false,
+  "ASI": false
+}

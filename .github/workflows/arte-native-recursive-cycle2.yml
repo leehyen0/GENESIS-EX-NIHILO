@@ -1,0 +1,50 @@
+name: arte-native-recursive-cycle2
+
+on:
+  pull_request:
+    paths:
+      - 'arte_cognition/native_meta_policy_runtime.py'
+      - 'arte_cognition/test_native_meta_policy_runtime.py'
+      - 'evaluations/run_native_recursive_research_cycle2.py'
+      - 'research/native_research_cycle_001_reverify_receipt.json'
+      - 'research/native_research_cycle_002_precommit.json'
+      - '.github/workflows/arte-native-recursive-cycle2.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  native-cycle2:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile native meta-policy runtime and evaluator
+        run: |
+          python -m py_compile arte_cognition/native_meta_policy_runtime.py
+          python -m py_compile arte_cognition/test_native_meta_policy_runtime.py
+          python -m py_compile evaluations/run_native_recursive_research_cycle2.py
+      - name: Run native meta-policy runtime controls
+        run: python -m unittest arte_cognition.test_native_meta_policy_runtime -v
+      - name: Fetch frozen generation 1 evidence parent
+        run: git fetch origin c98d80aee0ed0ad50ea2590da3fb6ebb4712c484
+      - name: Run precommitted native recursive-research cycle 2
+        run: |
+          mkdir -p evaluation_output
+          PYTHONPATH=. python evaluations/run_native_recursive_research_cycle2.py \
+            --parent-head c98d80aee0ed0ad50ea2590da3fb6ebb4712c484 \
+            --precommit research/native_research_cycle_002_precommit.json \
+            --cycle1-receipt research/native_research_cycle_001_reverify_receipt.json \
+            --output evaluation_output/native_recursive_research_cycle2_receipt.json
+      - name: Upload native cycle 2 receipt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: arte-native-cycle2-${{ github.event.pull_request.number || github.run_number }}
+          path: evaluation_output/native_recursive_research_cycle2_receipt.json
+          if-no-files-found: warn
