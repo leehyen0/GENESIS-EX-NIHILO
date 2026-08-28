@@ -1,0 +1,20 @@
+{
+  "continuity_body_integrity_sha256": "4d08708006f98b54e63608657c3e283edd98f9ed53af4795f7842cff420e2941",
+  "epoch": 10,
+  "parent_state": {
+    "causal_fossils": [],
+    "claim_flags": {"AGI":false,"ASI":false,"external_recursive_acceleration":false,"human_intelligence_exceeded":false,"independent_custody_proof":false,"source_disjoint_transfer_proof":false},
+    "epoch_completed": 9,
+    "external_calibration": {"authority_rule":"ANSWER_IF_GROUP_HAS_EXTERNAL_ERROR_HISTORY_ELSE_HOLD","coverage":0.8333333333333334,"cross_family_scale_transfer":true,"false_authority_rate":0.16666666666666666,"mean_width":0.5,"n":6,"real_external_public_data":true,"retrospective":true},
+    "family_credits": {"BINARY_RULE":1,"CALIBRATED_AFFINE_TRANSFER":1,"CAUSAL_INTERVENTION":1,"GRAPH_SHORTEST_PATH":1,"MODULAR_AFFINE":1,"NOISY_TOOL_BANDIT":1,"RESOURCE_SCHEDULING":1,"SEQUENCE_RECURRENCE":1,"SYMBOLIC_REWRITE":1},
+    "merge_roots": {"continuity_body_integrity_sha256":"4d08708006f98b54e63608657c3e283edd98f9ed53af4795f7842cff420e2941","continuity_parent_state_sha256":"47f236b419ee3b553582abecef780e02e392b9261ecb3e54516b81678ff526a1","g2064_evidence_sha256":"5e651bd1c6702d1c95526066690df8dcfc527f8540c92c32eaaf37845c642ba0","g2064_source_checkpoint_file_sha256":"32c1ec1d9491e0bb6e0ec89b9fc5797b94b74007e820e5f3b1382bf64ec04f5d","merge_semantics":"EXECUTION_PARENT_PLUS_EXTERNAL_EVIDENCE_GRAFT_NOT_DUAL_PARENT_IDENTITY"},
+    "schema": "arte.dual_external_synergy_state/v56",
+    "self_model": {"alpha":10.0,"beta":1.0},
+    "solved_family_registry": ["MODULAR_AFFINE","GRAPH_SHORTEST_PATH","SEQUENCE_RECURRENCE","BINARY_RULE","RESOURCE_SCHEDULING","NOISY_TOOL_BANDIT","CAUSAL_INTERVENTION","SYMBOLIC_REWRITE","CALIBRATED_AFFINE_TRANSFER"],
+    "state_sha256": "974afbd11d9d62de450d9b5bc635a2c41deb053807dd29fed6e07647c52d82aa",
+    "synergy_credit": 1,
+    "synergy_lineage": [{"both_roots_required":true,"epoch":9,"evidence_sha256":"5e651bd1c6702d1c95526066690df8dcfc527f8540c92c32eaaf37845c642ba0","family":"CALIBRATED_AFFINE_TRANSFER","github_run_id":"33135078969","metrics":{"full":{"answered":164,"answered_accuracy":1.0,"correct":164,"false_authority_rate":0.0,"held":76,"n":240,"utility_per_case":0.7625,"wrong":0},"no_calibration":{"answered":240,"answered_accuracy":0.7208333333333333,"correct":173,"false_authority_rate":0.2791666666666667,"held":0,"n":240,"utility_per_case":0.1625,"wrong":67},"no_continuity":{"answered":160,"answered_accuracy":0.0,"correct":0,"false_authority_rate":0.6666666666666666,"held":80,"n":240,"utility_per_case":-1.25,"wrong":160},"wrong_calibration":{"answered":66,"answered_accuracy":0.09090909090909091,"correct":6,"false_authority_rate":0.25,"held":174,"n":240,"utility_per_case":-0.29375,"wrong":60}},"parent_state_sha256":"47f236b419ee3b553582abecef780e02e392b9261ecb3e54516b81678ff526a1","self_predicted_success":0.9,"success":true}]
+  },
+  "parent_state_sha256": "974afbd11d9d62de450d9b5bc635a2c41deb053807dd29fed6e07647c52d82aa",
+  "schema": "arte.dual_external_synergy_trigger/v56"
+}
