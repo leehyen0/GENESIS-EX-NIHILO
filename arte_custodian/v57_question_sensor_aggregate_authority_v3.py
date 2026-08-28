@@ -58,7 +58,7 @@ def verify(batch_path,freeze_path,snapshot_path,policy_path,receipt_paths,proven
         if r.get('formal_freeze_sha256')!=freeze.get('freeze_sha256'): errors.append('GENERATION_FREEZE_SHA_MISMATCH:'+str(g))
         if r.get('prefreeze_snapshot_sha256')!=snap.get('snapshot_sha256'): errors.append('GENERATION_SNAPSHOT_SHA_MISMATCH:'+str(g))
         if r.get('commitment_batch_sha256')!=batch_sha: errors.append('GENERATION_BATCH_SHA_MISMATCH:'+str(g))
-        for field in ('formal_freeze_self_hash_valid','prefreeze_snapshot_self_hash_valid','question_output_hash_custodian_bound','prediction_output_hash_custodian_bound','stage_hash_chain_complete'):
+        for field in ('formal_freeze_self_hash_valid','prefreeze_snapshot_self_hash_valid','hidden_challenge_semantics_valid','question_output_hash_custodian_bound','prediction_output_hash_custodian_bound','stage_hash_chain_complete'):
             if r.get(field) is not True: errors.append('GENERATION_MISSING_STAGE_AUTHORITY:'+str(g)+':'+field)
         cb=r.get('claim_boundary',{})
         if cb.get('this_receipt_alone_proves_independent_custody') is not False or cb.get('AGI') is not False or cb.get('ASI') is not False or cb.get('external_recursive_acceleration') is not False:
@@ -71,7 +71,6 @@ def verify(batch_path,freeze_path,snapshot_path,policy_path,receipt_paths,proven
         if r.get('custodian_id')!=batch.get('custodian_id'): errors.append('RECEIPT_CUSTODIAN_MISMATCH:'+g)
         if r.get('challenge_id')!=c.get('challenge_id'): errors.append('RECEIPT_CHALLENGE_ID_MISMATCH:'+g)
 
-    crypto_and_stage_complete=not errors
     provenance=None; external_account_distinct=False; independent_authority_verified=False
     if provenance_path:
         provenance=load(provenance_path)
@@ -94,7 +93,6 @@ def verify(batch_path,freeze_path,snapshot_path,policy_path,receipt_paths,proven
     else:
         warnings.extend(['EXTERNAL_CUSTODY_PROVENANCE_MISSING','INDEPENDENT_CONTROL_AUTHORITY_NOT_VERIFIED'])
 
-    # Recompute after provenance structural errors may have been added.
     three_generation_chain_complete=not [e for e in errors if not e.startswith('BAD_EXTERNAL_PROVENANCE') and not e.startswith('PROVENANCE_')]
     stage_order_authority_candidate=bool(three_generation_chain_complete and external_account_distinct)
     e4=bool(not errors and independent_authority_verified)
