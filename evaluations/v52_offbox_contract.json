@@ -1,0 +1,19 @@
+{
+  "schema": "arte.github_offbox_mass_acceleration_contract/v52",
+  "parent_v50_body_sha256": "5c95c746bfda5dff5047f25ca7a486d994f49bfa8fc6926debfeaa95083e5dda",
+  "workload": {
+    "generations": 1024,
+    "domains": 16,
+    "contexts_per_domain": 8,
+    "mutation_candidates": 32
+  },
+  "required_false_flags": {
+    "external_recursive_acceleration": false,
+    "independent_custody_proof": false,
+    "matched_cross_domain_superiority": false,
+    "human_intelligence_exceeded": false,
+    "AGI": false,
+    "ASI": false
+  },
+  "contract_sha256": "7f02af003c22cce21bb815a6bd4f5a585116fab6478226ab1f1414b4c58b2b0c"
+}
