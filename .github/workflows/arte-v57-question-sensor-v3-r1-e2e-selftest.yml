@@ -1,0 +1,24 @@
+name: arte-v57-question-sensor-v3-r1-e2e-selftest
+on:
+  push:
+    paths:
+      - '.github/workflows/arte-v57-question-sensor-v3-r1-e2e-selftest.yml'
+  workflow_dispatch:
+jobs:
+  v3-r1-e2e:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile selftest
+        run: python -m py_compile arte_custodian/v57_question_sensor_v3_e2e_selftest.py
+      - name: Run repaired three-generation rehearsal and adversarial checks
+        run: python arte_custodian/v57_question_sensor_v3_e2e_selftest.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: arte-v57-question-sensor-v3-r1-e2e-selftest
+          path: v3_selftest/SELFTEST_RESULT.json
