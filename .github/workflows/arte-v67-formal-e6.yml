@@ -1,0 +1,88 @@
+name: arte-v67-formal-e6-epoch
+on:
+  push:
+    branches:
+      - arte-v67-formal-e6
+    paths:
+      - 'arte_external_replay/v67_trigger.json'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+  attestations: write
+
+jobs:
+  e6-epoch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify E6 precommit, frozen code, and trigger chain
+        shell: python
+        run: |
+          import json,subprocess,hashlib
+          p=json.load(open('arte_external_replay/v67_e6_precommit.json'))
+          t=json.load(open('arte_external_replay/v67_trigger.json'))
+          for path,expected in p['frozen_git_blob_sha1'].items():
+              got=subprocess.check_output(['git','hash-object',path],text=True).strip()
+              assert got==expected,(path,got,expected)
+          def h(x):
+              return hashlib.sha256(json.dumps(x,sort_keys=True,separators=(',',':'),ensure_ascii=False).encode()).hexdigest()
+          for key in ['parent_body_state','parent_world_state']:
+              s=t[key]; assert s['state_sha256']==h({k:v for k,v in s.items() if k!='state_sha256'})
+          assert p['formal_E5_parent_gate'] is True
+          assert p['epochs']==8 and 1<=t['epoch']<=8
+          assert p['attempt_budget_per_epoch']==1 and p['feedback_before_verdict'] is False
+          print('E6 PRECOMMIT PASS',p['precommit_sha256'],'epoch',t['epoch'])
+      - name: Acquire and commit independent NIST source cognition
+        run: python arte_external_replay/v67_source_stage.py arte_external_replay/v67_trigger.json v67_source.json
+      - name: Verify source cognition commit exists before target entropy
+        shell: python
+        run: |
+          import json
+          s=json.load(open('v67_source.json'))
+          assert s['source_cognition_commit']['source_cognition_sha256']
+          print('SOURCE COMMIT PASS',s['source_cognition_commit']['source_cognition_sha256'])
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install verified drand client
+        run: npm install drand-client isomorphic-fetch abort-controller
+      - name: Obtain strictly future target entropy
+        run: node arte_external_replay/v65_future_drand.mjs > v67_target_beacon.json
+      - name: Run one cold-restored E6 epoch with external authorities
+        run: python arte_external_replay/v67_epoch_runner.py arte_external_replay/v67_trigger.json v67_source.json v67_target_beacon.json v67_output
+      - name: Verify epoch result and controls
+        shell: python
+        run: |
+          import json
+          e=json.load(open('v67_output/epoch_evidence.json'))
+          m=e['metrics']
+          assert e['target_beacon']['cryptographic_verification_enabled'] is True
+          assert e['target_beacon']['target_entropy_strictly_future'] is True
+          assert e['attempt_budget']==1 and e['feedback_before_verdict'] is False and e['gold_seen_before_submission'] is False
+          assert m['all_roles_exact'] is True and m['retention']==1.0
+          assert m['mean_full_raw_cost'] < m['mean_static_raw_cost']
+          assert m['mean_full_raw_cost'] < m['mean_more_compute_raw_cost']
+          assert m['mean_full_raw_cost'] < m['mean_wrong_transfer_raw_cost']
+          assert m['mean_full_raw_cost'] < m['mean_ablation_raw_cost']
+          print('E6 EPOCH PASS',e['epoch'],m)
+      - name: GitHub/Sigstore attest E6 epoch evidence
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: v67_output/epoch_evidence.json
+      - name: Cryptographically verify epoch attestation
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh attestation verify v67_output/epoch_evidence.json -R "$GITHUB_REPOSITORY" --format json > v67_output/attestation_verification.json
+          test -s v67_output/attestation_verification.json
+      - name: Record hashes
+        run: sha256sum v67_output/* > v67_output/file_sha256s.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: arte-v67-e6-epoch
+          path: v67_output/
