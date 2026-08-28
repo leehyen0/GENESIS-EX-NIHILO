@@ -1,0 +1,60 @@
+name: arte-v57-question-sensor-formal-freeze-v3-r2
+on:
+  push:
+    branches:
+      - arte-v57-source-disjoint-crossnovel
+    paths:
+      - 'arte_custodian/v57_question_sensor_commitment_batch_external.json'
+  workflow_dispatch:
+jobs:
+  freeze-v3-r2:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile current intake and v3-r2 freeze gate
+        run: |
+          python -m py_compile arte_custodian/v57_question_sensor_commitment_intake.py
+          python -m py_compile arte_custodian/v57_question_sensor_freeze_after_intake_v3.py
+      - name: Validate external G1 G2 G3 commitment batch
+        run: |
+          mkdir -p v57_freeze_v3_r2
+          python arte_custodian/v57_question_sensor_commitment_intake.py \
+            arte_custodian/v57_question_sensor_commitment_batch_external.json \
+            --audit-out v57_freeze_v3_r2/intake_audit.json
+      - name: Produce current formal candidate freeze
+        run: |
+          python arte_custodian/v57_question_sensor_freeze_after_intake_v3.py \
+            arte_custodian/v57_question_sensor_commitment_batch_external.json \
+            --freeze-out v57_freeze_v3_r2/candidate_freeze.json
+      - name: Verify v3-r2 self-hash and non-self-certifying authority boundary
+        run: |
+          python - <<'PY'
+          import hashlib,json
+          def canon(x): return json.dumps(x,ensure_ascii=False,sort_keys=True,separators=(',',':')).encode('utf-8')
+          a=json.load(open('v57_freeze_v3_r2/intake_audit.json'))
+          f=json.load(open('v57_freeze_v3_r2/candidate_freeze.json'))
+          assert a['structurally_valid'] is True
+          assert a['status']=='ACCEPT_STRUCTURAL_COMMITMENTS__READY_FOR_CANDIDATE_FREEZE'
+          assert a['authority_boundary']['independent_custody_proven'] is False
+          assert f['schema']=='arte.question_sensor_candidate_freeze/v57-v3'
+          assert f['formal_candidate_freeze'] is True
+          assert f['prefreeze_snapshot_sha256']=='a5c26643ee3732e51952195c7698ab1b6b975bc28d3c3a192d6103bdc7d03916'
+          assert f['body_state_sha256']=='2b02b704147e95ad401110b98744f7ab54cb46f4b8b073ea9b20994dd0d8f257'
+          assert f['stage_hash_binding_protocol_required'] is True
+          assert f['independent_challenge_semantics_required'] is True
+          assert f['repository_local_E4_self_certification_forbidden'] is True
+          assert f['independent_custody_proven'] is False
+          assert f['claim_boundary']['AGI'] is False and f['claim_boundary']['ASI'] is False
+          declared=f['freeze_sha256']; x=dict(f); x.pop('freeze_sha256')
+          assert hashlib.sha256(canon(x)).hexdigest()==declared
+          print(json.dumps({'formal_freeze':True,'freeze_sha256':declared,'prefreeze_snapshot_sha256':f['prefreeze_snapshot_sha256'],'repository_local_E4':False},sort_keys=True))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: arte-v57-question-sensor-formal-freeze-v3-r2
+          path: v57_freeze_v3_r2
