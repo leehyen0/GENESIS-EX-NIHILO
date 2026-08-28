@@ -1,0 +1,41 @@
+{
+  "body_state_sha256": "2b02b704147e95ad401110b98744f7ab54cb46f4b8b073ea9b20994dd0d8f257",
+  "candidate_content_anchor_commit": "f7de91e92ee314129d5b27ada040d17e904bb82a",
+  "claim_boundary": {
+    "AGI": false,
+    "ASI": false,
+    "external_recursive_acceleration": false,
+    "global_recursive_self_improvement": false
+  },
+  "epoch20_evidence_head_sha": "1c7483f946c75a24e38e887b4f1964effad40254",
+  "files": {
+    "arte_candidate/run_v57_question_sensor_candidate.py": "87ebe87af624942b8ac0e08a0c6339efe620bf8a77d3f891ac553ac014a47ce3",
+    "arte_candidate/v57_epoch20_question_bank.json": "dc3968d87397c1d146be9b526c6839659492dac5ed607ecebe80894acf876c0e",
+    "arte_custodian/v57_epoch20_independent_question_sensor_public_spec_v3.json": "92bf5962bd46ffe7c1ca0b0d97e149b5eb91ab0227e306b54bab9f8a9b4027ae",
+    "arte_custodian/v57_question_sensor_aggregate_authority_v3.py": "57b9a7572a7b477632b1445f319369f3d4b9ad1f2cfd950bdd03c6c5bd0ba161",
+    "arte_custodian/v57_question_sensor_challenge_semantics_v3.py": "2dfb4723f521e88f44fb94b6085bc19c9b9ae45e63f7a9a910f50c3834e23883",
+    "arte_custodian/v57_question_sensor_commitment_intake.py": "a3ef02f55071465bc10f7b7bdfc580f0ff93e3a9137dcc836319f0b90a646e97",
+    "arte_custodian/v57_question_sensor_custodian_protocol_v3.py": "bb5b2594fb79ef6d8119fb66794023b68c08db5a477a1e167b1b8e0f4ce81c6a",
+    "arte_custodian/v57_question_sensor_final_verifier_v3.py": "16c8ee96f4973fa3b4c47dc0c51288eb622b82a7a075bfa3db0d0ea31574579b",
+    "arte_custodian/v57_question_sensor_freeze_after_intake_v3.py": "2e06442f2edb3ec8d3d1a1006e805b48f7d522dd00828d638b1f258fca1f503d",
+    "arte_custodian/v57_question_sensor_independent_authority_policy.json": "9081a2235dcb6c12239a100d5ab1e45579e62d09cf8b291cb2b7496f01be8de9"
+  },
+  "formal_candidate_freeze": false,
+  "freeze_allowed_without_valid_G1_G2_G3_commitment_batch": false,
+  "generated_operator_sha256": "23e1b2449c1d27eaf3546124eee57bb1a573f9ad1930b9dc9ce6ba28d17ad54f",
+  "hardening": {
+    "challenge_semantics_rederived_from_frozen_bank": true,
+    "formal_freeze_self_hash_required": true,
+    "hidden_expected_question_and_target_not_trusted": true,
+    "prediction_output_hash_must_be_custodian_bound_before_key_reveal": true,
+    "prefreeze_snapshot_self_hash_required": true,
+    "question_output_hash_must_be_custodian_bound_before_sensor_release": true,
+    "three_generation_aggregate_authority_separate_from_per_generation_success": true
+  },
+  "independent_custody_proven": false,
+  "learned_question_bank_canonical_sha256": "cef2f2f365a9763c1966e4a62739aedbaae7c860ddd986d2b0e8c757603eb017",
+  "schema": "arte.question_sensor_candidate_prefreeze_snapshot/v57-v3",
+  "snapshot_head_sha": "f7de91e92ee314129d5b27ada040d17e904bb82a",
+  "snapshot_sha256": "52127bcd1d7220abb6f37263eadbd2e85784c779f0d3e734089953f6e0fd890c",
+  "supersedes_prefreeze_snapshot_sha256": "bccce1fba7e73d2e359c46a15c8cd67464a558c7cf1a7ca91af6aa5df85fcb96"
+}
