@@ -1,0 +1,22 @@
+{
+  "schema": "arte.v57_epoch16_trigger/v2",
+  "epoch": 16,
+  "parent_state_sha256": "eeceb3b6389eeced39c3b4ca6f3948035fa5063e21f8172ea14e2790ad948131",
+  "parent_restore": {
+    "epoch15_run_id": "33137539741",
+    "immutable_trigger_path": "arte_external_replay/v57_epoch15_trigger.json",
+    "expected_child_sha256": "eeceb3b6389eeced39c3b4ca6f3948035fa5063e21f8172ea14e2790ad948131"
+  },
+  "e3_roots": {
+    "cross_domain_transfer_receipt_sha256": "fc9d5febd706edef223b10d920a6374c18e7812cc2d1b2b0199153d7bb718440",
+    "novel_discovery_receipt_sha256": "0331978e07671e6866c71b1f631d1336b2c578f064c5b617344d6a882c8d6303",
+    "historical_e3_final_state_sha256": "1daf29c62f9421c8b1bb10b7650cfc954f1f024c79a6b7fc3a426e07bd8ed880"
+  },
+  "protocol": {
+    "heldout_index_selected_before_dev_label_search": true,
+    "heldout_target_excluded_from_search": true,
+    "prediction_precommit_before_target_reveal": true,
+    "same_candidates_full_ablation": true,
+    "e3_roots_are_priors_not_authority_parents": true
+  }
+}
