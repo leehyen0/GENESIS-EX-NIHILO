@@ -1,0 +1,29 @@
+{
+  "claim_boundary": {
+    "independent_custody": false,
+    "prospective": false,
+    "real_world_intervention": false
+  },
+  "evidence_sha256": "5e651bd1c6702d1c95526066690df8dcfc527f8540c92c32eaaf37845c642ba0",
+  "external_calibration": {
+    "authority_rule": "ANSWER_IF_GROUP_HAS_EXTERNAL_ERROR_HISTORY_ELSE_HOLD",
+    "coverage": 0.8333333333333334,
+    "cross_family_scale_transfer": true,
+    "false_authority_rate": 0.16666666666666666,
+    "mean_width": 0.5,
+    "n": 6,
+    "real_external_public_data": true,
+    "retrospective": true
+  },
+  "holdout_ids": [
+    "AU_CPI_MOM_2026_07",
+    "KR_CPI_YOY_2026_04",
+    "IT_HICP_YOY_2026_04",
+    "CN_INDUSTRIAL_YOY_2026_07",
+    "CN_RETAIL_YOY_2026_07",
+    "US_PCE_YOY_2026_07"
+  ],
+  "schema": "arte.external_calibration_evidence/v56",
+  "source_checkpoint_file_sha256": "32c1ec1d9491e0bb6e0ec89b9fc5797b94b74007e820e5f3b1382bf64ec04f5d",
+  "source_generation": 2064
+}
