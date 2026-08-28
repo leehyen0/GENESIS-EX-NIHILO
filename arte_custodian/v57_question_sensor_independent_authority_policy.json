@@ -11,18 +11,24 @@
   "independence_requirements": [
     "Three-generation cryptographic success is necessary but not sufficient for independent authority.",
     "A distinct GitHub submission account is useful provenance but is not by itself proof that the account is independently controlled.",
-    "Independent authority requires a public provenance record bound to the same commitment batch and formal freeze.",
-    "The provenance record must show a submission actor distinct from the repository owner.",
-    "The provenance record must contain an independence verification whose verifier is distinct from both repository owner and submission actor.",
-    "The verification basis must be INDEPENDENT_THIRD_PARTY or INDEPENDENT_ORGANIZATION and must include a public evidence URL.",
-    "If any independence requirement is missing or unverifiable, E4_independent_custody_authorized remains false."
+    "A repository-local provenance JSON, even if it says verified=true and names a distinct actor or URL, is evidence material only and cannot confer independent authority.",
+    "The candidate repository, its workflows, the repository owner, ChatGPT, and ARTE are not permitted to self-certify E4 independent custody.",
+    "Repository-local aggregate tooling may only emit an EXTERNAL_AUTHORITY_CANDIDATE after cryptographic, semantic, stage-order, and provenance consistency checks.",
+    "E4 authorization requires an adjudication made outside the candidate/user/ChatGPT/ARTE authority boundary by an actually independent evaluator who directly controls or verifies the relevant external custody evidence.",
+    "The external adjudication must publicly bind the commitment batch, formal freeze, three generation receipts, and the evaluator's own authority/provenance.",
+    "Until such an external adjudication exists and is independently inspectable, E4_independent_custody_authorized remains false."
   ],
   "stage_separation_requirements": [
     "Hidden plaintext, OTP keys, sensor bits, and targets must remain outside the candidate boundary until their specified reveal stage.",
     "Public packet reveal occurs only after formal candidate freeze.",
-    "Sensor bits are returned only after question outputs are frozen.",
-    "OTP keys and targets are revealed only after prediction outputs are frozen."
+    "Sensor bits are returned only after question outputs are frozen and the custodian response binds the exact question-output hash.",
+    "OTP keys and targets are revealed only after prediction outputs are frozen and the reveal binds the exact prediction-output hash."
   ],
+  "authority_output_rule": {
+    "repository_local_maximum": "EXTERNAL_AUTHORITY_CANDIDATE",
+    "repository_local_E4_authorization_allowed": false,
+    "external_adjudication_required_for_E4": true
+  },
   "claim_boundary": {
     "AGI": false,
     "ASI": false,
