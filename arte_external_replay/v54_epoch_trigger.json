@@ -1,17 +1,17 @@
 {
   "schema": "arte.external_epoch_trigger/v54",
-  "epoch": 1,
-  "parent_state_sha256": "de29753b66ef954aa182b08a9d135be34a1f356d8e8f46549aaa9d061975532e",
+  "epoch": 2,
+  "parent_state_sha256": "17927404da70d24a8cfc1a7f2435083863e00e8d8ded290c66011e1f7e561237",
   "parent_state": {
     "schema": "arte.external_epoch_state/v54",
     "root_body_sha256": "1a4c80a95bd1affd0ef978eb69a083559ba836aa589b17a5a2db70158a34849b",
-    "epoch_completed": 0,
-    "family_credits": {},
-    "solved_family_registry": [],
-    "self_model": {"alpha": 1.0, "beta": 1.0},
+    "epoch_completed": 1,
+    "family_credits": {"MODULAR_AFFINE": 1},
+    "solved_family_registry": ["MODULAR_AFFINE"],
+    "self_model": {"alpha": 2.0, "beta": 1.0},
     "tool_credit": {},
     "causal_fossils": [],
-    "lineage": [],
-    "state_sha256": "de29753b66ef954aa182b08a9d135be34a1f356d8e8f46549aaa9d061975532e"
+    "lineage": [{"epoch":1,"family":"MODULAR_AFFINE","github_run_id":"33133581929","parent_state_sha256":"de29753b66ef954aa182b08a9d135be34a1f356d8e8f46549aaa9d061975532e","success":true,"probes":602,"learned_sha256":"196fefcb00bea1bc5f37ca064305437cb27b04c1fc625d29c7087de2d1f5824a"}],
+    "state_sha256": "17927404da70d24a8cfc1a7f2435083863e00e8d8ded290c66011e1f7e561237"
   }
 }
