@@ -1,0 +1,29 @@
+name: arte-v57-export-epoch20-question-bank
+on:
+  push:
+    paths:
+      - '.github/workflows/arte-v57-export-epoch20-question-bank.yml'
+jobs:
+  export:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Export exact learned question bank
+        run: |
+          python - <<'PY'
+          import json, hashlib, sys
+          sys.path.insert(0,'arte_external_replay')
+          import v57_epoch20_minimal_question_sensor_runner as e20
+          val=e20.parse_rows(e20.fetch(e20.SOURCE_CONFIG,'validation.csv'),target=True,proof=True)
+          bank,unresolved=e20.build_question_bank(val)
+          assert len(bank)==5 and not unresolved
+          assert max(v['bit_count'] for v in bank.values())==1
+          b=json.dumps(bank,sort_keys=True,separators=(',',':'))
+          print('QUESTION_BANK_JSON='+b)
+          print('QUESTION_BANK_SHA256='+hashlib.sha256(b.encode()).hexdigest())
+          PY
