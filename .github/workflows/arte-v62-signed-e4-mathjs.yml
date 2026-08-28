@@ -1,0 +1,63 @@
+name: arte-v62-signed-e4-mathjs
+on:
+  push:
+    branches:
+      - arte-v62-signed-e4-mathjs
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+  attestations: write
+
+jobs:
+  signed-e4:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install verified drand client
+        run: npm install drand-client isomorphic-fetch abort-controller
+      - name: Obtain post-freeze external entropy
+        run: node arte_external_replay/v61_beacon.mjs > v62_beacon.json
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Prepare challenge and freeze BODY submission
+        run: python arte_external_replay/v61_prepare.py v62_beacon.json v62_work
+      - name: Query independent mathjs outcome authority
+        run: python arte_external_replay/v62_external_eval.py v62_beacon.json v62_work v62_output
+      - name: Verify external verdict transcript
+        shell: python
+        run: |
+          import json
+          e=json.load(open('v62_output/evidence_bundle.json'))
+          v=e['verdict']
+          t=e['authority_transcript']
+          assert v['authority']=='mathjs.org REST web service'
+          assert v['external_http_evaluation'] is True
+          assert v['all_exact'] is True
+          assert len(v['verdicts'])==6 and all(v['verdicts'])
+          assert len(t['responses'])==6
+          assert all(x['response']['ok'] and x['response']['status']==200 for x in t['responses'])
+          assert e['submission']['gold_seen'] is False
+          print('external authority verdict PASS', v['receipt_sha256'])
+      - name: GitHub/Sigstore attest complete evidence bundle
+        id: attest
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: v62_output/evidence_bundle.json
+      - name: Verify GitHub attestation cryptographically
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh attestation verify v62_output/evidence_bundle.json -R "$GITHUB_REPOSITORY" --format json > v62_output/attestation_verification.json
+          test -s v62_output/attestation_verification.json
+      - name: Record file hashes
+        run: sha256sum v62_output/* > v62_output/file_sha256s.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: arte-v62-signed-e4-mathjs
+          path: v62_output/
