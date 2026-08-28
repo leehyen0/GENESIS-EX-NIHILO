@@ -1,0 +1,91 @@
+{
+  "schema": "arte.independent_question_sensor_public_spec/v57-v3",
+  "purpose": "Independent commit-reveal evaluation of the frozen epoch20 one-bit missing-sensor cognition with explicit custodian binding of question and prediction stage hashes.",
+  "evidence_root": {
+    "epoch20_hosted_run_id": "33150258964",
+    "epoch20_body_state_sha256": "2b02b704147e95ad401110b98744f7ab54cb46f4b8b073ea9b20994dd0d8f257",
+    "epoch20_operator_sha256": "23e1b2449c1d27eaf3546124eee57bb1a573f9ad1930b9dc9ce6ba28d17ad54f",
+    "frozen_question_bank_canonical_sha256": "cef2f2f365a9763c1966e4a62739aedbaae7c860ddd986d2b0e8c757603eb017",
+    "claim": "PRIOR_BOUNDED_EVIDENCE_ONLY__NOT_INDEPENDENT_CUSTODY"
+  },
+  "candidate": {
+    "path": "arte_candidate/run_v57_question_sensor_candidate.py",
+    "bank": "arte_candidate/v57_epoch20_question_bank.json",
+    "network": "OFF",
+    "question_input_schema": "arte.independent_question_input/v57",
+    "question_output_schema": "arte.independent_question_output/v57",
+    "sensor_input_schema": "arte.independent_sensor_input/v57 with v3 top-level stage-binding fields",
+    "prediction_output_schema": "arte.independent_prediction_output/v57"
+  },
+  "hidden_package": {
+    "schema": "arte.hidden_question_sensor_challenge/v57",
+    "all_G1_G2_G3_created_before_G1": true,
+    "same_batch_id": true,
+    "unique_challenge_ids": true,
+    "recommended_cases_per_generation": "20-40",
+    "allowed_positive_domain": "the five frozen ambiguity signatures only",
+    "negative_controls": "malformed or out-of-bank observations may be included with expected_action=HOLD",
+    "targets_and_sensor_bits_withheld": true
+  },
+  "chronology": [
+    {
+      "stage": 0,
+      "event": "External custodian creates all G1/G2/G3 exact hidden UTF-8 packages and independent random OTP keys, then publishes only one three-generation commitment batch.",
+      "must_precede": "formal candidate freeze"
+    },
+    {
+      "stage": 1,
+      "event": "Formal freeze is created only after commitment intake and binds the exact v3 pre-freeze snapshot, authority policy, candidate, bank, intake, freeze generator, per-generation verifier, aggregate verifier, public spec, and commitment batch.",
+      "must_precede": "public packet reveal"
+    },
+    {
+      "stage": 2,
+      "event": "Custodian releases the exact precommitted public packet for one generation after validating the formal freeze self-hash.",
+      "must_precede": "candidate question execution"
+    },
+    {
+      "stage": 3,
+      "event": "Candidate runs network-off and produces questions. The canonical question-output SHA-256 is sent to the custodian.",
+      "must_precede": "sensor response"
+    },
+    {
+      "stage": 4,
+      "event": "Custodian verifies the exact questions against the hidden package and returns sensor_input containing formal_freeze_sha256 and question_output_sha256. A wrong question causes no sensor release.",
+      "must_precede": "candidate prediction execution"
+    },
+    {
+      "stage": 5,
+      "event": "Candidate runs network-off and produces predictions. The canonical prediction-output SHA-256 is sent to the custodian.",
+      "must_precede": "OTP key reveal"
+    },
+    {
+      "stage": 6,
+      "event": "Custodian returns a reveal object containing the OTP key plus formal_freeze_sha256, question_output_sha256, sensor_input_sha256, and prediction_output_sha256.",
+      "must_precede": "final verification"
+    },
+    {
+      "stage": 7,
+      "event": "v3 final verifier decrypts the original hidden package and checks every commitment, freeze self-hash, snapshot binding, stage hash, question, sensor bit, prediction, target, and HOLD control."
+    }
+  ],
+  "why_stage_hashes_matter": {
+    "question_binding": "The custodian sensor response cryptographically identifies the exact question-output object received before sensor release.",
+    "prediction_binding": "The custodian key reveal cryptographically identifies the exact prediction-output object received before target/key release.",
+    "limitation": "Cryptographic hash binding alone is not an independent wall-clock authority; the chronological claim becomes evidence only when the custodian itself is independently controlled and its provenance is verified."
+  },
+  "authority": {
+    "policy_path": "arte_custodian/v57_question_sensor_independent_authority_policy.json",
+    "three_generation_crypto_success_is_sufficient_for_E4": false,
+    "distinct_external_account_alone_is_sufficient_for_E4": false,
+    "independence_verification_required": true,
+    "minimum_accuracy": 1.0
+  },
+  "claim_boundary": {
+    "setup_itself_is_E4": false,
+    "self_owned_e2e_is_E4": false,
+    "AGI": false,
+    "ASI": false,
+    "external_recursive_acceleration": false,
+    "global_recursive_self_improvement": false
+  }
+}
