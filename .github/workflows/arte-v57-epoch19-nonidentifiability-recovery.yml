@@ -1,0 +1,52 @@
+name: arte-v57-epoch19-nonidentifiability-recovery
+on:
+  push:
+    paths:
+      - '.github/workflows/arte-v57-epoch19-nonidentifiability-recovery.yml'
+  workflow_dispatch:
+jobs:
+  epoch19-recovery:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile recovery runner
+        run: python -m py_compile arte_external_replay/v57_epoch19_nonidentifiability_recovery_runner.py
+      - name: Run failure-conditioned epistemic recovery on fresh CLUTRR test
+        run: python arte_external_replay/v57_epoch19_nonidentifiability_recovery_runner.py
+      - name: Verify conservative claims and artifact integrity
+        run: |
+          python - <<'PY'
+          import json,hashlib
+          p=json.load(open('v57_output/prediction_precommit.json'))
+          e=json.load(open('v57_output/external_evaluation.json'))
+          s=json.load(open('v57_output/checkpoint_state.json'))
+          r=json.load(open('v57_output/epoch_receipt.json'))
+          m=json.load(open('v57_output/hash_manifest.json'))
+          assert p['test_target_consumed_for_precommit'] is False
+          assert e['prediction_precommit_before_reveal'] is True
+          assert e['test_target_consumed_for_precommit'] is False
+          assert e['validation_raw_entity_graph_conflicting_groups']==5
+          assert e['validation_raw_entity_graph_conflicting_cases']==15
+          assert e['target_stripped_proof_graph_validation_conflicts']==0
+          assert e['epoch19_full_task_promotion'] is False
+          assert s['epoch_completed']==19
+          assert s['epoch19_status']=='COMPLETED_AS_NONIDENTIFIABILITY_DISCOVERY__FULL_TASK_NOT_PROMOTED'
+          assert s['self_model']['alpha']==19 and s['self_model']['beta']==5
+          assert r['failed_run_id']=='33140700215'
+          assert r['failed_run_consumed_as_fossil'] is True
+          assert r['full_task_promotion'] is False
+          assert r['claim_flags']['external_recursive_acceleration'] is False
+          assert r['claim_flags']['AGI'] is False and r['claim_flags']['ASI'] is False
+          for f in m['files']:
+              assert hashlib.sha256(open('v57_output/'+f['name'],'rb').read()).hexdigest()==f['sha256']
+          print(json.dumps({'baseline':e['metrics']['baseline'],'exact_gate':e['metrics']['exact_signature_gate'],'morph_gate':e['metrics']['morphology_gate'],'child':s['state_sha256']},sort_keys=True))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: arte-v57-epoch19-nonidentifiability-recovery
+          path: v57_output
