@@ -1,0 +1,65 @@
+name: arte-v57-spatial-query-frame-epoch18
+on:
+  push:
+    paths:
+      - 'arte_external_replay/v57_epoch18_spatial_query_frame_runner.py'
+      - 'arte_external_replay/v57_epoch18_trigger.json'
+      - '.github/workflows/arte-v57-spatial-query-frame-epoch18.yml'
+  workflow_dispatch:
+jobs:
+  epoch18:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile epoch18 runner
+        run: python -m py_compile arte_external_replay/v57_epoch18_spatial_query_frame_runner.py
+      - name: Run third-generation cross-modal spatial query-frame replication
+        run: python arte_external_replay/v57_epoch18_spatial_query_frame_runner.py arte_external_replay/v57_epoch18_trigger.json v57_output
+      - name: Verify repository-owner-disjoint three-step replication
+        run: |
+          python - <<'PY'
+          import json
+          e=json.load(open('v57_output/external_evaluation.json'))
+          r=json.load(open('v57_output/epoch_receipt.json'))
+          s=json.load(open('v57_output/checkpoint_state.json'))
+          p=json.load(open('v57_output/prediction_precommit.json'))
+          assert e['selection_used_heldout_target'] is False
+          assert e['heldout_target_hidden_from_selection_and_generation'] is True
+          assert e['prediction_precommit_written_before_reveal'] is True
+          assert p['heldout_target_accessed'] is False
+          assert e['success'] is True
+          assert e['full_selected']=='GENERATED_QUERY_FRAME'
+          assert e['ablation_selected']=='GENERATED_QUERY_FRAME'
+          assert e['generated_component']['kind']=='SPATIAL_QUERY_FRAME_NORMALIZATION'
+          assert e['generated_component']['orientation']=='SUBJECT_MINUS_OBJECT'
+          assert e['full_search_cost'] < e['ablation_search_cost']
+          assert e['remove_frame_success'] is False
+          assert e['wrong_orientation_success'] is False
+          assert e['repository_owner_disjoint_from_epoch16_17'] is True
+          assert e['independent_dataset_authority'] is False
+          assert e['claim_class']=='BOUNDED_THREE_STEP_REPOSITORY_OWNER_DISJOINT_REPLICATION'
+          assert r['hosted_external'] is True
+          assert r['parent_state_sha256']=='c5c1bed520ae4cd900a7b6a854236fd224210e6055fdd5cf89e7848a8071489a'
+          assert r['three_step_replication_candidate'] is True
+          assert r['claim_flags']['independent_custody_proof'] is False
+          assert r['claim_flags']['source_disjoint_transfer_proof'] is False
+          assert r['claim_flags']['external_recursive_acceleration'] is False
+          assert r['claim_flags']['AGI'] is False and r['claim_flags']['ASI'] is False
+          assert s['epoch_completed']==18
+          assert s['self_model']['alpha']==19 and s['self_model']['beta']==3
+          c=s['synergy_credit_details']['THREE_STEP_TRANSFER_ONTOLOGY_REPLICATION']
+          assert c['status']=='SUPPORTED_BOUNDED_THREE_STEP_REPOSITORY_OWNER_DISJOINT'
+          assert c['repository_owner_disjoint'] is True
+          assert c['dataset_authority_independent'] is False
+          assert c['external_recursive_acceleration'] is False
+          print('epoch18 three-step cross-modal repository-owner-disjoint replication verified')
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: arte-v57-epoch18-spatial-query-frame
+          path: v57_output
