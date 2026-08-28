@@ -1,0 +1,98 @@
+name: arte-v57-question-sensor-custody-selftest
+on:
+  push:
+    paths:
+      - '.github/workflows/arte-v57-question-sensor-custody-selftest.yml'
+jobs:
+  selftest:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile and validate public files
+        run: |
+          python -m py_compile arte_candidate/run_v57_question_sensor_candidate.py
+          python -m py_compile arte_custodian/v57_question_sensor_custodian_reference.py
+          python -m py_compile arte_custodian/v57_question_sensor_commitment_intake.py
+          python -m json.tool arte_candidate/v57_epoch20_question_bank.json >/dev/null
+          python -m json.tool arte_custodian/v57_epoch20_independent_question_sensor_public_spec.json >/dev/null
+      - name: Test network-free question and prediction phases
+        run: |
+          mkdir -p /tmp/arte_v57_selftest
+          cat > /tmp/arte_v57_selftest/public.json <<'JSON'
+          {
+            "schema":"arte.independent_question_input/v57",
+            "challenge_id":"SELFTEST-Q",
+            "generation":"G1",
+            "cases":[
+              {"case_id":"known","public_observation":{"query_nodes":["alice","dave"],"path_edges":[["alice","husband","bob"],["bob","daughter","carol"],["carol","grandfather","dave"]],"node_genders":{"alice":"female","bob":"male","carol":"female","dave":"male"}}},
+              {"case_id":"unknown","public_observation":{"query_nodes":["u0","u3"],"path_edges":[["u0","brother","u1"],["u1","daughter","u2"],["u2","grandfather","u3"]],"node_genders":{"u0":"male","u1":"male","u2":"female","u3":"male"}}}
+            ]
+          }
+          JSON
+          python arte_candidate/run_v57_question_sensor_candidate.py --phase question --input /tmp/arte_v57_selftest/public.json --output /tmp/arte_v57_selftest/questions.json
+          python - <<'PY'
+          import json
+          q=json.load(open('/tmp/arte_v57_selftest/questions.json'))
+          a={x['case_id']:x for x in q['questions']}
+          assert a['known']['action']=='QUESTION'
+          assert a['known']['question']=={'kind':'CANONICAL_PROVENANCE_EDGE_MEMBERSHIP','edge':[0,'daughter',2]}
+          assert a['unknown']['action']=='HOLD'
+          known=json.load(open('/tmp/arte_v57_selftest/public.json'))['cases'][0]
+          sensor={
+            'schema':'arte.independent_sensor_input/v57','challenge_id':'SELFTEST-Q','generation':'G1',
+            'cases':[{'case_id':'known','public_observation':known['public_observation'],'question':a['known']['question'],'question_sha256':a['known']['question_sha256'],'sensor_bit':1}]
+          }
+          json.dump(sensor,open('/tmp/arte_v57_selftest/sensor.json','w'))
+          PY
+          python arte_candidate/run_v57_question_sensor_candidate.py --phase predict --input /tmp/arte_v57_selftest/sensor.json --output /tmp/arte_v57_selftest/predictions.json
+          python - <<'PY'
+          import json
+          p=json.load(open('/tmp/arte_v57_selftest/predictions.json'))['predictions'][0]
+          assert p=={'case_id':'known','action':'PREDICT','prediction':'father'}
+          print('candidate two-phase interface PASS')
+          PY
+      - name: Test commitment batch acceptance and V156-style corruption rejection
+        run: |
+          mkdir -p /tmp/arte_v57_selftest/reveals
+          python - <<'PY'
+          import json
+          base={
+            'schema':'arte.hidden_question_sensor_challenge/v57','batch_id':'SELFTEST-BATCH',
+            'claim_boundary':{'AGI':False,'ASI':False},
+            'public_packet':{'schema':'arte.independent_question_input/v57','challenge_id':'X','generation':'G1','cases':[]},
+            'cases':[]
+          }
+          for g in ('G1','G2','G3'):
+            x=dict(base);x['generation']=g;x['challenge_id']='SELFTEST-'+g
+            x['public_packet']=dict(base['public_packet']);x['public_packet']['challenge_id']=x['challenge_id'];x['public_packet']['generation']=g
+            json.dump(x,open('/tmp/arte_v57_selftest/'+g+'.json','w'),sort_keys=True)
+          PY
+          python arte_custodian/v57_question_sensor_custodian_reference.py --g1 /tmp/arte_v57_selftest/G1.json --g2 /tmp/arte_v57_selftest/G2.json --g3 /tmp/arte_v57_selftest/G3.json --custodian-id SELF_TEST_NOT_INDEPENDENT --commitment-batch-out /tmp/arte_v57_selftest/batch.json --reveal-dir /tmp/arte_v57_selftest/reveals
+          python arte_custodian/v57_question_sensor_commitment_intake.py /tmp/arte_v57_selftest/batch.json --audit-out /tmp/arte_v57_selftest/audit_good.json
+          python - <<'PY'
+          import json
+          b=json.load(open('/tmp/arte_v57_selftest/batch.json'))
+          b['commitments'][1]['ciphertext_b64']='VGhpcyBpcyBhIGZha2UgcGxhY2Vob2xkZXIu'
+          json.dump(b,open('/tmp/arte_v57_selftest/batch_bad.json','w'))
+          PY
+          set +e
+          python arte_custodian/v57_question_sensor_commitment_intake.py /tmp/arte_v57_selftest/batch_bad.json --audit-out /tmp/arte_v57_selftest/audit_bad.json
+          rc=$?
+          set -e
+          test "$rc" -eq 2
+          python - <<'PY'
+          import json
+          good=json.load(open('/tmp/arte_v57_selftest/audit_good.json'))
+          bad=json.load(open('/tmp/arte_v57_selftest/audit_bad.json'))
+          assert good['structurally_valid'] is True
+          assert bad['structurally_valid'] is False
+          assert any('CIPHERTEXT_LENGTH_MISMATCH' in x for x in bad['errors'])
+          assert any('CIPHERTEXT_SHA256_MISMATCH' in x for x in bad['errors'])
+          assert good['authority_boundary']['independent_custody_proven'] is False
+          print('commitment intake PASS; malformed commitment rejected')
+          PY
