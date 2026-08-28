@@ -1,0 +1,44 @@
+name: arte-v54-external-epoch
+on:
+  push:
+    branches:
+      - arte-v54-8epoch-continuity
+    paths:
+      - 'arte_external_replay/v54_epoch_trigger.json'
+      - 'arte_external_replay/v54_epoch_runner.py'
+      - '.github/workflows/arte-v54-external-epoch.yml'
+  workflow_dispatch:
+jobs:
+  epoch:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Run one cold-restored external epoch
+        run: python arte_external_replay/v54_epoch_runner.py arte_external_replay/v54_epoch_trigger.json v54_output
+      - name: Verify receipt and conservative claims
+        shell: python
+        run: |
+          import json,hashlib
+          from pathlib import Path
+          d=Path('v54_output')
+          r=json.loads((d/'epoch_receipt.json').read_text())
+          s=json.loads((d/'checkpoint_state.json').read_text())
+          m=json.loads((d/'hash_manifest.json').read_text())
+          assert r['hosted_external'] is True
+          assert r['actual_success'] is True
+          assert r['child_state_sha256']==s['state_sha256']
+          assert r['solved_registry_size']==r['epoch']
+          assert s['epoch_completed']==r['epoch']
+          for k,v in r['claim_flags'].items(): assert v is False
+          for x in m['files']:
+              assert hashlib.sha256((d/x['name']).read_bytes()).hexdigest()==x['sha256']
+          print('v54 epoch verified')
+      - uses: actions/upload-artifact@v4
+        with:
+          name: arte-v54-epoch
+          path: v54_output/
