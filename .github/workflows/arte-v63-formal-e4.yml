@@ -1,0 +1,125 @@
+name: arte-v63-formal-e4
+on:
+  push:
+    branches:
+      - arte-v63-formal-e4
+    paths:
+      - 'arte_external_replay/v63_trigger.json'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+  attestations: write
+
+jobs:
+  formal-e4:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify precommit and frozen implementation hashes
+        shell: python
+        run: |
+          import hashlib,json
+          from pathlib import Path
+          p=json.load(open('arte_external_replay/v63_e4_precommit.json'))
+          for path,expected in p['frozen_file_sha256'].items():
+              got=hashlib.sha256(Path(path).read_bytes()).hexdigest()
+              assert got==expected,(path,got,expected)
+          assert p['attempt_budget']==1
+          assert p['feedback_before_verdict']==False
+          assert p['challenge_entropy_authority']=='League of Entropy drand'
+          assert p['outcome_authority']=='mathjs.org REST web service'
+          assert p['provenance_authority']=='GitHub artifact attestations / Sigstore'
+          print('precommit PASS',p['precommit_sha256'])
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install verified drand client
+        run: npm install drand-client isomorphic-fetch abort-controller
+      - name: Obtain post-precommit verified challenge entropy
+        run: node arte_external_replay/v61_beacon.mjs > v63_beacon.json
+      - name: Generate challenge and freeze one-shot submission
+        run: python arte_external_replay/v61_prepare.py v63_beacon.json v63_work
+      - name: Query independent external outcome authority
+        run: python arte_external_replay/v62_external_eval.py v63_beacon.json v63_work v63_eval
+      - name: Verify external result under precommitted contract
+        shell: python
+        run: |
+          import json
+          e=json.load(open('v63_eval/evidence_bundle.json'))
+          assert e['submission']['gold_seen'] is False
+          assert e['verdict']['external_http_evaluation'] is True
+          assert e['verdict']['all_exact'] is True
+          assert len(e['verdict']['verdicts'])==6 and all(e['verdict']['verdicts'])
+          assert all(x['response']['status']==200 for x in e['authority_transcript']['responses'])
+          print('external outcome PASS',e['verdict']['receipt_sha256'])
+      - name: Build formal E4 evidence object
+        shell: python
+        run: |
+          import hashlib,json,os
+          from pathlib import Path
+          def h(x):
+              return hashlib.sha256(json.dumps(x,sort_keys=True,separators=(',',':'),ensure_ascii=False).encode()).hexdigest()
+          p=json.load(open('arte_external_replay/v63_e4_precommit.json'))
+          e=json.load(open('v63_eval/evidence_bundle.json'))
+          obj={
+            'schema':'arte.v63_formal_e4_evidence',
+            'precommit_sha256':p['precommit_sha256'],
+            'trigger_commit_sha':os.environ['GITHUB_SHA'],
+            'github_run_id':os.environ['GITHUB_RUN_ID'],
+            'challenge_entropy_authority':'League of Entropy drand',
+            'challenge_beacon_round':e['beacon']['round'],
+            'challenge_beacon_verified':e['beacon']['cryptographic_verification_enabled'],
+            'submission_sha256':e['submission']['submission_sha256'],
+            'outcome_authority':'mathjs.org REST web service',
+            'authority_transcript_sha256':e['authority_transcript']['transcript_sha256'],
+            'verdict_receipt_sha256':e['verdict']['receipt_sha256'],
+            'all_exact':e['verdict']['all_exact'],
+            'gold_seen_before_submission':False,
+            'attempt_budget':1,
+            'feedback_before_verdict':False,
+            'provenance_authority':'GitHub artifact attestations / Sigstore',
+            'formal_e4_candidate':True,
+            'claim_flags':{
+              'source_disjoint_E5':False,
+              'repeated_external_acceleration_E6':False,
+              'AGI':False,'ASI':False,'human_intelligence_exceeded':False
+            }
+          }
+          obj['evidence_sha256']=h(obj)
+          Path('v63_output').mkdir(exist_ok=True)
+          Path('v63_output/formal_e4_evidence.json').write_text(json.dumps(obj,indent=2))
+          Path('v63_output/evidence_bundle.json').write_bytes(Path('v63_eval/evidence_bundle.json').read_bytes())
+          print('formal E4 candidate object',obj['evidence_sha256'])
+      - name: GitHub/Sigstore attest formal E4 evidence
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: v63_output/formal_e4_evidence.json
+      - name: Cryptographically verify formal E4 attestation
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh attestation verify v63_output/formal_e4_evidence.json -R "$GITHUB_REPOSITORY" --format json > v63_output/attestation_verification.json
+          test -s v63_output/attestation_verification.json
+      - name: Final local consistency gate
+        shell: python
+        run: |
+          import json
+          e=json.load(open('v63_output/formal_e4_evidence.json'))
+          a=json.load(open('v63_output/attestation_verification.json'))
+          assert e['formal_e4_candidate'] is True
+          assert e['all_exact'] is True
+          assert e['gold_seen_before_submission'] is False
+          assert e['attempt_budget']==1
+          assert len(a)>=1
+          print('v63 FORMAL E4 PRECOMMITTED RUN PASS')
+      - name: Record hashes
+        run: sha256sum v63_output/* > v63_output/file_sha256s.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: arte-v63-formal-e4
+          path: v63_output/
