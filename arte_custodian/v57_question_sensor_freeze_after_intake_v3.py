@@ -3,7 +3,7 @@ import argparse, hashlib, json
 from pathlib import Path
 import v57_question_sensor_commitment_intake as intake
 
-SNAPSHOT_PATH=Path(__file__).with_name('v57_question_sensor_candidate_prefreeze_snapshot_v3.json')
+SNAPSHOT_PATH=Path(__file__).with_name('v57_question_sensor_candidate_prefreeze_snapshot_v3_r1.json')
 SNAPSHOT_SCHEMA='arte.question_sensor_candidate_prefreeze_snapshot/v57-v3'
 FREEZE_SCHEMA='arte.question_sensor_candidate_freeze/v57-v3'
 POLICY_PATH='arte_custodian/v57_question_sensor_independent_authority_policy.json'
