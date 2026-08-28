@@ -1,0 +1,23 @@
+{
+  "schema": "arte.v57_epoch19_nonidentifiability_recovery_trigger/v1",
+  "epoch": 19,
+  "parent_state_sha256": "41b0971dc3e79e30cc7454a656224a86ace56287294a84f8ada8f378882d5b68",
+  "inherited_abstraction_sha256": "0f8c310b6c945dcd0e5bc5047a74cffe522fe905de1f4b2e05cf827393ad9eb0",
+  "failed_run_id": "33140700215",
+  "failed_run_outcome_credit": false,
+  "validation_findings": {
+    "query_edge_node_mapping": "2020/2020 exact oriented via genders order",
+    "raw_entity_graph_conflicting_groups": 5,
+    "raw_entity_graph_conflicting_cases": 15,
+    "target_stripped_proof_graph_conflicts": 0
+  },
+  "protocol": {
+    "consume_failed_run_as_fossil_before_test": true,
+    "self_model_beta_plus_one_before_test": true,
+    "precommit_all_test_actions_before_reveal_evaluation": true,
+    "full_task_promotion_allowed": false,
+    "epistemic_hold_is_valid_action": true,
+    "independent_custody": false,
+    "external_recursive_acceleration_claim_allowed": false
+  }
+}
