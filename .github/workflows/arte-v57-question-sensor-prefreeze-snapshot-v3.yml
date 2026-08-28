@@ -1,0 +1,78 @@
+name: arte-v57-question-sensor-prefreeze-snapshot-v3
+on:
+  push:
+    paths:
+      - '.github/workflows/arte-v57-question-sensor-prefreeze-snapshot-v3.yml'
+  workflow_dispatch:
+jobs:
+  snapshot:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile frozen v3 Python components
+        run: |
+          python -m py_compile \
+            arte_candidate/run_v57_question_sensor_candidate.py \
+            arte_custodian/v57_question_sensor_commitment_intake.py \
+            arte_custodian/v57_question_sensor_custodian_protocol_v3.py \
+            arte_custodian/v57_question_sensor_challenge_semantics_v3.py \
+            arte_custodian/v57_question_sensor_final_verifier_v3.py \
+            arte_custodian/v57_question_sensor_aggregate_authority_v3.py \
+            arte_custodian/v57_question_sensor_freeze_after_intake_v3.py
+      - name: Produce v3 pre-freeze snapshot
+        run: |
+          mkdir -p prefreeze_v3
+          python - <<'PY'
+          import hashlib,json,os
+          from pathlib import Path
+          files=[
+            'arte_candidate/run_v57_question_sensor_candidate.py',
+            'arte_candidate/v57_epoch20_question_bank.json',
+            'arte_custodian/v57_question_sensor_commitment_intake.py',
+            'arte_custodian/v57_question_sensor_independent_authority_policy.json',
+            'arte_custodian/v57_question_sensor_custodian_protocol_v3.py',
+            'arte_custodian/v57_epoch20_independent_question_sensor_public_spec_v3.json',
+            'arte_custodian/v57_question_sensor_challenge_semantics_v3.py',
+            'arte_custodian/v57_question_sensor_final_verifier_v3.py',
+            'arte_custodian/v57_question_sensor_aggregate_authority_v3.py',
+            'arte_custodian/v57_question_sensor_freeze_after_intake_v3.py'
+          ]
+          hs={p:hashlib.sha256(Path(p).read_bytes()).hexdigest() for p in files}
+          x={
+            'schema':'arte.question_sensor_candidate_prefreeze_snapshot/v57-v3',
+            'snapshot_head_sha':os.environ['GITHUB_SHA'],
+            'candidate_content_anchor_commit':os.environ['GITHUB_SHA'],
+            'epoch20_evidence_head_sha':'1c7483f946c75a24e38e887b4f1964effad40254',
+            'body_state_sha256':'2b02b704147e95ad401110b98744f7ab54cb46f4b8b073ea9b20994dd0d8f257',
+            'generated_operator_sha256':'23e1b2449c1d27eaf3546124eee57bb1a573f9ad1930b9dc9ce6ba28d17ad54f',
+            'learned_question_bank_canonical_sha256':'cef2f2f365a9763c1966e4a62739aedbaae7c860ddd986d2b0e8c757603eb017',
+            'files':hs,
+            'supersedes_prefreeze_snapshot_sha256':'bccce1fba7e73d2e359c46a15c8cd67464a558c7cf1a7ca91af6aa5df85fcb96',
+            'hardening':{
+              'formal_freeze_self_hash_required':True,
+              'prefreeze_snapshot_self_hash_required':True,
+              'question_output_hash_must_be_custodian_bound_before_sensor_release':True,
+              'prediction_output_hash_must_be_custodian_bound_before_key_reveal':True,
+              'hidden_expected_question_and_target_not_trusted':True,
+              'challenge_semantics_rederived_from_frozen_bank':True,
+              'three_generation_aggregate_authority_separate_from_per_generation_success':True
+            },
+            'formal_candidate_freeze':False,
+            'freeze_allowed_without_valid_G1_G2_G3_commitment_batch':False,
+            'independent_custody_proven':False,
+            'claim_boundary':{'AGI':False,'ASI':False,'external_recursive_acceleration':False,'global_recursive_self_improvement':False}
+          }
+          x['snapshot_sha256']=hashlib.sha256(json.dumps(x,ensure_ascii=False,sort_keys=True,separators=(',',':')).encode()).hexdigest()
+          Path('prefreeze_v3/candidate_prefreeze_snapshot_v3.json').write_text(json.dumps(x,ensure_ascii=False,indent=2,sort_keys=True)+'\n',encoding='utf-8')
+          print('V3_SNAPSHOT_JSON='+json.dumps(x,ensure_ascii=False,sort_keys=True,separators=(',',':')))
+          print('V3_SNAPSHOT_SHA256='+x['snapshot_sha256'])
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: arte-v57-question-sensor-prefreeze-snapshot-v3
+          path: prefreeze_v3
