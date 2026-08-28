@@ -1,0 +1,54 @@
+name: arte-v57-question-sensor-prefreeze-snapshot
+on:
+  push:
+    paths:
+      - '.github/workflows/arte-v57-question-sensor-prefreeze-snapshot.yml'
+jobs:
+  snapshot:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Produce candidate content snapshot
+        run: |
+          mkdir -p prefreeze
+          python - <<'PY'
+          import hashlib,json,os
+          from pathlib import Path
+          files=[
+            'arte_candidate/run_v57_question_sensor_candidate.py',
+            'arte_candidate/v57_epoch20_question_bank.json',
+            'arte_custodian/v57_epoch20_independent_question_sensor_public_spec.json',
+            'arte_custodian/v57_question_sensor_custodian_reference.py',
+            'arte_custodian/v57_question_sensor_commitment_intake.py'
+          ]
+          hs={p:hashlib.sha256(Path(p).read_bytes()).hexdigest() for p in files}
+          x={
+            'schema':'arte.question_sensor_candidate_prefreeze_snapshot/v57',
+            'snapshot_head_sha':os.environ['GITHUB_SHA'],
+            'candidate_content_anchor_commit':'2db537b5487aa8b6b2128867cfa7e0c471c505d4',
+            'epoch20_evidence_head_sha':'1c7483f946c75a24e38e887b4f1964effad40254',
+            'body_state_sha256':'2b02b704147e95ad401110b98744f7ab54cb46f4b8b073ea9b20994dd0d8f257',
+            'generated_operator_sha256':'23e1b2449c1d27eaf3546124eee57bb1a573f9ad1930b9dc9ce6ba28d17ad54f',
+            'learned_question_bank_canonical_sha256':'cef2f2f365a9763c1966e4a62739aedbaae7c860ddd986d2b0e8c757603eb017',
+            'files':hs,
+            'selftest_run_id':'33150695386',
+            'selftest_status':'PASS',
+            'formal_candidate_freeze':False,
+            'freeze_allowed_without_valid_G1_G2_G3_commitment_batch':False,
+            'independent_custody_proven':False,
+            'AGI':False,'ASI':False
+          }
+          b=json.dumps(x,sort_keys=True,separators=(',',':')).encode()
+          x['snapshot_sha256']=hashlib.sha256(b).hexdigest()
+          Path('prefreeze/candidate_prefreeze_snapshot.json').write_text(json.dumps(x,indent=2,sort_keys=True)+'\n')
+          print(json.dumps(x,sort_keys=True))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: arte-v57-question-sensor-prefreeze-snapshot
+          path: prefreeze
