@@ -1,0 +1,29 @@
+{
+  "body_state_sha256": "33175317de2758886696cdd2d0d77112854c70e9a8f846d3b556e51648371078",
+  "critical_levels": {
+    "CROSS_DOMAIN_TRANSFER": 1,
+    "LONG_HORIZON_PLANNING": 3,
+    "NOVEL_DISCOVERY": 1,
+    "SELF_MODEL_ACCURACY": 3,
+    "TOOL_INTELLIGENCE": 3,
+    "WORLD_COUPLING": 3
+  },
+  "hosted_synergy_epochs": 3,
+  "independent_custody": false,
+  "new_auxiliary_evidence": {
+    "DUAL_EXTERNAL_SYNERGY": "E3_STYLE_BOUNDED_HOSTED_CONSEQUENCE_CANDIDATE"
+  },
+  "next_weakest_axes": [
+    "CROSS_DOMAIN_TRANSFER",
+    "NOVEL_DISCOVERY"
+  ],
+  "schema": "arte.external_evidence_progress/v56",
+  "synergy_credit": 3,
+  "synergy_families": [
+    "CALIBRATED_AFFINE_TRANSFER",
+    "CALIBRATED_TOOL_ROUTING",
+    "CALIBRATED_CAUSAL_TRANSFER"
+  ],
+  "total_external_continuity_epochs_in_lineage": 11,
+  "why_not_E4_or_higher": "Task/evaluation authority is not independently custodied; G2064 public outcome evidence is retrospective; new hosted composite tasks are controlled by the experiment."
+}
