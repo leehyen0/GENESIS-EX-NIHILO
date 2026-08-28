@@ -8,6 +8,7 @@ SNAPSHOT_SCHEMA='arte.question_sensor_candidate_prefreeze_snapshot/v57-v3'
 FREEZE_SCHEMA='arte.question_sensor_candidate_freeze/v57-v3'
 POLICY_PATH='arte_custodian/v57_question_sensor_independent_authority_policy.json'
 FINAL_VERIFIER_PATH='arte_custodian/v57_question_sensor_final_verifier_v3.py'
+SEMANTICS_VERIFIER_PATH='arte_custodian/v57_question_sensor_challenge_semantics_v3.py'
 AGGREGATE_VERIFIER_PATH='arte_custodian/v57_question_sensor_aggregate_authority_v3.py'
 CUSTODIAN_PROTOCOL_PATH='arte_custodian/v57_question_sensor_custodian_protocol_v3.py'
 PUBLIC_SPEC_PATH='arte_custodian/v57_epoch20_independent_question_sensor_public_spec_v3.json'
@@ -43,11 +44,12 @@ def main():
       'body_state_sha256':snap['body_state_sha256'],'generated_operator_sha256':snap['generated_operator_sha256'],
       'learned_question_bank_canonical_sha256':snap['learned_question_bank_canonical_sha256'],'files':snap['files'],
       'authority_policy_sha256':snap['files'][POLICY_PATH],'per_generation_verifier_sha256':snap['files'][FINAL_VERIFIER_PATH],
+      'challenge_semantics_verifier_sha256':snap['files'][SEMANTICS_VERIFIER_PATH],
       'aggregate_authority_verifier_sha256':snap['files'][AGGREGATE_VERIFIER_PATH],'custodian_protocol_sha256':snap['files'][CUSTODIAN_PROTOCOL_PATH],
       'public_spec_sha256':snap['files'][PUBLIC_SPEC_PATH],
       'commitment_batch_sha256':audit['commitment_batch_sha256'],'commitment_batch_id':batch['batch_id'],'custodian_id':batch['custodian_id'],
       'intake_status':audit['status'],'all_G1_G2_G3_commitments_present':True,
-      'stage_hash_binding_protocol_required':True,
+      'stage_hash_binding_protocol_required':True,'independent_challenge_semantics_required':True,
       'public_packet_revealed_before_freeze':False,'sensor_bits_revealed_before_freeze':False,'targets_or_otp_keys_revealed_before_freeze':False,
       'independent_custody_proven':False,
       'claim_boundary':{'AGI':False,'ASI':False,'external_recursive_acceleration':False,'global_recursive_self_improvement':False}
