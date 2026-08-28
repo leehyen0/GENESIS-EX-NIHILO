@@ -7,7 +7,7 @@ CAND='arte_candidate/run_v57_question_sensor_candidate.py'
 FREEZE='arte_custodian/v57_question_sensor_freeze_after_intake_v3.py'
 FINAL='arte_custodian/v57_question_sensor_final_verifier_v3.py'
 AGG='arte_custodian/v57_question_sensor_aggregate_authority_v3.py'
-SNAP='arte_custodian/v57_question_sensor_candidate_prefreeze_snapshot_v3_r1.json'
+SNAP='arte_custodian/v57_question_sensor_candidate_prefreeze_snapshot_v3_r2.json'
 BANK='arte_candidate/v57_epoch20_question_bank.json'
 POLICY='arte_custodian/v57_question_sensor_independent_authority_policy.json'
 
@@ -30,7 +30,7 @@ entries=[
   (['wife','son','grandfather'],['male','female','male','male'],{'kind':'CANONICAL_PROVENANCE_EDGE_MEMBERSHIP','edge':[0,'son',2]},['father-in-law','father'])
 ]
 
-batch_id='V3-SELFTEST-BATCH-R1'; hidden_paths=[]
+batch_id='V3-SELFTEST-BATCH-R2'; hidden_paths=[]
 for gi,g in enumerate(('G1','G2','G3'),1):
     cases=[]; pub=[]
     for j in range(3):
@@ -42,7 +42,7 @@ for gi,g in enumerate(('G1','G2','G3'),1):
     po=obs(nodes,['husband','son','grandfather'],['female','male','male','male'])
     pub.append({'case_id':f'{g}-H1','public_observation':po})
     cases.append({'case_id':f'{g}-H1','expected_action':'HOLD','expected_question':None,'sensor_bit':None,'target':None,'tags':['negative-hold','selftest']})
-    packet={'schema':'arte.independent_question_input/v57','challenge_id':f'V3-R1-SELFTEST-{g}','generation':g,'cases':pub}
+    packet={'schema':'arte.independent_question_input/v57','challenge_id':f'V3-R2-SELFTEST-{g}','generation':g,'cases':pub}
     hidden={'schema':'arte.hidden_question_sensor_challenge/v57','batch_id':batch_id,'challenge_id':packet['challenge_id'],'generation':g,'public_packet':packet,'cases':cases,'claim_boundary':{'AGI':False,'ASI':False}}
     hp=td/f'{g}_hidden.json'; save(hp,hidden); hidden_paths.append(hp)
 
@@ -91,6 +91,32 @@ rr=subprocess.run(['python',AGG,'--commitment-batch',str(batch),'--freeze',str(f
 assert rr.returncode==2
 da=json.load(open(dupagg)); assert da['three_generation_crypto_and_stage_hash_chain_complete'] is False
 
+# Attack F: even a locally authored provenance packet that claims perfect external verification
+# may produce only EXTERNAL_AUTHORITY_CANDIDATE; repository-local E4 must remain impossible.
+import hashlib
+def canon(x): return json.dumps(x,ensure_ascii=False,sort_keys=True,separators=(',',':')).encode('utf-8')
+batch_obj=json.load(open(batch)); freeze_obj=json.load(open(freeze))
+prov={
+  'schema':'arte.question_sensor_external_custody_provenance/v57-v3',
+  'custodian_id':batch_obj['custodian_id'],
+  'commitment_batch_sha256':hashlib.sha256(canon(batch_obj)).hexdigest(),
+  'formal_freeze_sha256':freeze_obj['freeze_sha256'],
+  'repository_owner_login':'repo-owner-A',
+  'submission_actor_login':'claimed-custodian-B',
+  'actor_distinct_from_repository_owner':True,
+  'independence_verification':{
+    'verified':True,
+    'verification_basis':'INDEPENDENT_THIRD_PARTY',
+    'verifier_actor_login':'claimed-verifier-C',
+    'public_evidence_url':'https://example.invalid/self-authored-not-authority',
+    'hidden_material_never_entered_candidate_boundary':True
+  }
+}
+provp=td/'self_authored_provenance.json'; save(provp,prov)
+aggprov=td/'aggregate_with_self_authored_provenance.json'
+run('python',AGG,'--commitment-batch',str(batch),'--freeze',str(freeze),'--prefreeze-snapshot',SNAP,'--authority-policy',POLICY,'--receipts',*[str(x) for x in receipts],'--external-provenance',str(provp),'--out',str(aggprov))
+ap=json.load(open(aggprov)); assert ap['EXTERNAL_AUTHORITY_CANDIDATE'] is True; assert ap['E4_independent_custody_authorized'] is False; assert ap['external_adjudication_required_for_E4'] is True
+
 result={
  'self_owned_three_generation_chain_complete':aa['three_generation_crypto_and_stage_hash_chain_complete'],
  'self_owned_E4':aa['E4_independent_custody_authorized'],
@@ -99,7 +125,10 @@ result={
  'formal_freeze_tamper_rejected':True,
  'wrong_hidden_target_rejected_by_independent_semantics':True,
  'duplicate_generation_rejected':True,
+ 'self_authored_perfect_provenance_cannot_issue_E4':ap['E4_independent_custody_authorized'] is False,
+ 'self_authored_provenance_maximum':ap['repository_local_authority_ceiling'],
  'prior_failed_run_preserved':'33166669843',
+ 'prior_r1_success_preserved':'33166901360',
  'claim_boundary':{'AGI':False,'ASI':False,'external_recursive_acceleration':False,'independent_custody':False}
 }
 save(td/'SELFTEST_RESULT.json',result); print(json.dumps(result,sort_keys=True))
