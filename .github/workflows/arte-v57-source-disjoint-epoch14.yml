@@ -1,0 +1,42 @@
+name: arte-v57-source-disjoint-epoch14
+on:
+  push:
+    branches: [arte-v57-source-disjoint-crossnovel]
+    paths:
+      - 'arte_external_replay/v57_epoch14_trigger.json'
+      - 'arte_external_replay/v57_epoch14_retention_runner.py'
+      - '.github/workflows/arte-v57-source-disjoint-epoch14.yml'
+  workflow_dispatch:
+jobs:
+  epoch14:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Run retained source-disjoint external epoch 14
+        run: python arte_external_replay/v57_epoch14_retention_runner.py arte_external_replay/v57_epoch14_trigger.json v57_output
+      - name: Verify retained operator scaling, source isolation, and continuity
+        shell: python
+        run: |
+          import json,hashlib
+          from pathlib import Path
+          d=Path('v57_output');r=json.loads((d/'epoch_receipt.json').read_text());s=json.loads((d/'checkpoint_state.json').read_text());e=json.loads((d/'external_evaluation.json').read_text());m=json.loads((d/'hash_manifest.json').read_text())
+          assert r['epoch']==14 and r['hosted_external'] is True and r['actual_success'] is True
+          assert r['source_owner']=='google' and r['source_repo']=='BIG-bench'
+          assert e['task_kind']=='TRACKING_SHUFFLED_OBJECTS_SEVEN' and e['retained_operator_reused'] is True
+          assert e['novel_operator_generated'] is False and r['novel_operator_generated'] is False
+          assert e['remove_frontend_success'] is False and e['remove_inherited_transition_success'] is False
+          assert r['child_state_sha256']==s['state_sha256']
+          assert len(s.get('generated_operator_registry',[]))==2
+          assert set(s['evidence_candidates']['SOURCE_DISJOINT_EXTERNAL_TRANSFER']['external_source_owners'])=={'google','fchollet'}
+          for v in r['claim_flags'].values(): assert v is False
+          for x in m['files']:assert hashlib.sha256((d/x['name']).read_bytes()).hexdigest()==x['sha256']
+          print('v57 epoch14 verified')
+      - uses: actions/upload-artifact@v4
+        with:
+          name: arte-v57-epoch14
+          path: v57_output/
