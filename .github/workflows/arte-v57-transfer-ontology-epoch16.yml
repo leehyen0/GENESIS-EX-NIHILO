@@ -1,0 +1,40 @@
+name: arte-v57-transfer-ontology-epoch16
+on:
+  push:
+    paths:
+      - 'arte_external_replay/v57_epoch16_transfer_ontology_acceleration_runner.py'
+      - 'arte_external_replay/v57_epoch16_trigger.json'
+      - '.github/workflows/arte-v57-transfer-ontology-epoch16.yml'
+  workflow_dispatch:
+jobs:
+  epoch16:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Run transfer to ontology search acceleration
+        run: python arte_external_replay/v57_epoch16_transfer_ontology_acceleration_runner.py arte_external_replay/v57_epoch16_trigger.json v57_output
+      - name: Verify heldout isolation and causal search contrast
+        run: |
+          python - <<'PY'
+          import json
+          e=json.load(open('v57_output/external_evaluation.json'))
+          r=json.load(open('v57_output/epoch_receipt.json'))
+          assert e['selection_used_heldout_target'] is False
+          assert e['heldout_target_hidden_until_after_prediction'] is True
+          assert e['success'] is True
+          assert e['full_selected']=='ORDERED_POSE'
+          assert e['ablation_selected']=='ORDERED_POSE'
+          assert e['full_search_cost'] < e['ablation_search_cost']
+          assert e['wrong_all_turns_first_success'] is False
+          assert r['parent_state_sha256']=='eeceb3b6389eeced39c3b4ca6f3948035fa5063e21f8172ea14e2790ad948131'
+          print('epoch16 transfer->ontology acceleration verified')
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: arte-v57-epoch16-transfer-ontology
+          path: v57_output
