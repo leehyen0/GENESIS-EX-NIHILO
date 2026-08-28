@@ -1,20 +1,21 @@
 {
   "schema": "arte.external_epoch_trigger/v54",
-  "epoch": 3,
-  "parent_state_sha256": "20de18b1d27bea0e027084412197b9b80c4b70dd68fc9d01762d7b6b1cf9c9fc",
+  "epoch": 4,
+  "parent_state_sha256": "55abfbfc3e64c0d7fa1a82d6a2ad6e4d85dfae08ac78dfd8a7cb18fcc742fca3",
   "parent_state": {
     "schema": "arte.external_epoch_state/v54",
     "root_body_sha256": "1a4c80a95bd1affd0ef978eb69a083559ba836aa589b17a5a2db70158a34849b",
-    "epoch_completed": 2,
-    "family_credits": {"MODULAR_AFFINE": 1, "GRAPH_SHORTEST_PATH": 1},
-    "solved_family_registry": ["MODULAR_AFFINE", "GRAPH_SHORTEST_PATH"],
-    "self_model": {"alpha": 3.0, "beta": 1.0},
+    "epoch_completed": 3,
+    "family_credits": {"MODULAR_AFFINE":1,"GRAPH_SHORTEST_PATH":1,"SEQUENCE_RECURRENCE":1},
+    "solved_family_registry": ["MODULAR_AFFINE","GRAPH_SHORTEST_PATH","SEQUENCE_RECURRENCE"],
+    "self_model": {"alpha":4.0,"beta":1.0},
     "tool_credit": {},
     "causal_fossils": [],
     "lineage": [
       {"epoch":1,"family":"MODULAR_AFFINE","github_run_id":"33133581929","parent_state_sha256":"de29753b66ef954aa182b08a9d135be34a1f356d8e8f46549aaa9d061975532e","success":true,"probes":602,"learned_sha256":"196fefcb00bea1bc5f37ca064305437cb27b04c1fc625d29c7087de2d1f5824a"},
-      {"epoch":2,"family":"GRAPH_SHORTEST_PATH","github_run_id":"33133643208","parent_state_sha256":"17927404da70d24a8cfc1a7f2435083863e00e8d8ded290c66011e1f7e561237","success":true,"probes":18,"learned_sha256":"21ccd21357ae5a3b3381875cf7e03a7ac140835e2340f2e40656f90e17a08bee"}
+      {"epoch":2,"family":"GRAPH_SHORTEST_PATH","github_run_id":"33133643208","parent_state_sha256":"17927404da70d24a8cfc1a7f2435083863e00e8d8ded290c66011e1f7e561237","success":true,"probes":18,"learned_sha256":"21ccd21357ae5a3b3381875cf7e03a7ac140835e2340f2e40656f90e17a08bee"},
+      {"epoch":3,"family":"SEQUENCE_RECURRENCE","github_run_id":"33133692026","parent_state_sha256":"20de18b1d27bea0e027084412197b9b80c4b70dd68fc9d01762d7b6b1cf9c9fc","success":true,"probes":1,"learned_sha256":"a543bcb626689dbfe0241a615dd3bbe90d35292dcff7fd4aa623716fd514d4b3"}
     ],
-    "state_sha256": "20de18b1d27bea0e027084412197b9b80c4b70dd68fc9d01762d7b6b1cf9c9fc"
+    "state_sha256": "55abfbfc3e64c0d7fa1a82d6a2ad6e4d85dfae08ac78dfd8a7cb18fcc742fca3"
   }
 }
