@@ -1,0 +1,35 @@
+name: arte-v57-target-free-parser-ablation
+on:
+  push:
+    branches: [arte-v57-source-disjoint-crossnovel]
+    paths:
+      - 'arte_external_replay/v57_failed_input_parser_ablation.py'
+      - '.github/workflows/arte-v57-target-free-parser-ablation.yml'
+  workflow_dispatch:
+jobs:
+  parser-ablation:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Replay failed input without target access
+        run: python arte_external_replay/v57_failed_input_parser_ablation.py parser_ablation_receipt.json
+      - name: Verify causal parser residual
+        shell: python
+        run: |
+          import json
+          r=json.load(open('parser_ablation_receipt.json'))
+          assert r['failed_run_id']=='33137022834'
+          assert r['target_scores_accessed'] is False
+          assert r['old_parser_success'] is False
+          assert r['revised_parser_success'] is True
+          assert r['causal_parser_repair_supported'] is True
+          print('target-free parser ablation verified')
+      - uses: actions/upload-artifact@v4
+        with:
+          name: arte-v57-parser-ablation
+          path: parser_ablation_receipt.json
