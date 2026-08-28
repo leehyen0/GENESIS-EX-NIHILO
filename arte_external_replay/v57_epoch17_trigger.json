@@ -1,0 +1,20 @@
+{
+  "schema": "arte.v57_epoch17_trigger/v1",
+  "epoch": 17,
+  "parent_state_sha256": "dc44d103dbecf2572c63838f70c007990e2d814093af1190c185da894907acbf",
+  "parent_restore": {
+    "epoch16_run_id": "33138840575",
+    "immutable_trigger_path": "arte_external_replay/v57_epoch16_trigger.json",
+    "expected_child_sha256": "dc44d103dbecf2572c63838f70c007990e2d814093af1190c185da894907acbf"
+  },
+  "inherited_abstraction_sha256": "3c1f0de7ec871bf598c84522ae7a9762974f4b5620ccc0f146552adb4ca31ede",
+  "protocol": {
+    "canonical_family_defined_from_input_surface_only": true,
+    "heldout_selected_before_dev_label_search": true,
+    "heldout_target_excluded_from_generation": true,
+    "full_ablation_same_base_candidates_and_generator": true,
+    "only_candidate_order_differs": true,
+    "residual_generated_frame_shift_from_dev_only": true,
+    "prediction_precommit_before_heldout_target_reveal": true
+  }
+}
