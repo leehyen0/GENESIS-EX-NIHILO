@@ -1,0 +1,34 @@
+{
+  "schema": "arte.epoch18_parent_restore_failure_fossil/v1",
+  "epoch_attempt": 18,
+  "github_run_id": "33140176077",
+  "github_head_sha": "d408ef9a17b936d29dad536f321af28534e1d810",
+  "stage": "PARENT_RESTORE",
+  "failure_type": "PARENT_RESTORE_EXPECTATION_DRIFT::STALE_EXPECTED_SHA",
+  "compile_success": true,
+  "external_evaluation_started": false,
+  "heldout_selected": false,
+  "heldout_target_consumed": false,
+  "failed_run_outcome_credit": false,
+  "stale_expected_parent_state_sha256": "c5c1bed520ae4cd900a7b6a854236fd224210e6055fdd5cf89e7848a8071489a",
+  "actual_parent_state_sha256": "c5c1bed5ce34f2fd60f819d9b05fc97f9f03277234ed2f939a82aef6e886dcb9",
+  "stale_expected_abstraction_sha256": "9ce0de4225f1871e2d57e91ca8d0e4e640411aa4be4ac0e1cfb9004d60f2ca57",
+  "actual_abstraction_sha256": "e5045e0d3b894911d0c20e12a7dfb0c051f3f8fc5e185abe8c6d34521175b74a",
+  "canonical_epoch17_run_id": "33138955977",
+  "canonical_epoch17_artifact_id": "9673139937",
+  "canonical_epoch17_artifact_digest": "sha256:4b218b5805ee21ebf58745300b103768e8a630ca8db071306ca40bbc22d18b5b",
+  "recovery_policy": {
+    "append_causal_fossil": true,
+    "append_recovery_event": true,
+    "self_model_beta_plus_one": true,
+    "reuse_failed_challenge": false,
+    "expected_recovery_parent_sha256": "8fa92abf907b3c5c237077849b3b59eb530e701c53a5a61fdbbeba14bfad96d3"
+  },
+  "claim_flags": {
+    "independent_custody_proof": false,
+    "source_disjoint_transfer_proof": false,
+    "external_recursive_acceleration": false,
+    "AGI": false,
+    "ASI": false
+  }
+}
