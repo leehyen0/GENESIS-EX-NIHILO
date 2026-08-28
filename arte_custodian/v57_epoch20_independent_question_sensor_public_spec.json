@@ -1,0 +1,97 @@
+{
+  "schema": "arte.independent_question_sensor_public_spec/v57",
+  "purpose": "Independent post-freeze commit-reveal evaluation of the epoch20 one-bit missing-sensor cognition. The custodian owns hidden public packets before freeze, sensor truth, and targets; the candidate owns only the frozen question bank and candidate code.",
+  "evidence_root": {
+    "epoch20_hosted_run_id": "33150258964",
+    "epoch20_body_state_sha256": "2b02b704147e95ad401110b98744f7ab54cb46f4b8b073ea9b20994dd0d8f257",
+    "epoch20_operator_sha256": "23e1b2449c1d27eaf3546124eee57bb1a573f9ad1930b9dc9ce6ba28d17ad54f",
+    "frozen_question_bank_sha256": "cef2f2f365a9763c1966e4a62739aedbaae7c860ddd986d2b0e8c757603eb017",
+    "claim": "PRIOR_BOUNDED_EVIDENCE_ONLY__NOT_INDEPENDENT_CUSTODY"
+  },
+  "candidate_interface": {
+    "candidate_path": "arte_candidate/run_v57_question_sensor_candidate.py",
+    "bank_path": "arte_candidate/v57_epoch20_question_bank.json",
+    "network": "OFF",
+    "question_cli": "python run_v57_question_sensor_candidate.py --phase question --input public_input.json --output questions.json",
+    "prediction_cli": "python run_v57_question_sensor_candidate.py --phase predict --input sensor_input.json --output predictions.json",
+    "question_input_schema": {
+      "schema": "arte.independent_question_input/v57",
+      "challenge_id": "string",
+      "generation": "G1|G2|G3",
+      "cases": [{
+        "case_id": "string",
+        "public_observation": {
+          "query_nodes": ["node-id", "node-id"],
+          "path_edges": [["node-id", "relation", "node-id"], ["node-id", "relation", "node-id"], ["node-id", "relation", "node-id"]],
+          "node_genders": {"node-id": "male|female"}
+        }
+      }]
+    },
+    "question_output": "QUESTION with one canonical provenance-edge membership predicate, or HOLD for malformed/out-of-bank cases",
+    "sensor_input": "The exact public observation, exact candidate question and its hash, plus one custodian-returned sensor bit. The target is absent.",
+    "prediction_output": "PREDICT one kinship label or HOLD. Claim boundary remains false for AGI/ASI/independent custody."
+  },
+  "hidden_package_schema": {
+    "schema": "arte.hidden_question_sensor_challenge/v57",
+    "challenge_id": "string",
+    "batch_id": "string shared by G1/G2/G3",
+    "generation": "G1|G2|G3",
+    "public_packet": "exact question_input object, withheld until matching candidate freeze",
+    "cases": [{
+      "case_id": "must match public_packet",
+      "expected_question": "exact canonical question object",
+      "sensor_bit": "0|1",
+      "target": "expected final relation label",
+      "tags": ["string"]
+    }],
+    "claim_boundary": {"AGI": false, "ASI": false}
+  },
+  "challenge_construction": {
+    "all_three_generations_fixed_before_G1_freeze": true,
+    "recommended_cases_per_generation": "20-40",
+    "use_only_five_public ambiguity signatures represented by the frozen bank": true,
+    "balance_sensor_bits_within_each_used_signature": true,
+    "public_packet_case_order_randomized": true,
+    "node_ids_may_be_renamed_or_permuted_so_long_as the unique directed 3-edge query path is preserved": true,
+    "G2_G3_may_add irrelevant metadata outside public_observation but may not alter candidate-required fields": true,
+    "expected_question_must_equal_the_frozen_bank_question_after_candidate canonicalization": true,
+    "target_must_equal_the_frozen_bank_answer_for_sensor_bit": true,
+    "malformed_or_out_of_bank_negative_controls_may_be_included_and_must_expect_HOLD": true,
+    "custodian_must_not_optimize_candidate_or_rewrite_G2_G3_after_G1": true
+  },
+  "commitment_protocol": {
+    "algorithm": "Exact hidden-package UTF-8 bytes are encrypted with a uniformly random one-time-pad key of identical byte length; ciphertext[i]=plaintext[i] XOR key[i].",
+    "batch": "G1/G2/G3 commitments MUST be returned together before G1 freeze and share one batch_id and custodian_id.",
+    "commitment_fields": ["schema", "batch_id", "challenge_id", "generation", "custodian_id", "byte_length", "plaintext_sha256", "ciphertext_sha256", "ciphertext_b64", "public_packet_sha256", "key_withheld", "all_generations_fixed_before_G1", "claim_boundary"],
+    "public_packet_hash": "SHA-256 of canonical JSON bytes json.dumps(public_packet, sort_keys=True, separators=(',',':'), ensure_ascii=False).encode('utf-8'). The public packet itself remains withheld until freeze.",
+    "candidate_freeze": "Only after a structurally valid three-commitment batch is accepted, freeze candidate head SHA, candidate file SHA256, bank file SHA256, verifier workflow SHA256, public spec SHA256, BODY state SHA256, and commitment-batch SHA256.",
+    "public_reveal": "After freeze, custodian releases the exact public_packet only. Verifier checks public_packet_sha256 against the commitment.",
+    "question_freeze": "Candidate runs network-off and freezes questions.json SHA256 before any sensor bit is returned.",
+    "sensor_response": "Custodian returns only the bit for each exact candidate question. No target or other hidden relation is released.",
+    "prediction_freeze": "Candidate runs network-off and freezes predictions.json SHA256 before hidden-package key reveal.",
+    "final_reveal": "Custodian releases OTP key only after prediction freeze. Independent verifier decrypts exact hidden package and checks public packet hash, question binding, sensor bits, predictions, targets, commitments and all freeze hashes."
+  },
+  "promotion_requirements": {
+    "E4_candidate": [
+      "custodian is outside user/ChatGPT/ARTE information boundary and actually withholds hidden bytes and keys",
+      "all G1/G2/G3 commitments structurally and cryptographically valid before G1 freeze",
+      "G2/G3 unchanged after G1 result",
+      "candidate code/bank/verifier frozen before public packet reveal",
+      "questions frozen before sensor response",
+      "predictions frozen before target/key reveal",
+      "independent final receipt binds all hashes and challenge IDs",
+      "no self-owned dry run, public benchmark, ciphertext possession or deployment success may substitute for custody"
+    ],
+    "minimum_accuracy": 1.0,
+    "wrong_or_missing_question_counts_as_failure": true,
+    "HOLD_negative_controls_must_be_correct": true
+  },
+  "claim_boundary": {
+    "setup_itself_is_E4": false,
+    "valid_commitments_alone_are_E4": false,
+    "software_enforced_hiddenness_is_independent_custody": false,
+    "AGI": false,
+    "ASI": false,
+    "external_recursive_acceleration": false
+  }
+}
