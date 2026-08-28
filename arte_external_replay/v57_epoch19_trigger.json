@@ -1,0 +1,30 @@
+{
+  "schema": "arte.v57_epoch19_clutrr_relation_composition_trigger/v1",
+  "epoch": 19,
+  "parent_state_sha256": "41b0971dc3e79e30cc7454a656224a86ace56287294a84f8ada8f378882d5b68",
+  "inherited_abstraction_sha256": "0f8c310b6c945dcd0e5bc5047a74cffe522fe905de1f4b2e05cf827393ad9eb0",
+  "parent_restore": {
+    "epoch18_run_id": "33140447809",
+    "epoch18_artifact_id": "9673725476",
+    "epoch18_artifact_digest": "sha256:9996240e647d4113c9d41f689002a134d36df983fe4bfe498a8e3ebeda251e22"
+  },
+  "external_source": {
+    "repository": "kliang5/CLUTRR_huggingface_dataset",
+    "commit": "e5b496941e91abb7c319d2618a3ce96752bc4ab7",
+    "config": "gen_train23_test2to10",
+    "benchmark_origin": "CLUTRR / facebookresearch"
+  },
+  "protocol": {
+    "binary_laws_generated_from_length2_train": true,
+    "composition_orientation_selected_on_length3_validation": true,
+    "heldout_requires_length_at_least_4": true,
+    "heldout_selection_uses_input_case_without_target_field": true,
+    "prediction_precommit_before_target_reveal_parse": true,
+    "full_ablation_same_candidates_and_data": true,
+    "only_candidate_order_differs": true,
+    "remove_and_wrong_controls_required": true,
+    "natural_language_surface_used_for_solver": false,
+    "independent_evaluator": false,
+    "external_recursive_acceleration_claim_allowed": false
+  }
+}
