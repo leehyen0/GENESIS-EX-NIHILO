@@ -1,0 +1,14 @@
+{
+  "schema": "arte.external_transfer_trigger/v56",
+  "epoch": 1,
+  "parent_state_sha256": "1429749bf59aa56c29f3ba8ca434cc73abea2e6a5431bfe005d0ba5b67c947a6",
+  "parent_state": {
+    "schema": "arte.external_transfer_state/v56",
+    "root_body_sha256": "4d08708006f98b54e63608657c3e283edd98f9ed53af4795f7842cff420e2941",
+    "epoch_completed": 0,
+    "transfer_registry": [],
+    "discovery_registry": [],
+    "lineage": [],
+    "state_sha256": "1429749bf59aa56c29f3ba8ca434cc73abea2e6a5431bfe005d0ba5b67c947a6"
+  }
+}
