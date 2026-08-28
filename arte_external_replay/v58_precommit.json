@@ -1,0 +1,28 @@
+{
+  "schema": "arte.independent_entropy_custody_precommit/v58",
+  "parent_v57_body_sha256": "4bbe7ecfd150874eaf353d9b0b0a0949b709f069d46fcb593539d211d5530645",
+  "authority": "League of Entropy drand default network",
+  "drand_chain_hash": "8990e7a9aaed2ffed73dbd7092123d6f289930540d7651336225dc172e51b2ce",
+  "drand_public_key": "868f005eb8e6e4ca0a47c8a77ceaa5309a47978a7c71bc5cce96366b5d7a569937c529eeda66c7293784a9402801af31",
+  "protocol": [
+    "freeze BODY, generator, solver, evaluator and workflow in Git commit",
+    "after workflow starts, cryptographically verify a newly generated drand round",
+    "derive hidden laws/training challenges from beacon 1",
+    "solve and hash-commit hypotheses",
+    "only then obtain and cryptographically verify a later drand round",
+    "derive prospective heldout test inputs from beacon 2",
+    "evaluate with frozen deterministic evaluator",
+    "publish beacons, signatures, hypotheses, outputs and artifact hashes"
+  ],
+  "matched_transfer_control": "FULL uses source-domain inferred law; ABLATION target search receives no source law",
+  "claim_boundary": {
+    "independent_entropy_heldout_candidate": true,
+    "traditional_independent_custodian": false,
+    "independent_evaluator_signature_on_outcome": false,
+    "formal_v50_E4_not_granted_until semantics are reviewed": true,
+    "AGI": false,
+    "ASI": false,
+    "human_intelligence_exceeded": false
+  },
+  "precommit_sha256": "aa1e7699139ff5c8d4e41af46b61e45f6efa6fbc286a2e9cef1bdbceadd67406"
+}
