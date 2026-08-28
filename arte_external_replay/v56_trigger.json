@@ -1,14 +1,45 @@
 {
   "schema": "arte.external_transfer_trigger/v56",
-  "epoch": 1,
-  "parent_state_sha256": "1429749bf59aa56c29f3ba8ca434cc73abea2e6a5431bfe005d0ba5b67c947a6",
+  "epoch": 2,
+  "parent_state_sha256": "aa0c70a6c14fd756b73605e8df19c6518e3fdf2e7b1ef9a03a841cf916b14aa9",
   "parent_state": {
     "schema": "arte.external_transfer_state/v56",
     "root_body_sha256": "4d08708006f98b54e63608657c3e283edd98f9ed53af4795f7842cff420e2941",
-    "epoch_completed": 0,
-    "transfer_registry": [],
-    "discovery_registry": [],
-    "lineage": [],
-    "state_sha256": "1429749bf59aa56c29f3ba8ca434cc73abea2e6a5431bfe005d0ba5b67c947a6"
+    "epoch_completed": 1,
+    "transfer_registry": [
+      {
+        "epoch": 1,
+        "source_domain": "TABLE_RELATION",
+        "target_domain": "SYMBOLIC_RULE",
+        "source_exact": true,
+        "full_exact": true,
+        "ablation_exact": true,
+        "full_search_cost": 1,
+        "ablation_search_cost": 1667,
+        "cost_reduction": 0.9994001199760048,
+        "hypothesis_commit_sha256": "61fa9f12bff7ecb839a125e6e9814882f80dbeae95e91a3274a5993e82ceb885"
+      }
+    ],
+    "discovery_registry": [
+      {
+        "epoch": 1,
+        "hypothesis_commit_sha256": "61fa9f12bff7ecb839a125e6e9814882f80dbeae95e91a3274a5993e82ceb885",
+        "fresh_test_count": 80,
+        "fresh_test_generated_after_commit": true,
+        "fresh_test_exact": true,
+        "external_scientific_novelty": false
+      }
+    ],
+    "lineage": [
+      {
+        "epoch": 1,
+        "github_run_id": "33134469998",
+        "parent_state_sha256": "1429749bf59aa56c29f3ba8ca434cc73abea2e6a5431bfe005d0ba5b67c947a6",
+        "source_domain": "TABLE_RELATION",
+        "target_domain": "SYMBOLIC_RULE",
+        "hypothesis_commit_sha256": "61fa9f12bff7ecb839a125e6e9814882f80dbeae95e91a3274a5993e82ceb885"
+      }
+    ],
+    "state_sha256": "aa0c70a6c14fd756b73605e8df19c6518e3fdf2e7b1ef9a03a841cf916b14aa9"
   }
 }
