@@ -1,0 +1,17 @@
+{
+  "schema": "arte.external_epoch_trigger/v54",
+  "epoch": 1,
+  "parent_state_sha256": "de29753b66ef954aa182b08a9d135be34a1f356d8e8f46549aaa9d061975532e",
+  "parent_state": {
+    "schema": "arte.external_epoch_state/v54",
+    "root_body_sha256": "1a4c80a95bd1affd0ef978eb69a083559ba836aa589b17a5a2db70158a34849b",
+    "epoch_completed": 0,
+    "family_credits": {},
+    "solved_family_registry": [],
+    "self_model": {"alpha": 1.0, "beta": 1.0},
+    "tool_credit": {},
+    "causal_fossils": [],
+    "lineage": [],
+    "state_sha256": "de29753b66ef954aa182b08a9d135be34a1f356d8e8f46549aaa9d061975532e"
+  }
+}
