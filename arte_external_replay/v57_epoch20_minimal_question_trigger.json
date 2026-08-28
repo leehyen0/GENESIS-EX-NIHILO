@@ -1,0 +1,20 @@
+{
+  "schema": "arte.v57_epoch20_minimal_question_trigger/v1",
+  "epoch": 20,
+  "parent_state_sha256": "f59f6b8b6b6a5a06129257645d5318660fb58337ed306bf114c33ef46c5678bf",
+  "source_config": "gen_train23_test2to10",
+  "fresh_config": "gen_train234_test2to10",
+  "protocol": {
+    "question_bank_generated_from_source_validation_only": true,
+    "minimum_question_search_max_bits": 3,
+    "require_one_bit_solution": true,
+    "fresh_validation_used_only_after_question_bank_freeze": true,
+    "question_precommit_before_proof_parse": true,
+    "sensor_uses_target_stripped_proof_evidence": true,
+    "prediction_precommit_before_target_parse": true,
+    "raw_test_file_contains_target_and_proof_columns": true,
+    "independent_custody": false,
+    "full_task_promotion": false,
+    "external_recursive_acceleration_claim_allowed": false
+  }
+}
