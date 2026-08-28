@@ -1,11 +1,11 @@
 {
   "schema": "arte.external_transfer_trigger/v56",
-  "epoch": 3,
-  "parent_state_sha256": "14a84f7f7c4165c049cce41728ed4acdbd0b17182657aabb0b9424bc9cda5230",
+  "epoch": 4,
+  "parent_state_sha256": "5383838a5d520ee18759f34bfa7ab07ddb3d9de07250448837eefa208e8ce98e",
   "parent_state": {
     "schema": "arte.external_transfer_state/v56",
     "root_body_sha256": "4d08708006f98b54e63608657c3e283edd98f9ed53af4795f7842cff420e2941",
-    "epoch_completed": 2,
+    "epoch_completed": 3,
     "transfer_registry": [
       {
         "epoch": 1,
@@ -30,6 +30,18 @@
         "ablation_search_cost": 122,
         "cost_reduction": 0.9918032786885246,
         "hypothesis_commit_sha256": "e001ae13f30c9c41f1f5d0010e2a9992ad03cafceb720772c664c7ae3cc4d8a0"
+      },
+      {
+        "epoch": 3,
+        "source_domain": "BINARY_FEATURE",
+        "target_domain": "SEQUENCE_RULE",
+        "source_exact": true,
+        "full_exact": true,
+        "ablation_exact": true,
+        "full_search_cost": 1,
+        "ablation_search_cost": 1838,
+        "cost_reduction": 0.999455930359086,
+        "hypothesis_commit_sha256": "1449758f100597abffea3460b33229569432d26060428301a8f09e0dbaf5125d"
       }
     ],
     "discovery_registry": [
@@ -44,6 +56,14 @@
       {
         "epoch": 2,
         "hypothesis_commit_sha256": "e001ae13f30c9c41f1f5d0010e2a9992ad03cafceb720772c664c7ae3cc4d8a0",
+        "fresh_test_count": 80,
+        "fresh_test_generated_after_commit": true,
+        "fresh_test_exact": true,
+        "external_scientific_novelty": false
+      },
+      {
+        "epoch": 3,
+        "hypothesis_commit_sha256": "1449758f100597abffea3460b33229569432d26060428301a8f09e0dbaf5125d",
         "fresh_test_count": 80,
         "fresh_test_generated_after_commit": true,
         "fresh_test_exact": true,
@@ -66,8 +86,16 @@
         "source_domain": "GRAPH_WEIGHT",
         "target_domain": "RESOURCE_SCHEDULING",
         "hypothesis_commit_sha256": "e001ae13f30c9c41f1f5d0010e2a9992ad03cafceb720772c664c7ae3cc4d8a0"
+      },
+      {
+        "epoch": 3,
+        "github_run_id": "33134610589",
+        "parent_state_sha256": "14a84f7f7c4165c049cce41728ed4acdbd0b17182657aabb0b9424bc9cda5230",
+        "source_domain": "BINARY_FEATURE",
+        "target_domain": "SEQUENCE_RULE",
+        "hypothesis_commit_sha256": "1449758f100597abffea3460b33229569432d26060428301a8f09e0dbaf5125d"
       }
     ],
-    "state_sha256": "14a84f7f7c4165c049cce41728ed4acdbd0b17182657aabb0b9424bc9cda5230"
+    "state_sha256": "5383838a5d520ee18759f34bfa7ab07ddb3d9de07250448837eefa208e8ce98e"
   }
 }
