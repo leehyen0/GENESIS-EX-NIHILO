@@ -1,0 +1,44 @@
+{
+  "schema": "arte.frozen_question_bank/v57",
+  "source_body_state_sha256": "2b02b704147e95ad401110b98744f7ab54cb46f4b8b073ea9b20994dd0d8f257",
+  "source_operator_sha256": "23e1b2449c1d27eaf3546124eee57bb1a573f9ad1930b9dc9ce6ba28d17ad54f",
+  "canonical_bank_sha256": "cef2f2f365a9763c1966e4a62739aedbaae7c860ddd986d2b0e8c757603eb017",
+  "entries": [
+    {
+      "path_relations": ["husband", "daughter", "grandfather"],
+      "path_genders": ["female", "male", "female", "male"],
+      "question": {"kind": "CANONICAL_PROVENANCE_EDGE_MEMBERSHIP", "edge": [0, "daughter", 2]},
+      "answer_to_target": {"0": "father-in-law", "1": "father"}
+    },
+    {
+      "path_relations": ["husband", "daughter", "grandmother"],
+      "path_genders": ["female", "male", "female", "female"],
+      "question": {"kind": "CANONICAL_PROVENANCE_EDGE_MEMBERSHIP", "edge": [0, "daughter", 2]},
+      "answer_to_target": {"0": "mother-in-law", "1": "mother"}
+    },
+    {
+      "path_relations": ["husband", "son", "grandmother"],
+      "path_genders": ["female", "male", "male", "female"],
+      "question": {"kind": "CANONICAL_PROVENANCE_EDGE_MEMBERSHIP", "edge": [0, "husband", 1]},
+      "answer_to_target": {"0": "mother", "1": "mother-in-law"}
+    },
+    {
+      "path_relations": ["wife", "daughter", "grandfather"],
+      "path_genders": ["male", "female", "female", "male"],
+      "question": {"kind": "CANONICAL_PROVENANCE_EDGE_MEMBERSHIP", "edge": [0, "daughter", 2]},
+      "answer_to_target": {"0": "father-in-law", "1": "father"}
+    },
+    {
+      "path_relations": ["wife", "son", "grandfather"],
+      "path_genders": ["male", "female", "male", "male"],
+      "question": {"kind": "CANONICAL_PROVENANCE_EDGE_MEMBERSHIP", "edge": [0, "son", 2]},
+      "answer_to_target": {"0": "father-in-law", "1": "father"}
+    }
+  ],
+  "claim_boundary": {
+    "independent_custody_proven": false,
+    "external_recursive_acceleration": false,
+    "AGI": false,
+    "ASI": false
+  }
+}
