@@ -1,0 +1,47 @@
+name: arte-v57-temporal-frame-epoch17
+on:
+  push:
+    paths:
+      - 'arte_external_replay/v57_epoch17_temporal_frame_genesis_runner.py'
+      - 'arte_external_replay/v57_epoch17_trigger.json'
+      - '.github/workflows/arte-v57-temporal-frame-epoch17.yml'
+  workflow_dispatch:
+jobs:
+  epoch17:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Run second-generation temporal frame genesis
+        run: python arte_external_replay/v57_epoch17_temporal_frame_genesis_runner.py arte_external_replay/v57_epoch17_trigger.json v57_output
+      - name: Verify second-generation feedback and heldout isolation
+        run: |
+          python - <<'PY'
+          import json
+          e=json.load(open('v57_output/external_evaluation.json'))
+          r=json.load(open('v57_output/epoch_receipt.json'))
+          s=json.load(open('v57_output/checkpoint_state.json'))
+          assert e['selection_used_heldout_target'] is False
+          assert e['heldout_target_hidden_until_after_prediction'] is True
+          assert e['success'] is True
+          assert e['full_selected']=='GENERATED_FRAME_SHIFT'
+          assert e['ablation_selected']=='GENERATED_FRAME_SHIFT'
+          assert e['generated_component']['delta_days']==1
+          assert e['full_search_cost'] < e['ablation_search_cost']
+          assert e['no_frame_success'] is False
+          assert e['reverse_frame_success'] is False
+          assert r['parent_state_sha256']=='dc44d103dbecf2572c63838f70c007990e2d814093af1190c185da894907acbf'
+          assert r['mutual_acceleration_candidate'] is True
+          assert r['claim_flags']['external_recursive_acceleration'] is False
+          assert s['self_model']['alpha']==18 and s['self_model']['beta']==3
+          assert s['synergy_credit_details']['ONTOLOGY_TO_NEXT_TRANSFER_TO_NEW_ONTOLOGY']['status']=='SUPPORTED_BOUNDED_TWO_STEP'
+          print('epoch17 second-generation transfer/ontology feedback verified')
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: arte-v57-epoch17-temporal-frame
+          path: v57_output
