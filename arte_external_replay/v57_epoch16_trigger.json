@@ -1,11 +1,20 @@
 {
-  "schema": "arte.v57_epoch16_trigger/v2",
+  "schema": "arte.v57_epoch16_trigger/v3_failure_conditioned",
   "epoch": 16,
   "parent_state_sha256": "eeceb3b6389eeced39c3b4ca6f3948035fa5063e21f8172ea14e2790ad948131",
   "parent_restore": {
     "epoch15_run_id": "33137539741",
     "immutable_trigger_path": "arte_external_replay/v57_epoch15_trigger.json",
     "expected_child_sha256": "eeceb3b6389eeced39c3b4ca6f3948035fa5063e21f8172ea14e2790ad948131"
+  },
+  "failure_conditioning": {
+    "failed_run_id": "33138655768",
+    "failure_type": "STATE_SCHEMA_COLLISION::synergy_credit_int_vs_dict",
+    "failed_run_outcome_credit": false,
+    "failed_run_target_or_prediction_must_not_be_reused": true,
+    "mutation_scope": "BOOKKEEPING_FIELD_ONLY",
+    "self_model_update_before_fresh_challenge": "BETA_PLUS_ONE",
+    "exclude_failed_run_heldout_index_from_recovery": true
   },
   "e3_roots": {
     "cross_domain_transfer_receipt_sha256": "fc9d5febd706edef223b10d920a6374c18e7812cc2d1b2b0199153d7bb718440",
@@ -17,6 +26,7 @@
     "heldout_target_excluded_from_search": true,
     "prediction_precommit_before_target_reveal": true,
     "same_candidates_full_ablation": true,
-    "e3_roots_are_priors_not_authority_parents": true
+    "e3_roots_are_priors_not_authority_parents": true,
+    "fresh_recovery_heldout_disjoint_from_failed_run": true
   }
 }
