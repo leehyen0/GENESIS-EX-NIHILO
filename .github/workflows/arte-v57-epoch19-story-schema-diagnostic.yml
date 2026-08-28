@@ -1,0 +1,22 @@
+name: arte-v57-epoch19-story-schema-diagnostic
+on:
+  push:
+    paths:
+      - '.github/workflows/arte-v57-epoch19-story-schema-diagnostic.yml'
+  workflow_dispatch:
+jobs:
+  diagnose:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m py_compile arte_external_replay/v57_epoch19_story_schema_diagnostic.py
+      - run: python arte_external_replay/v57_epoch19_story_schema_diagnostic.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: arte-v57-epoch19-story-schema-diagnostic
+          path: diag_story_schema
