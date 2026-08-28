@@ -1,0 +1,47 @@
+name: arte-v56-transfer-discovery
+on:
+  push:
+    branches:
+      - arte-v56-transfer-discovery
+    paths:
+      - 'arte_external_replay/v56_trigger.json'
+      - 'arte_external_replay/v56_runner.py'
+      - '.github/workflows/arte-v56-transfer-discovery.yml'
+  workflow_dispatch:
+jobs:
+  transfer-discovery:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Run one external transfer/discovery epoch
+        run: python arte_external_replay/v56_runner.py arte_external_replay/v56_trigger.json v56_output
+      - name: Verify matched transfer and prospective discovery
+        shell: python
+        run: |
+          import json,hashlib
+          from pathlib import Path
+          d=Path("v56_output")
+          r=json.loads((d/"epoch_receipt.json").read_text())
+          s=json.loads((d/"checkpoint_state.json").read_text())
+          m=json.loads((d/"hash_manifest.json").read_text())
+          assert r["hosted_external"] is True
+          assert r["source_exact"] is True
+          assert r["full_target_exact"] is True
+          assert r["ablation_target_exact"] is True
+          assert r["full_search_cost"] < r["ablation_search_cost"]
+          assert r["prospective_discovery_exact"] is True
+          assert r["fresh_test_generated_after_commit"] is True
+          assert s["state_sha256"] == r["child_state_sha256"]
+          for k,v in r["claim_flags"].items(): assert v is False
+          for x in m["files"]:
+              assert hashlib.sha256((d/x["name"]).read_bytes()).hexdigest()==x["sha256"]
+          print("v56 verified")
+      - uses: actions/upload-artifact@v4
+        with:
+          name: arte-v56-transfer-discovery
+          path: v56_output/
