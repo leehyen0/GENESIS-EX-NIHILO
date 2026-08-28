@@ -1,0 +1,66 @@
+name: arte-v57-clutrr-relation-composition-epoch19
+on:
+  push:
+    paths:
+      - '.github/workflows/arte-v57-clutrr-relation-composition-epoch19.yml'
+  workflow_dispatch:
+jobs:
+  epoch19:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile epoch19 runner
+        run: python -m py_compile arte_external_replay/v57_epoch19_clutrr_relation_composition_runner.py
+      - name: Run fourth-step CLUTRR structured relation challenge
+        run: python arte_external_replay/v57_epoch19_clutrr_relation_composition_runner.py arte_external_replay/v57_epoch19_trigger.json v57_output
+      - name: Verify recursive relation composition transfer
+        run: |
+          python - <<'PY'
+          import json
+          e=json.load(open('v57_output/external_evaluation.json'))
+          r=json.load(open('v57_output/epoch_receipt.json'))
+          s=json.load(open('v57_output/checkpoint_state.json'))
+          p=json.load(open('v57_output/prediction_precommit.json'))
+          assert e['selection_used_target'] is False
+          assert e['target_excluded_from_selection_case_objects'] is True
+          assert e['prediction_precommit_written_before_target_reveal_parse'] is True
+          assert p['target_loaded_into_selection_case'] is False
+          assert e['heldout_relation_length'] >= 4
+          assert e['success'] is True
+          assert e['full_selected']=='ORDERED_BINARY_CLOSURE'
+          assert e['ablation_selected']=='ORDERED_BINARY_CLOSURE'
+          assert e['full_search_cost'] < e['ablation_search_cost']
+          assert e['remove_success'] is False
+          assert e['wrong_success'] is False
+          assert e['repository_owner_disjoint_from_epoch16_18'] is True
+          assert e['benchmark_origin_owner_new_vs_epoch16_18'] is True
+          assert e['independent_evaluator'] is False
+          assert e['natural_language_surface_used_for_solver'] is False
+          assert e['generated_component']['kind']=='GENERATED_KINSHIP_BINARY_RELATION_COMPOSITION'
+          assert e['generated_component']['orientation']=='FORWARD_QUERY_PATH'
+          assert r['hosted_external'] is True
+          assert r['parent_state_sha256']=='41b0971dc3e79e30cc7454a656224a86ace56287294a84f8ada8f378882d5b68'
+          assert r['four_step_replication_candidate'] is True
+          assert r['claim_flags']['independent_custody_proof'] is False
+          assert r['claim_flags']['independent_evaluator'] is False
+          assert r['claim_flags']['external_recursive_acceleration'] is False
+          assert r['claim_flags']['natural_language_clutrr_solution'] is False
+          assert r['claim_flags']['AGI'] is False and r['claim_flags']['ASI'] is False
+          assert s['epoch_completed']==19
+          assert s['self_model']['alpha']==20 and s['self_model']['beta']==4
+          c=s['synergy_credit_details']['FOUR_STEP_TRANSFER_ONTOLOGY_REPLICATION']
+          assert c['status']=='SUPPORTED_BOUNDED_FOUR_STEP_THIRD_SOURCE_OWNER_STRUCTURED_RELATION'
+          assert c['structured_relation_channel_only'] is True
+          assert c['natural_language_solution'] is False
+          assert c['external_recursive_acceleration'] is False
+          print('epoch19 fourth-step CLUTRR structured relation replication verified')
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: arte-v57-epoch19-clutrr-relation-composition
+          path: v57_output
