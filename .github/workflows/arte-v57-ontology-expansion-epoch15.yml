@@ -1,0 +1,43 @@
+name: arte-v57-ontology-expansion-epoch15
+on:
+  push:
+    branches: [arte-v57-source-disjoint-crossnovel]
+    paths:
+      - 'arte_external_replay/v57_epoch15_trigger.json'
+      - 'arte_external_replay/v57_epoch15_ontology_expansion_runner.py'
+      - '.github/workflows/arte-v57-ontology-expansion-epoch15.yml'
+  workflow_dispatch:
+jobs:
+  epoch15:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Run failure-generated ontology on target-independent fresh external stress case
+        run: python arte_external_replay/v57_epoch15_ontology_expansion_runner.py arte_external_replay/v57_epoch15_trigger.json v57_output
+      - name: Verify external-failure causal consumption and ontology escape
+        shell: python
+        run: |
+          import json,hashlib
+          from pathlib import Path
+          d=Path('v57_output');r=json.loads((d/'epoch_receipt.json').read_text());s=json.loads((d/'checkpoint_state.json').read_text());e=json.loads((d/'external_evaluation.json').read_text());p=json.loads((d/'prediction_precommit.json').read_text());m=json.loads((d/'hash_manifest.json').read_text())
+          assert r['epoch']==15 and r['hosted_external'] is True and r['actual_success'] is True
+          assert abs(r['self_predicted_success']-(15/17))<1e-12
+          assert r['external_failure_causally_consumed'] is True and r['target_independent_selection'] is True
+          assert e['selection_used_target'] is False and e['target_hidden_until_after_prediction'] is True
+          assert e['old_representation_can_answer'] is False and e['remove_generated_operator_success'] is False
+          assert e['generated_operator_sha256']=='9acabe9915c45105caa1ee04bfa5c8d267706809119a616ed2f456a0674ae6fd'
+          assert e['precommit_sha256']==hashlib.sha256(json.dumps(p,sort_keys=True,separators=(',',':')).encode()).hexdigest()
+          assert r['child_state_sha256']==s['state_sha256'] and s['causal_root_cause_refinements'][-1]['previous_hypothesis_status']=='REFUTED_INSUFFICIENT'
+          assert s['evidence_candidates']['EXTERNAL_FAILURE_TO_ONTOLOGY_EXPANSION']['fresh_external_success'] is True
+          for v in r['claim_flags'].values(): assert v is False
+          for x in m['files']:assert hashlib.sha256((d/x['name']).read_bytes()).hexdigest()==x['sha256']
+          print('v57 ontology expansion epoch15 verified')
+      - uses: actions/upload-artifact@v4
+        with:
+          name: arte-v57-epoch15-ontology-expansion
+          path: v57_output/
