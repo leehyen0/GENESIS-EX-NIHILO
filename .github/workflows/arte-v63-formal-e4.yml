@@ -20,14 +20,13 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Verify precommit and frozen implementation hashes
+      - name: Verify precommit and frozen Git blob identities
         shell: python
         run: |
-          import hashlib,json
-          from pathlib import Path
+          import json,subprocess
           p=json.load(open('arte_external_replay/v63_e4_precommit.json'))
-          for path,expected in p['frozen_file_sha256'].items():
-              got=hashlib.sha256(Path(path).read_bytes()).hexdigest()
+          for path,expected in p['frozen_git_blob_sha1'].items():
+              got=subprocess.check_output(['git','hash-object',path],text=True).strip()
               assert got==expected,(path,got,expected)
           assert p['attempt_budget']==1
           assert p['feedback_before_verdict']==False
