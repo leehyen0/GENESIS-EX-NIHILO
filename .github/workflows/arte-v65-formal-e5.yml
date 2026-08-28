@@ -1,0 +1,134 @@
+name: arte-v65-formal-e5
+on:
+  push:
+    branches:
+      - arte-v65-formal-e5
+    paths:
+      - 'arte_external_replay/v65_trigger.json'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+  attestations: write
+
+jobs:
+  formal-e5:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify E5 precommit and frozen implementation identities
+        shell: python
+        run: |
+          import json,subprocess
+          p=json.load(open('arte_external_replay/v65_e5_precommit.json'))
+          for path,expected in p['frozen_git_blob_sha1'].items():
+              got=subprocess.check_output(['git','hash-object',path],text=True).strip()
+              assert got==expected,(path,got,expected)
+          assert p['attempt_budget']==1
+          assert p['source_authority']=='NIST Randomness Beacon 2.0'
+          assert p['target_authority']=='League of Entropy drand future round'
+          assert p['outcome_authority']=='mathjs.org REST web service'
+          assert p['formal_E4_parent_gate']==True
+          print('E5 PRECOMMIT PASS',p['precommit_sha256'])
+      - name: Acquire source cognition from independent NIST source
+        run: python arte_external_replay/v65_source_learn.py v65_source
+      - name: Commit source cognition before target entropy exists
+        shell: python
+        run: |
+          import json,hashlib
+          s=json.load(open('v65_source/source_cognition.json'))
+          assert s['source_cognition_sha256']
+          print('SOURCE COGNITION COMMITTED',s['source_cognition_sha256'])
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install cryptographically verified drand client
+        run: npm install drand-client isomorphic-fetch abort-controller
+      - name: Obtain strictly future target entropy after source cognition commit
+        run: node arte_external_replay/v65_future_drand.mjs > v65_target_beacon.json
+      - name: Build target and freeze FULL/ABLATION one-shot submission
+        run: python arte_external_replay/v65_target_prepare.py v65_source/source_cognition.json v65_target_beacon.json v65_work
+      - name: Independent external target evaluation
+        run: python arte_external_replay/v65_external_eval.py v65_source/nist_source_receipt.json v65_source/source_cognition.json v65_target_beacon.json v65_work v65_eval
+      - name: Verify source-disjoint matched transfer result
+        shell: python
+        run: |
+          import json,statistics
+          e=json.load(open('v65_eval/evidence_bundle.json'))
+          v=e['verdict']
+          assert e['target_beacon']['target_entropy_strictly_future'] is True
+          assert e['target_beacon']['round']>e['target_beacon']['floor_round']
+          assert v['source_authority']=='NIST Randomness Beacon 2.0'
+          assert v['target_entropy_authority']=='League of Entropy drand'
+          assert v['outcome_authority']=='mathjs.org REST web service'
+          assert v['all_full_exact'] and v['all_ablation_exact'] and v['all_full_cost_lower']
+          assert v['gold_seen_before_submission'] is False
+          assert v['attempt_budget']==1
+          assert all(x['response']['status']==200 for pair in e['authority_transcript']['pairs'] for x in pair['responses'])
+          reductions=[x['transfer_cost_reduction'] for x in v['pairs']]
+          print('MATCHED SOURCE-DISJOINT TRANSFER PASS',statistics.mean(reductions))
+      - name: Build formal E5 evidence object
+        shell: python
+        run: |
+          import hashlib,json,os,statistics
+          from pathlib import Path
+          def h(x):return hashlib.sha256(json.dumps(x,sort_keys=True,separators=(',',':'),ensure_ascii=False).encode()).hexdigest()
+          p=json.load(open('arte_external_replay/v65_e5_precommit.json'))
+          e=json.load(open('v65_eval/evidence_bundle.json'))
+          v=e['verdict'];reds=[x['transfer_cost_reduction'] for x in v['pairs']]
+          obj={
+            'schema':'arte.v65_formal_e5_evidence',
+            'precommit_sha256':p['precommit_sha256'],
+            'github_run_id':os.environ['GITHUB_RUN_ID'],'trigger_commit_sha':os.environ['GITHUB_SHA'],
+            'parent_formal_E4_gate':True,
+            'source_authority':'NIST Randomness Beacon 2.0',
+            'source_receipt_sha256':v['source_receipt_sha256'],
+            'source_cognition_sha256':v['source_cognition_sha256'],
+            'target_authority':'League of Entropy drand',
+            'target_floor_round':e['target_beacon']['floor_round'],'target_round':e['target_beacon']['round'],
+            'target_strictly_future':e['target_beacon']['target_entropy_strictly_future'],
+            'outcome_authority':'mathjs.org REST web service',
+            'verdict_sha256':v['verdict_sha256'],
+            'all_full_exact':v['all_full_exact'],'all_ablation_exact':v['all_ablation_exact'],
+            'all_full_cost_lower':v['all_full_cost_lower'],'mean_transfer_cost_reduction':statistics.mean(reds),
+            'attempt_budget':1,'feedback_before_verdict':False,'gold_seen_before_submission':False,
+            'provenance_authority':'GitHub artifact attestations / Sigstore',
+            'formal_E5_candidate':True,
+            'claim_flags':{'E6_repeated_external_acceleration':False,'AGI':False,'ASI':False,'human_intelligence_exceeded':False}
+          }
+          obj['evidence_sha256']=h(obj)
+          Path('v65_output').mkdir(exist_ok=True)
+          Path('v65_output/formal_e5_evidence.json').write_text(json.dumps(obj,indent=2))
+          Path('v65_output/evidence_bundle.json').write_bytes(Path('v65_eval/evidence_bundle.json').read_bytes())
+          print('FORMAL E5 CANDIDATE',obj['evidence_sha256'])
+      - name: GitHub/Sigstore attest formal E5 evidence
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: v65_output/formal_e5_evidence.json
+      - name: Cryptographically verify E5 attestation
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh attestation verify v65_output/formal_e5_evidence.json -R "$GITHUB_REPOSITORY" --format json > v65_output/attestation_verification.json
+          test -s v65_output/attestation_verification.json
+      - name: Final E5 consistency gate
+        shell: python
+        run: |
+          import json
+          e=json.load(open('v65_output/formal_e5_evidence.json'));a=json.load(open('v65_output/attestation_verification.json'))
+          assert e['formal_E5_candidate'] is True
+          assert e['target_strictly_future'] is True
+          assert e['all_full_exact'] and e['all_ablation_exact'] and e['all_full_cost_lower']
+          assert e['attempt_budget']==1 and e['feedback_before_verdict'] is False
+          assert len(a)>=1
+          print('v65 FORMAL E5 PRECOMMITTED RUN PASS')
+      - name: Record hashes
+        run: sha256sum v65_output/* > v65_output/file_sha256s.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: arte-v65-formal-e5
+          path: v65_output/
