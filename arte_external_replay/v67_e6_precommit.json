@@ -1,0 +1,57 @@
+{
+  "schema": "arte.formal_e6_precommit/v67",
+  "parent_v66_body_sha256": "eefe8e1ce321cbe63c7a69dbe41412a82acc26f13a8ebfa671869f8073d9786e",
+  "formal_E5_parent_gate": true,
+  "epochs": 8,
+  "attempt_budget_per_epoch": 1,
+  "feedback_before_verdict": false,
+  "cold_restore_full_state_required": true,
+  "source_authority": "NIST Randomness Beacon 2.0",
+  "target_authority": "League of Entropy drand future round",
+  "outcome_authority": "mathjs.org REST web service",
+  "provenance_authority": "GitHub artifact attestations / Sigstore",
+  "controls": ["STATIC", "MORE_COMPUTE", "WRONG_TRANSFER", "TRANSFER_ABLATION"],
+  "difficulty_contract": {
+    "pressure_formula": "8 + 4*epoch",
+    "heldout_per_pair_formula": "2 + epoch",
+    "pressure_must_strictly_increase": true,
+    "no_difficulty_retreat": true
+  },
+  "acceleration_contract": {
+    "full_raw_cost_early_gt_mid_gt_late": true,
+    "full_normalized_cost_early_gt_mid_gt_late": true,
+    "FULL_must_beat_all_controls_every_epoch": true,
+    "retention_each_epoch": 1.0,
+    "distinct_github_run_ids": 8,
+    "parent_child_state_hash_chain_exact": true,
+    "each_epoch_evidence_sigstore_attested": true
+  },
+  "frozen_git_blob_sha1": {
+    "arte_external_replay/v67_source_stage.py": "63bcda24faf2984feb823884ea31d4203ebda87e",
+    "arte_external_replay/v67_epoch_runner.py": "f469f40e5194c1a1b51471e1a955ca2c5893676c",
+    "arte_external_replay/v65_future_drand.mjs": "45116d1542c130803868b9860a4ff05b2fc3ad43",
+    ".github/workflows/arte-v67-formal-e6.yml": "e24254f401ba4807175a5fec5a5f417ee7a57bd9"
+  },
+  "promotion_conditions": [
+    "formal E5 parent gate true",
+    "8 distinct externally hosted epochs complete",
+    "full parent/child state cold-restore hash chain exact",
+    "source cognition committed before future target entropy each epoch",
+    "drand cryptographic verification each epoch",
+    "mathjs external heldout exact for FULL and all controls",
+    "FULL raw adaptation cost beats STATIC, MORE_COMPUTE, WRONG_TRANSFER, ABLATION every epoch",
+    "pressure strictly increases across all epochs",
+    "FULL raw and normalized adaptation costs decrease early -> mid -> late",
+    "retention = 1.0 every epoch",
+    "each epoch evidence attested and cryptographically verified by GitHub/Sigstore"
+  ],
+  "claim_boundary": {
+    "formal_E6_if_all_conditions_pass": true,
+    "external_recursive_acceleration_if_E6_passes": "bounded operational candidate only",
+    "unrestricted_general_intelligence": false,
+    "AGI": false,
+    "ASI": false,
+    "human_intelligence_exceeded": false
+  },
+  "precommit_sha256": "d39f82e4a85b6a10693c941aab9f38eea08fbf9a3c40093b21d2c6c1901829c3"
+}
