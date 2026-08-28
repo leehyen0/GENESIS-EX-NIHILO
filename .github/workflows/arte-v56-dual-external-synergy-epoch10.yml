@@ -1,0 +1,39 @@
+name: arte-v56-dual-external-synergy-epoch10
+on:
+  push:
+    branches:
+      - arte-v56-dual-external-synergy
+    paths:
+      - '.github/workflows/arte-v56-dual-external-synergy-epoch10.yml'
+  workflow_dispatch:
+jobs:
+  synergy-epoch10:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Run cold-restored synergy epoch 10
+        run: python arte_external_replay/v56_synergy_runner.py arte_external_replay/v56_synergy_trigger_epoch10.json arte_external_replay/v56_g2064_evidence.json v56_output
+      - name: Verify epoch 10
+        shell: python
+        run: |
+          import json,hashlib
+          from pathlib import Path
+          d=Path('v56_output'); r=json.loads((d/'epoch_receipt.json').read_text()); s=json.loads((d/'checkpoint_state.json').read_text()); m=json.loads((d/'hash_manifest.json').read_text())
+          assert r['epoch']==10 and r['actual_success'] is True and r['hosted_external'] is True and r['cold_restore_verified'] is True
+          assert r['parent_state_sha256']=='974afbd11d9d62de450d9b5bc635a2c41deb053807dd29fed6e07647c52d82aa'
+          assert r['child_state_sha256']==s['state_sha256'] and r['synergy_credit_total']==2
+          full=r['synergy_metrics']['full']; assert full['false_authority_rate']<=0.08 and full['answered_accuracy']>=0.88
+          assert full['utility_per_case']>r['synergy_metrics']['no_continuity']['utility_per_case']+0.20
+          assert full['utility_per_case']>r['synergy_metrics']['no_calibration']['utility_per_case']+0.08
+          for v in r['claim_flags'].values(): assert v is False
+          for x in m['files']: assert hashlib.sha256((d/x['name']).read_bytes()).hexdigest()==x['sha256']
+          print('v56 epoch10 verified')
+      - uses: actions/upload-artifact@v4
+        with:
+          name: arte-v56-synergy-epoch10
+          path: v56_output/
