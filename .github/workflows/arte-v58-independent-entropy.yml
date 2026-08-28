@@ -1,0 +1,54 @@
+name: arte-v58-independent-entropy-heldout
+on:
+  push:
+    branches:
+      - arte-v58-independent-entropy
+  workflow_dispatch:
+jobs:
+  heldout:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install official drand verification client
+        run: npm install drand-client isomorphic-fetch abort-controller
+      - name: Obtain first post-start cryptographically verified beacon
+        run: node arte_external_replay/v58_beacon.mjs > beacon1.json
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Solve and commit hypotheses before second beacon exists
+        run: python arte_external_replay/v58_runner.py solve --beacon1 beacon1.json --outdir v58_work
+      - name: Obtain later independently generated verified beacon
+        shell: bash
+        run: |
+          ROUND=$(python -c "import json; print(json.load(open('beacon1.json'))['round'])")
+          node arte_external_replay/v58_beacon.mjs "$ROUND" > beacon2.json
+      - name: Evaluate frozen hypotheses on beacon-2 heldout set
+        run: python arte_external_replay/v58_runner.py evaluate --beacon1 beacon1.json --beacon2 beacon2.json --workdir v58_work --outdir v58_output
+      - name: Verify conservative claims
+        shell: python
+        run: |
+          import json
+          r=json.load(open('v58_output/v58_receipt.json'))
+          assert r['beacon2']['round'] > r['beacon1']['round']
+          assert r['beacon1']['cryptographic_verification_enabled'] is True
+          assert r['beacon2']['cryptographic_verification_enabled'] is True
+          assert r['all_full_exact'] is True
+          assert r['all_ablation_exact'] is True
+          assert r['all_full_cost_lower'] is True
+          assert r['total_heldout_tests']==512
+          assert r['claim_flags']['formal_E4_independent_custodian'] is False
+          print('v58 independent entropy heldout PASS')
+      - uses: actions/upload-artifact@v4
+        with:
+          name: arte-v58-independent-entropy-heldout
+          path: |
+            beacon1.json
+            beacon2.json
+            v58_work/
+            v58_output/
