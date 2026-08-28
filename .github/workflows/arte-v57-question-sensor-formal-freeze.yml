@@ -1,47 +1,15 @@
-name: arte-v57-question-sensor-formal-freeze
+name: arte-v57-question-sensor-formal-freeze-SUPERSEDED-v2
 on:
-  push:
-    paths:
-      - 'arte_custodian/v57_question_sensor_commitment_batch_external.json'
+  workflow_dispatch:
 jobs:
-  freeze:
+  superseded-v2-freeze:
     runs-on: ubuntu-24.04
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-      - name: Compile intake and freeze gate
+      - name: Superseded authority notice
         run: |
-          python -m py_compile arte_custodian/v57_question_sensor_commitment_intake.py
-          python -m py_compile arte_custodian/v57_question_sensor_freeze_after_intake_v2.py
-      - name: Validate external commitment batch
-        run: |
-          mkdir -p v57_freeze
-          python arte_custodian/v57_question_sensor_commitment_intake.py arte_custodian/v57_question_sensor_commitment_batch_external.json --audit-out v57_freeze/intake_audit.json
-      - name: Produce verifier-complete formal candidate freeze
-        run: |
-          python arte_custodian/v57_question_sensor_freeze_after_intake_v2.py arte_custodian/v57_question_sensor_commitment_batch_external.json --freeze-out v57_freeze/candidate_freeze.json
-      - name: Verify conservative authority boundary
-        run: |
-          python - <<'PY'
-          import json
-          a=json.load(open('v57_freeze/intake_audit.json'))
-          f=json.load(open('v57_freeze/candidate_freeze.json'))
-          assert a['structurally_valid'] is True
-          assert a['status']=='ACCEPT_STRUCTURAL_COMMITMENTS__READY_FOR_CANDIDATE_FREEZE'
-          assert a['authority_boundary']['independent_custody_proven'] is False
-          assert f['schema']=='arte.question_sensor_candidate_freeze/v57-v2'
-          assert f['formal_candidate_freeze'] is True
-          assert f['prefreeze_snapshot_sha256']=='bccce1fba7e73d2e359c46a15c8cd67464a558c7cf1a7ca91af6aa5df85fcb96'
-          assert f['body_state_sha256']=='2b02b704147e95ad401110b98744f7ab54cb46f4b8b073ea9b20994dd0d8f257'
-          assert f['independent_custody_proven'] is False
-          assert f['claim_boundary']['AGI'] is False and f['claim_boundary']['ASI'] is False
-          print('formal freeze ready; public packet may now be requested from the external custodian')
-          PY
-      - uses: actions/upload-artifact@v4
-        with:
-          name: arte-v57-question-sensor-formal-freeze
-          path: v57_freeze
+          echo 'SUPERSEDED: this v2 workflow is retained only as historical evidence.'
+          echo 'Do not use it for current E4 or formal-freeze authority.'
+          echo 'Current authority is v3-r2 and repository-local E4 self-certification is forbidden.'
+          exit 2
