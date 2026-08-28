@@ -1,0 +1,20 @@
+{
+  "schema": "arte.native_research_lineage/v1",
+  "cycles": [
+    {
+      "generation": 0,
+      "head_sha": "e3dbe4687491b838cb254517332edce4ba6db73a",
+      "workflow_run_id": 33024110601,
+      "artifact_id": 9627698422,
+      "artifact_name": "arte-native-research-108",
+      "artifact_digest": "sha256:635c616377aa10277733915ae61a5ed4e4a6ea461251370fe8353f5d56eebaec",
+      "receipt_path": "research/native_research_cycle_000_receipt.json",
+      "outcome_receipt_sha256": "7674b5cd7042aaf060748d3be7fe64542d67316ab3fda5e6a1e91ba244ff3dc7",
+      "official_benchmark_used": false,
+      "external_claim_authority": false
+    }
+  ],
+  "global_recursive_acceleration": false,
+  "AGI": false,
+  "ASI": false
+}

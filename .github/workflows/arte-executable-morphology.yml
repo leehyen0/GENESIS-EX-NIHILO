@@ -13,10 +13,21 @@ on:
       - 'arte_cognition/test_meta_acceleration.py'
       - 'arte_cognition/structural_failure_certificate.py'
       - 'arte_cognition/test_structural_failure_certificate.py'
+      - 'arte_cognition/causal_experiment_germline.py'
+      - 'arte_cognition/test_causal_experiment_germline.py'
+      - 'arte_cognition/test_causal_experiment_body_integration.py'
+      - 'arte_cognition/native_recursive_research.py'
+      - 'arte_cognition/test_native_recursive_research.py'
+      - 'arte_cognition/test_native_l3_morphology.py'
       - 'arte_cognition/self_evolving_body_checkpoint.py'
       - 'arte_cognition/test_self_evolving_body_checkpoint.py'
       - 'evaluations/run_morphology_meta_acceleration.py'
       - 'evaluations/run_certificate_driven_morphology_search.py'
+      - 'evaluations/run_native_recursive_research.py'
+      - 'evaluations/run_native_recursive_research_cycle1.py'
+      - 'research/native_research_cycle_000_receipt.json'
+      - 'research/native_research_cycle_001_precommit.json'
+      - 'research/native_research_lineage.json'
       - 'research/ARTE_SELF_EVOLVING_RESEARCH_BODY_20260823.md'
       - 'research/ARTE_EXTERNAL_RESEARCH_INGEST_20260823.md'
       - '.github/workflows/arte-executable-morphology.yml'
@@ -30,6 +41,8 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
@@ -45,10 +58,18 @@ jobs:
           python -m py_compile arte_cognition/test_meta_acceleration.py
           python -m py_compile arte_cognition/structural_failure_certificate.py
           python -m py_compile arte_cognition/test_structural_failure_certificate.py
+          python -m py_compile arte_cognition/causal_experiment_germline.py
+          python -m py_compile arte_cognition/test_causal_experiment_germline.py
+          python -m py_compile arte_cognition/test_causal_experiment_body_integration.py
+          python -m py_compile arte_cognition/native_recursive_research.py
+          python -m py_compile arte_cognition/test_native_recursive_research.py
+          python -m py_compile arte_cognition/test_native_l3_morphology.py
           python -m py_compile arte_cognition/self_evolving_body_checkpoint.py
           python -m py_compile arte_cognition/test_self_evolving_body_checkpoint.py
           python -m py_compile evaluations/run_morphology_meta_acceleration.py
           python -m py_compile evaluations/run_certificate_driven_morphology_search.py
+          python -m py_compile evaluations/run_native_recursive_research.py
+          python -m py_compile evaluations/run_native_recursive_research_cycle1.py
       - name: Run self-evolving BODY contracts
         run: |
           python -m unittest arte_cognition.test_executable_morphology -v
@@ -56,7 +77,26 @@ jobs:
           python -m unittest arte_cognition.test_external_experience -v
           python -m unittest arte_cognition.test_meta_acceleration -v
           python -m unittest arte_cognition.test_structural_failure_certificate -v
+          python -m unittest arte_cognition.test_causal_experiment_germline -v
+          python -m unittest arte_cognition.test_causal_experiment_body_integration -v
+          python -m unittest arte_cognition.test_native_recursive_research -v
+          python -m unittest arte_cognition.test_native_l3_morphology -v
           python -m unittest arte_cognition.test_self_evolving_body_checkpoint -v
+      - name: Run native recursive-research cycle 1
+        if: github.event_name == 'pull_request'
+        run: |
+          mkdir -p evaluation_output
+          PYTHONPATH=. python evaluations/run_native_recursive_research_cycle1.py \
+            --cycle0-head e3dbe4687491b838cb254517332edce4ba6db73a \
+            --cycle0-receipt research/native_research_cycle_000_receipt.json \
+            --output evaluation_output/native_recursive_research_cycle1_receipt.json
+      - name: Upload native research cycle 1 receipt
+        if: always() && github.event_name == 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: arte-native-research-cycle1-${{ github.event.pull_request.number }}
+          path: evaluation_output/native_recursive_research_cycle1_receipt.json
+          if-no-files-found: warn
       - name: Generate evaluator-owned hidden seeds
         run: |
           python - <<'PY'

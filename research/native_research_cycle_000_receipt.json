@@ -1,0 +1,34 @@
+{
+  "AGI": false,
+  "ASI": false,
+  "assessment_status": "PASS_BOUNDED_NATIVE_RESEARCH_CYCLE_NOT_RECURSIVE",
+  "base_body_hash": "a8c99d41c2ee3b97122d015dcccb85c8a1f9de64efdb622be62f842d77d82f58",
+  "base_problem_detectors": [
+    "EXTERNAL_ONLY_META_CREDIT",
+    "GENERATOR_MUTATOR_PRESSURE_UNREACHABLE",
+    "UNCREDITED_RESEARCH_INVENTION"
+  ],
+  "base_sha": "f3840760cfc0b5b7eac1e03b4d0f9874b0d1d6b0",
+  "baseline_next_target": "MUTATE_MUTATOR",
+  "candidate_body_hash": "5c1b1b8f4324297b3e5eda23fd10c860686d2276b4d5283a3e347767f4915743",
+  "closed_problem_detectors": [
+    "EXTERNAL_ONLY_META_CREDIT",
+    "UNCREDITED_RESEARCH_INVENTION"
+  ],
+  "descendant_next_target": "MUTATE_SEARCH_POLICY",
+  "external_claim_authority": false,
+  "full_credit": 0.8888888888888888,
+  "measurement_scope": "SELF_HOSTED_CODE_CONTRACT_NOT_OFFICIAL_BENCHMARK",
+  "next_problem_detectors": [
+    "GENERATOR_MUTATOR_PRESSURE_UNREACHABLE"
+  ],
+  "official_benchmark_used": false,
+  "outcome_receipt_sha256": "7674b5cd7042aaf060748d3be7fe64542d67316ab3fda5e6a1e91ba244ff3dc7",
+  "recursive_acceleration_established": false,
+  "remove_credit": -1.5,
+  "research_productivity": 0.8888888888888888,
+  "schema": "arte.native_recursive_research/v1",
+  "selected_problem_id": "NATIVE_PROBLEM::b34ee5a07ad65f0caec0",
+  "selected_problem_sha256": "7508b27f7340c1acaf89c1a814480e6f5523f42d1068de597a2e3e9c459fadb9",
+  "wrong_credit": -1.5
+}
