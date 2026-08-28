@@ -1,0 +1,33 @@
+{
+  "schema": "arte.question_sensor_independent_authority_policy/v57",
+  "purpose": "Freeze the authority rule before any external G1/G2/G3 commitment batch is accepted.",
+  "cryptographic_completeness_requirements": [
+    "Exactly three generation receipts are required: G1, G2, G3.",
+    "Every generation receipt must self-hash correctly and have all_cases_passed=true with passed_cases=case_count>0.",
+    "All receipts must bind to the same commitment batch SHA-256, formal freeze SHA-256, batch_id, and custodian_id.",
+    "Each generation receipt challenge_id must equal the corresponding precommitted challenge_id and all three challenge IDs must be unique.",
+    "The formal freeze must bind the exact commitment batch and must state that all G1/G2/G3 commitments were present before G1 began."
+  ],
+  "independence_requirements": [
+    "Three-generation cryptographic success is necessary but not sufficient for independent authority.",
+    "A distinct GitHub submission account is useful provenance but is not by itself proof that the account is independently controlled.",
+    "Independent authority requires a public provenance record bound to the same commitment batch and formal freeze.",
+    "The provenance record must show a submission actor distinct from the repository owner.",
+    "The provenance record must contain an independence verification whose verifier is distinct from both repository owner and submission actor.",
+    "The verification basis must be INDEPENDENT_THIRD_PARTY or INDEPENDENT_ORGANIZATION and must include a public evidence URL.",
+    "If any independence requirement is missing or unverifiable, E4_independent_custody_authorized remains false."
+  ],
+  "stage_separation_requirements": [
+    "Hidden plaintext, OTP keys, sensor bits, and targets must remain outside the candidate boundary until their specified reveal stage.",
+    "Public packet reveal occurs only after formal candidate freeze.",
+    "Sensor bits are returned only after question outputs are frozen.",
+    "OTP keys and targets are revealed only after prediction outputs are frozen."
+  ],
+  "claim_boundary": {
+    "AGI": false,
+    "ASI": false,
+    "external_recursive_acceleration": false,
+    "global_recursive_self_improvement": false,
+    "independent_custody": false
+  }
+}
