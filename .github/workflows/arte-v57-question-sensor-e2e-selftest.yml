@@ -1,0 +1,76 @@
+name: arte-v57-question-sensor-e2e-selftest
+on:
+  push:
+    paths:
+      - '.github/workflows/arte-v57-question-sensor-e2e-selftest.yml'
+jobs:
+  e2e:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile all custody code
+        run: |
+          python -m py_compile arte_candidate/run_v57_question_sensor_candidate.py
+          python -m py_compile arte_custodian/v57_question_sensor_custodian_reference.py
+          python -m py_compile arte_custodian/v57_question_sensor_commitment_intake.py
+          python -m py_compile arte_custodian/v57_question_sensor_final_verifier.py
+      - name: Build self-owned hidden G1 G2 G3 and commitments
+        run: |
+          mkdir -p /tmp/v57e2e/reveals /tmp/v57e2e/out
+          python - <<'PY'
+          import json
+          obs={'query_nodes':['alice','dave'],'path_edges':[['alice','husband','bob'],['bob','daughter','carol'],['carol','grandfather','dave']],'node_genders':{'alice':'female','bob':'male','carol':'female','dave':'male'}}
+          expected={'kind':'CANONICAL_PROVENANCE_EDGE_MEMBERSHIP','edge':[0,'daughter',2]}
+          for g,bit in [('G1',1),('G2',0),('G3',1)]:
+              cid='SELF-E2E-'+g
+              public={'schema':'arte.independent_question_input/v57','challenge_id':cid,'generation':g,'cases':[{'case_id':'c1','public_observation':obs}]}
+              target='father' if bit else 'father-in-law'
+              h={'schema':'arte.hidden_question_sensor_challenge/v57','batch_id':'SELF-E2E-BATCH','challenge_id':cid,'generation':g,'public_packet':public,'cases':[{'case_id':'c1','expected_question':expected,'sensor_bit':bit,'target':target,'tags':['SELF_TEST_NOT_INDEPENDENT']}],'claim_boundary':{'AGI':False,'ASI':False}}
+              json.dump(h,open('/tmp/v57e2e/'+g+'.json','w'),ensure_ascii=False,sort_keys=True)
+          PY
+          python arte_custodian/v57_question_sensor_custodian_reference.py --g1 /tmp/v57e2e/G1.json --g2 /tmp/v57e2e/G2.json --g3 /tmp/v57e2e/G3.json --custodian-id SELF_TEST_NOT_INDEPENDENT --commitment-batch-out /tmp/v57e2e/batch.json --reveal-dir /tmp/v57e2e/reveals
+          python arte_custodian/v57_question_sensor_commitment_intake.py /tmp/v57e2e/batch.json --audit-out /tmp/v57e2e/intake.json
+      - name: Run G1 question sensor prediction and final reveal verification
+        run: |
+          python - <<'PY'
+          import json,hashlib
+          h=json.load(open('/tmp/v57e2e/G1.json'))
+          json.dump(h['public_packet'],open('/tmp/v57e2e/public.json','w'))
+          b=json.load(open('/tmp/v57e2e/batch.json'))
+          def canon(x):return json.dumps(x,ensure_ascii=False,sort_keys=True,separators=(',',':')).encode()
+          freeze={'schema':'SELFTEST_FORMAL_FREEZE','formal_candidate_freeze':True,'commitment_batch_sha256':hashlib.sha256(canon(b)).hexdigest(),'freeze_sha256':'SELFTEST_ONLY'}
+          json.dump(freeze,open('/tmp/v57e2e/freeze.json','w'))
+          PY
+          python arte_candidate/run_v57_question_sensor_candidate.py --phase question --input /tmp/v57e2e/public.json --output /tmp/v57e2e/questions.json
+          python - <<'PY'
+          import json
+          public=json.load(open('/tmp/v57e2e/public.json')); q=json.load(open('/tmp/v57e2e/questions.json'))['questions'][0]
+          s={'schema':'arte.independent_sensor_input/v57','challenge_id':public['challenge_id'],'generation':'G1','cases':[{'case_id':'c1','public_observation':public['cases'][0]['public_observation'],'question':q['question'],'question_sha256':q['question_sha256'],'sensor_bit':1}]}
+          json.dump(s,open('/tmp/v57e2e/sensor.json','w'))
+          PY
+          python arte_candidate/run_v57_question_sensor_candidate.py --phase predict --input /tmp/v57e2e/sensor.json --output /tmp/v57e2e/predictions.json
+          python arte_custodian/v57_question_sensor_final_verifier.py --commitment-batch /tmp/v57e2e/batch.json --freeze /tmp/v57e2e/freeze.json --public-input /tmp/v57e2e/public.json --questions /tmp/v57e2e/questions.json --sensor-input /tmp/v57e2e/sensor.json --predictions /tmp/v57e2e/predictions.json --reveal /tmp/v57e2e/reveals/G1_REVEAL_KEEP_PRIVATE.json --receipt-out /tmp/v57e2e/out/good_receipt.json
+          python - <<'PY'
+          import json
+          r=json.load(open('/tmp/v57e2e/out/good_receipt.json'))
+          assert r['all_cases_passed'] is True and r['passed_cases']==1
+          s=json.load(open('/tmp/v57e2e/sensor.json'));s['cases'][0]['sensor_bit']=0
+          json.dump(s,open('/tmp/v57e2e/sensor_bad.json','w'))
+          PY
+          set +e
+          python arte_custodian/v57_question_sensor_final_verifier.py --commitment-batch /tmp/v57e2e/batch.json --freeze /tmp/v57e2e/freeze.json --public-input /tmp/v57e2e/public.json --questions /tmp/v57e2e/questions.json --sensor-input /tmp/v57e2e/sensor_bad.json --predictions /tmp/v57e2e/predictions.json --reveal /tmp/v57e2e/reveals/G1_REVEAL_KEEP_PRIVATE.json --receipt-out /tmp/v57e2e/out/bad_receipt.json
+          rc=$?
+          set -e
+          test "$rc" -eq 2
+          python - <<'PY'
+          import json
+          r=json.load(open('/tmp/v57e2e/out/bad_receipt.json'))
+          assert r['all_cases_passed'] is False
+          assert any('SENSOR_BIT_MISMATCH' in x for x in r['errors'])
+          print('end-to-end verifier PASS; corrupted sensor rejected')
+          PY
