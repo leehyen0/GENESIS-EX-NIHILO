@@ -1,0 +1,31 @@
+{
+  "schema": "arte.v57_epoch18_failure_conditioned_recovery_trigger/v1",
+  "epoch": 18,
+  "base_parent_state_sha256": "c5c1bed5ce34f2fd60f819d9b05fc97f9f03277234ed2f939a82aef6e886dcb9",
+  "parent_state_sha256": "8fa92abf907b3c5c237077849b3b59eb530e701c53a5a61fdbbeba14bfad96d3",
+  "inherited_abstraction_sha256": "e5045e0d3b894911d0c20e12a7dfb0c051f3f8fc5e185abe8c6d34521175b74a",
+  "canonical_parent_restore": {
+    "epoch17_run_id": "33138955977",
+    "epoch17_artifact_id": "9673139937",
+    "epoch17_artifact_digest": "sha256:4b218b5805ee21ebf58745300b103768e8a630ca8db071306ca40bbc22d18b5b"
+  },
+  "failed_run_id": "33140176077",
+  "failure_type": "PARENT_RESTORE_EXPECTATION_DRIFT::STALE_EXPECTED_SHA",
+  "failed_run_outcome_credit": false,
+  "failed_run_heldout_selected": false,
+  "failed_run_target_consumed": false,
+  "protocol": {
+    "failure_must_be_causally_consumed_before_new_challenge": true,
+    "self_model_beta_plus_one_before_new_challenge": true,
+    "fresh_run_id_selects_first_epoch18_heldout": true,
+    "heldout_selected_from_input_surface_only": true,
+    "heldout_target_excluded_from_selection_and_generation": true,
+    "prediction_precommit_before_target_reveal": true,
+    "full_ablation_same_candidates_and_generator": true,
+    "only_candidate_order_differs": true,
+    "remove_and_wrong_controls_required": true,
+    "repository_owner_disjoint": true,
+    "independent_dataset_authority": false,
+    "external_recursive_acceleration_claim_allowed": false
+  }
+}
