@@ -1,0 +1,7 @@
+{
+  "schema": "arte.formal_e5_trigger/v65",
+  "precommit_sha256": "ea23ef3f3cb6a84cdb830a71abff18cfccc597ba0d4203744ff2522ea10e2bd2",
+  "precommit_commit_sha": "4e0161a2976358e65e9ad133346bd7e30c9e0c29",
+  "attempt": 1,
+  "no_code_changes_after_precommit": true
+}
