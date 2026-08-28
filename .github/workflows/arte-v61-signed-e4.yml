@@ -1,0 +1,63 @@
+name: arte-v61-signed-e4
+on:
+  push:
+    branches:
+      - arte-v61-signed-e4
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+  attestations: write
+
+jobs:
+  signed-e4-candidate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install verified drand client
+        run: npm install drand-client isomorphic-fetch abort-controller
+      - name: Obtain post-freeze external entropy
+        run: node arte_external_replay/v61_beacon.mjs > v61_beacon.json
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Prepare challenge and freeze BODY submission
+        run: python arte_external_replay/v61_prepare.py v61_beacon.json v61_work
+      - name: Query Wolfram external outcome authority
+        run: python arte_external_replay/v61_external_eval.py v61_work v61_output
+      - name: Verify verdict before attestation
+        shell: python
+        run: |
+          import json
+          r=json.load(open('v61_output/verdict.json'))
+          assert r['authority']=='Wolfram Short Answers API'
+          assert r['external_http_evaluation'] is True
+          assert r['gold_revealed'] is False
+          assert r['all_exact'] is True
+          assert len(r['verdicts'])==6 and all(r['verdicts'])
+          print('external verdict PASS', r['receipt_sha256'])
+      - name: GitHub/Sigstore attest verdict provenance
+        id: attest
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: v61_output/verdict.json
+      - name: Verify GitHub attestation
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh attestation verify v61_output/verdict.json -R "$GITHUB_REPOSITORY" --format json > v61_output/attestation_verification.json
+          test -s v61_output/attestation_verification.json
+      - name: Package challenge/submission provenance
+        run: |
+          cp v61_beacon.json v61_output/beacon.json
+          cp v61_work/challenge.json v61_output/challenge.json
+          cp v61_work/submission.json v61_output/submission.json
+          sha256sum v61_output/* > v61_output/file_sha256s.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: arte-v61-signed-e4
+          path: v61_output/
