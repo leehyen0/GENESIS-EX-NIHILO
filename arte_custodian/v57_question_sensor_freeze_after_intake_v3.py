@@ -3,7 +3,7 @@ import argparse, hashlib, json
 from pathlib import Path
 import v57_question_sensor_commitment_intake as intake
 
-SNAPSHOT_PATH=Path(__file__).with_name('v57_question_sensor_candidate_prefreeze_snapshot_v3_r1.json')
+SNAPSHOT_PATH=Path(__file__).with_name('v57_question_sensor_candidate_prefreeze_snapshot_v3_r2.json')
 SNAPSHOT_SCHEMA='arte.question_sensor_candidate_prefreeze_snapshot/v57-v3'
 FREEZE_SCHEMA='arte.question_sensor_candidate_freeze/v57-v3'
 POLICY_PATH='arte_custodian/v57_question_sensor_independent_authority_policy.json'
@@ -50,6 +50,7 @@ def main():
       'commitment_batch_sha256':audit['commitment_batch_sha256'],'commitment_batch_id':batch['batch_id'],'custodian_id':batch['custodian_id'],
       'intake_status':audit['status'],'all_G1_G2_G3_commitments_present':True,
       'stage_hash_binding_protocol_required':True,'independent_challenge_semantics_required':True,
+      'repository_local_E4_self_certification_forbidden':True,
       'public_packet_revealed_before_freeze':False,'sensor_bits_revealed_before_freeze':False,'targets_or_otp_keys_revealed_before_freeze':False,
       'independent_custody_proven':False,
       'claim_boundary':{'AGI':False,'ASI':False,'external_recursive_acceleration':False,'global_recursive_self_improvement':False}
