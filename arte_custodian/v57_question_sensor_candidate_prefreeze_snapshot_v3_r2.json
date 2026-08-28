@@ -1,0 +1,57 @@
+{
+  "body_state_sha256": "2b02b704147e95ad401110b98744f7ab54cb46f4b8b073ea9b20994dd0d8f257",
+  "candidate_content_anchor_commit": "3fb9c006fddd72d08af29c4a4eeae6bf825f7576",
+  "causal_fossils": [
+    {
+      "failure_type": "SEMANTIC_VERIFIER_SCHEMA_DRIFT::EXPECTED_NONEXISTENT_BIT_COUNT_FIELD",
+      "run_id": "33166669843",
+      "status": "REPAIRED_AND_RETESTED"
+    },
+    {
+      "observation": "THREE_GENERATION_E2E_AND_ATTACK_SET_PASS",
+      "repair": "hard forbid repository-local E4 authorization; local maximum is EXTERNAL_AUTHORITY_CANDIDATE",
+      "residual": "REPOSITORY_LOCAL_PROVENANCE_COULD_HAVE_SELF_CERTIFIED_E4",
+      "run_id": "33166901360"
+    }
+  ],
+  "claim_boundary": {
+    "AGI": false,
+    "ASI": false,
+    "external_recursive_acceleration": false,
+    "global_recursive_self_improvement": false
+  },
+  "epoch20_evidence_head_sha": "1c7483f946c75a24e38e887b4f1964effad40254",
+  "files": {
+    "arte_candidate/run_v57_question_sensor_candidate.py": "87ebe87af624942b8ac0e08a0c6339efe620bf8a77d3f891ac553ac014a47ce3",
+    "arte_candidate/v57_epoch20_question_bank.json": "dc3968d87397c1d146be9b526c6839659492dac5ed607ecebe80894acf876c0e",
+    "arte_custodian/v57_epoch20_independent_question_sensor_public_spec_v3.json": "92bf5962bd46ffe7c1ca0b0d97e149b5eb91ab0227e306b54bab9f8a9b4027ae",
+    "arte_custodian/v57_question_sensor_aggregate_authority_v3.py": "832def23a398aace9c2328f9ee2a4fde7e0c1baee2c07b7bd9a68e9f9ed82b62",
+    "arte_custodian/v57_question_sensor_challenge_semantics_v3.py": "250bd8da985decb7804be07c173191229254f4049b2b9e4759f1306ba5adac5f",
+    "arte_custodian/v57_question_sensor_commitment_intake.py": "a3ef02f55071465bc10f7b7bdfc580f0ff93e3a9137dcc836319f0b90a646e97",
+    "arte_custodian/v57_question_sensor_custodian_protocol_v3.py": "bb5b2594fb79ef6d8119fb66794023b68c08db5a477a1e167b1b8e0f4ce81c6a",
+    "arte_custodian/v57_question_sensor_final_verifier_v3.py": "16c8ee96f4973fa3b4c47dc0c51288eb622b82a7a075bfa3db0d0ea31574579b",
+    "arte_custodian/v57_question_sensor_freeze_after_intake_v3.py": "9c456311cfdbd1b0c0d057cb7f4e860cd17dfd9abd251d04ac86245f4ed7d84f",
+    "arte_custodian/v57_question_sensor_independent_authority_policy.json": "eb7de7891a86616d838894aa81f951bfa9e523aa8b4a6c07ee47a00f8275d6c1"
+  },
+  "formal_candidate_freeze": false,
+  "freeze_allowed_without_valid_G1_G2_G3_commitment_batch": false,
+  "generated_operator_sha256": "23e1b2449c1d27eaf3546124eee57bb1a573f9ad1930b9dc9ce6ba28d17ad54f",
+  "hardening": {
+    "challenge_semantics_rederived_from_frozen_bank": true,
+    "external_adjudication_required_for_E4": true,
+    "formal_freeze_self_hash_required": true,
+    "hidden_expected_question_and_target_not_trusted": true,
+    "prediction_output_hash_must_be_custodian_bound_before_key_reveal": true,
+    "prefreeze_snapshot_self_hash_required": true,
+    "question_output_hash_must_be_custodian_bound_before_sensor_release": true,
+    "repository_local_E4_self_certification_forbidden": true,
+    "three_generation_aggregate_authority_separate_from_per_generation_success": true
+  },
+  "independent_custody_proven": false,
+  "learned_question_bank_canonical_sha256": "cef2f2f365a9763c1966e4a62739aedbaae7c860ddd986d2b0e8c757603eb017",
+  "schema": "arte.question_sensor_candidate_prefreeze_snapshot/v57-v3",
+  "snapshot_head_sha": "3fb9c006fddd72d08af29c4a4eeae6bf825f7576",
+  "snapshot_revision": "r2",
+  "snapshot_sha256": "a5c26643ee3732e51952195c7698ab1b6b975bc28d3c3a192d6103bdc7d03916",
+  "supersedes_prefreeze_snapshot_sha256": "6b71ab7f4d1add396a09a550e5f5cd3503295db3d053d209e09a430566ce7c56"
+}
