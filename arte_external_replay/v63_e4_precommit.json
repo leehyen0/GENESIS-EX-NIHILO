@@ -1,0 +1,41 @@
+{
+  "schema": "arte.formal_e4_precommit/v63",
+  "parent_v60_body_sha256": "cf3fc181ce3e253efa95f0ebaf6ea20e1cacedfc72fab28fb75d70b12c787123",
+  "attempt_budget": 1,
+  "feedback_before_verdict": false,
+  "challenge_entropy_authority": "League of Entropy drand",
+  "outcome_authority": "mathjs.org REST web service",
+  "provenance_authority": "GitHub artifact attestations / Sigstore",
+  "frozen_git_blob_sha1": {
+    "arte_external_replay/v61_beacon.mjs": "7e08d47292880ae96076a97b81b67ab350d0fd8f",
+    "arte_external_replay/v61_prepare.py": "da0257a67da569e4eb104b0e83212b2ca4e11eba",
+    "arte_external_replay/v62_external_eval.py": "5f4d64bced4f426e1d334b5ac2ec9916bea84c44",
+    ".github/workflows/arte-v63-formal-e4.yml": "b9c5b7c3231ae2ddf862b689041f0666273d1c3e"
+  },
+  "resource_contract": {
+    "solver": "frozen deterministic arithmetic solver",
+    "queries": 6,
+    "retries": 0,
+    "network_before_submission": "drand only",
+    "external_gold_fetch_after_submission_commit": true,
+    "verdict_feedback_before_completion": false
+  },
+  "promotion_conditions": [
+    "precommit blob identities exact",
+    "drand cryptographic verification enabled",
+    "submission committed before external gold fetch",
+    "mathjs HTTP status 200 on all six queries",
+    "all six verdicts exact",
+    "formal evidence object attested by GitHub/Sigstore",
+    "gh attestation verify succeeds"
+  ],
+  "claim_boundary": {
+    "formal_E4_if_all_conditions_pass": true,
+    "E5_source_disjoint_transfer": false,
+    "E6_repeated_external_acceleration": false,
+    "AGI": false,
+    "ASI": false,
+    "human_intelligence_exceeded": false
+  },
+  "precommit_sha256": "6c4feae5722917f68ddabc7613ad510b6c8aa5a99276d0935d4e44dc1f64f0c9"
+}
