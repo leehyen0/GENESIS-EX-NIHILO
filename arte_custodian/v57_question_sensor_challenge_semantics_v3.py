@@ -17,9 +17,15 @@ def load_bank(path):
     for e in b.get('entries',[]):
         k=(tuple(e.get('path_relations',[])),tuple(e.get('path_genders',[])))
         if len(k[0])!=3 or len(k[1])!=4 or k in idx: raise ValueError('BAD_OR_DUPLICATE_BANK_ENTRY')
-        if e.get('bit_count')!=1: raise ValueError('EXPECTED_ONE_BIT_BANK_ENTRY')
-        if set(e.get('answer_to_target',{}))!={'0','1'}: raise ValueError('BANK_ANSWER_MAP_MUST_HAVE_BITS_0_1')
+        q=e.get('question')
+        if not isinstance(q,dict) or not q: raise ValueError('BANK_ENTRY_REQUIRES_ONE_QUESTION_OBJECT')
+        answers=e.get('answer_to_target',{})
+        # The persisted frozen bank predates a per-entry bit_count field. One-bit
+        # semantics are established by exactly the binary answer keys 0 and 1.
+        if set(answers)!={'0','1'}: raise ValueError('BANK_ANSWER_MAP_MUST_HAVE_EXACT_BITS_0_1')
+        if not all(isinstance(answers[k],str) and answers[k] for k in ('0','1')): raise ValueError('BANK_TARGETS_MUST_BE_NONEMPTY_STRINGS')
         idx[k]=e
+    if not idx: raise ValueError('EMPTY_FROZEN_BANK')
     return b,idx
 
 def canonical_signature(obs):
