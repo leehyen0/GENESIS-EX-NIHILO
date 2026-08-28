@@ -1,0 +1,76 @@
+name: arte-v57-spatial-query-frame-epoch18-recovery
+on:
+  push:
+    paths:
+      - '.github/workflows/arte-v57-spatial-query-frame-epoch18-recovery.yml'
+  workflow_dispatch:
+jobs:
+  epoch18-recovery:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile base and recovery runners
+        run: |
+          python -m py_compile arte_external_replay/v57_epoch18_spatial_query_frame_runner.py
+          python -m py_compile arte_external_replay/v57_epoch18_recovery_runner.py
+      - name: Run failure-conditioned third-generation replication
+        run: python arte_external_replay/v57_epoch18_recovery_runner.py arte_external_replay/v57_epoch18_recovery_trigger.json v57_output
+      - name: Verify failure backpressure and fresh heldout replication
+        run: |
+          python - <<'PY'
+          import json
+          e=json.load(open('v57_output/external_evaluation.json'))
+          r=json.load(open('v57_output/epoch_receipt.json'))
+          s=json.load(open('v57_output/checkpoint_state.json'))
+          p=json.load(open('v57_output/prediction_precommit.json'))
+          assert e['selection_used_heldout_target'] is False
+          assert e['heldout_target_hidden_from_selection_and_generation'] is True
+          assert e['prediction_precommit_written_before_reveal'] is True
+          assert p['heldout_target_accessed'] is False
+          assert e['failure_conditioned'] is True
+          assert e['failed_run_id']=='33140176077'
+          assert e['failed_run_outcome_credit'] is False
+          assert e['failed_run_heldout_selected'] is False
+          assert e['failed_run_target_consumed'] is False
+          assert e['success'] is True
+          assert e['full_selected']=='GENERATED_QUERY_FRAME'
+          assert e['ablation_selected']=='GENERATED_QUERY_FRAME'
+          assert e['generated_component']['kind']=='SPATIAL_QUERY_FRAME_NORMALIZATION'
+          assert e['generated_component']['orientation']=='SUBJECT_MINUS_OBJECT'
+          assert e['full_search_cost'] < e['ablation_search_cost']
+          assert e['remove_frame_success'] is False
+          assert e['wrong_orientation_success'] is False
+          assert e['repository_owner_disjoint_from_epoch16_17'] is True
+          assert e['independent_dataset_authority'] is False
+          assert r['hosted_external'] is True
+          assert r['base_parent_state_sha256']=='c5c1bed5ce34f2fd60f819d9b05fc97f9f03277234ed2f939a82aef6e886dcb9'
+          assert r['recovery_parent_state_sha256']=='8fa92abf907b3c5c237077849b3b59eb530e701c53a5a61fdbbeba14bfad96d3'
+          assert r['failure_conditioned'] is True
+          assert r['failure_causally_consumed'] is True
+          assert r['failed_run_outcome_credit'] is False
+          assert r['failed_run_heldout_selected'] is False
+          assert r['three_step_replication_candidate'] is True
+          assert r['claim_flags']['independent_custody_proof'] is False
+          assert r['claim_flags']['source_disjoint_transfer_proof'] is False
+          assert r['claim_flags']['external_recursive_acceleration'] is False
+          assert r['claim_flags']['AGI'] is False and r['claim_flags']['ASI'] is False
+          assert s['epoch_completed']==18
+          assert s['self_model']['alpha']==19 and s['self_model']['beta']==4
+          assert any(x.get('external_failure_run_id')=='33140176077' for x in s['causal_fossils'])
+          assert any(x.get('external_failure_run_id')=='33140176077' and x.get('self_model_update')=='BETA_PLUS_ONE' for x in s['recovery_events'])
+          c=s['synergy_credit_details']['THREE_STEP_TRANSFER_ONTOLOGY_REPLICATION']
+          assert c['status']=='SUPPORTED_BOUNDED_THREE_STEP_REPOSITORY_OWNER_DISJOINT'
+          assert c['repository_owner_disjoint'] is True
+          assert c['dataset_authority_independent'] is False
+          assert c['external_recursive_acceleration'] is False
+          print('epoch18 failure-conditioned three-step replication verified')
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: arte-v57-epoch18-spatial-query-frame-recovery
+          path: v57_output
