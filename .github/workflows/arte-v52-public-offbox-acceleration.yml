@@ -1,0 +1,36 @@
+name: arte-v52-public-offbox-acceleration
+on:
+  push:
+    branches:
+      - arte-v52-public-offbox-accel
+  workflow_dispatch:
+jobs:
+  accelerate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Run 1024-generation off-box workload
+        run: python arte_cognition/v52_offbox_runner.py v52_output
+      - name: Verify contract and conservative claims
+        shell: python
+        run: |
+          import json,hashlib
+          from pathlib import Path
+          r=json.loads(Path("v52_output/v52_offbox_receipt.json").read_text())
+          c=json.loads(Path("evaluations/v52_offbox_contract.json").read_text())
+          assert r["workload"]==c["workload"]
+          assert r["offbox_action_consequence"] is True
+          for k,v in c["required_false_flags"].items(): assert r["claim_flags"][k] is v
+          m=json.loads(Path("v52_output/v52_hash_manifest.json").read_text())
+          for x in m["files"]:
+              assert hashlib.sha256((Path("v52_output")/x["name"]).read_bytes()).hexdigest()==x["sha256"]
+          print("v52 public contract PASS")
+      - uses: actions/upload-artifact@v4
+        with:
+          name: arte-v52-public-offbox-mass-acceleration
+          path: v52_output/
