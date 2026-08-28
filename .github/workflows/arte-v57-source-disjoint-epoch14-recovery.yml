@@ -1,0 +1,44 @@
+name: arte-v57-source-disjoint-epoch14-recovery
+on:
+  push:
+    branches: [arte-v57-source-disjoint-crossnovel]
+    paths:
+      - 'arte_external_replay/v57_epoch14_recovery_trigger.json'
+      - 'arte_external_replay/v57_epoch14_recovery_runner.py'
+      - '.github/workflows/arte-v57-source-disjoint-epoch14-recovery.yml'
+  workflow_dispatch:
+jobs:
+  recovery14:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Run failure-conditioned fresh external recovery
+        run: python arte_external_replay/v57_epoch14_recovery_runner.py arte_external_replay/v57_epoch14_recovery_trigger.json v57_output
+      - name: Verify backpressure, target isolation, retention, and continuity
+        shell: python
+        run: |
+          import json,hashlib
+          from pathlib import Path
+          d=Path('v57_output');r=json.loads((d/'epoch_receipt.json').read_text());s=json.loads((d/'checkpoint_state.json').read_text());e=json.loads((d/'external_evaluation.json').read_text());m=json.loads((d/'hash_manifest.json').read_text())
+          assert r['epoch']==14 and r['hosted_external'] is True and r['actual_success'] is True
+          assert r['recovery_from_failed_run_id']=='33137022834' and r['failure_conditioned_revision'] is True
+          assert abs(r['self_predicted_success']-0.875)<1e-12
+          assert e['source_owner']=='google' and e['source_repo']=='BIG-bench' and e['task_kind']=='TRACKING_SHUFFLED_OBJECTS_SEVEN'
+          assert e['target_hidden_until_after_prediction'] is True and e['retained_operator_reused'] is True and e['novel_operator_generated'] is False
+          assert e['frontend_revision_sha256']=='be23d44ce09b7a1badad130122f70b94c6de4872f181d5ca31892dc16e16641a'
+          assert e['remove_frontend_success'] is False and e['remove_inherited_transition_success'] is False
+          assert s['causal_fossils'][-1]['run_id']=='33137022834' and s['causal_fossils'][-1]['target_consumed_for_repair'] is False
+          assert r['child_state_sha256']==s['state_sha256'] and len(s['generated_operator_registry'])==2
+          assert set(s['evidence_candidates']['SOURCE_DISJOINT_EXTERNAL_TRANSFER']['external_source_owners'])=={'google','fchollet'}
+          for v in r['claim_flags'].values(): assert v is False
+          for x in m['files']: assert hashlib.sha256((d/x['name']).read_bytes()).hexdigest()==x['sha256']
+          print('v57 epoch14 failure-conditioned recovery verified')
+      - uses: actions/upload-artifact@v4
+        with:
+          name: arte-v57-epoch14-recovery
+          path: v57_output/
