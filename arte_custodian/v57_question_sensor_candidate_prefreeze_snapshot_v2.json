@@ -1,0 +1,30 @@
+{
+  "schema": "arte.question_sensor_candidate_prefreeze_snapshot/v57-v2",
+  "snapshot_head_sha": "036bd1e8a26cf42d8bd7705a03ec1da045a7c315",
+  "candidate_content_anchor_commit": "71102843e7e7652fafa0319f480dc28944bd52ff",
+  "epoch20_evidence_head_sha": "1c7483f946c75a24e38e887b4f1964effad40254",
+  "body_state_sha256": "2b02b704147e95ad401110b98744f7ab54cb46f4b8b073ea9b20994dd0d8f257",
+  "generated_operator_sha256": "23e1b2449c1d27eaf3546124eee57bb1a573f9ad1930b9dc9ce6ba28d17ad54f",
+  "learned_question_bank_canonical_sha256": "cef2f2f365a9763c1966e4a62739aedbaae7c860ddd986d2b0e8c757603eb017",
+  "files": {
+    "arte_candidate/run_v57_question_sensor_candidate.py": "87ebe87af624942b8ac0e08a0c6339efe620bf8a77d3f891ac553ac014a47ce3",
+    "arte_candidate/v57_epoch20_question_bank.json": "dc3968d87397c1d146be9b526c6839659492dac5ed607ecebe80894acf876c0e",
+    "arte_custodian/v57_epoch20_independent_question_sensor_public_spec.json": "6b8043b1ed77bf61efca0c6e19e3fa2de83dd4aae938686ad18ddc8feeb0d674",
+    "arte_custodian/v57_question_sensor_commitment_intake.py": "a3ef02f55071465bc10f7b7bdfc580f0ff93e3a9137dcc836319f0b90a646e97",
+    "arte_custodian/v57_question_sensor_custodian_reference.py": "91c527a6aa22a75d2e1b321df878ae324acbccd83bab66b3d51443fa6fef4633",
+    "arte_custodian/v57_question_sensor_final_verifier.py": "a20b6fb762a20a63a22794733c30cb28deaf4a1d656c9ed39374c08e9cb3951d"
+  },
+  "interface_selftest_run_id": "33150695386",
+  "e2e_verifier_selftest_run_id": "33150923904",
+  "selftests_status": "PASS",
+  "prefreeze_v2_run_id": "33150958380",
+  "prefreeze_v2_artifact_id": "9677666271",
+  "prefreeze_v2_artifact_zip_sha256": "8de91bba52764380cefb790fc0b3be05011c9bc1e90ac1a9b2e6c27f931d9e16",
+  "snapshot_sha256": "bccce1fba7e73d2e359c46a15c8cd67464a558c7cf1a7ca91af6aa5df85fcb96",
+  "supersedes_prefreeze_snapshot_sha256": "339ba2c3823cae39b9e280b44d4f4d419dd8d5d614040b594f69a8e76c6e66b6",
+  "formal_candidate_freeze": false,
+  "freeze_allowed_without_valid_G1_G2_G3_commitment_batch": false,
+  "independent_custody_proven": false,
+  "AGI": false,
+  "ASI": false
+}
