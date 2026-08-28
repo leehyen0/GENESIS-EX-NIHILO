@@ -16,25 +16,35 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Run transfer to ontology search acceleration
+      - name: Run failure-conditioned transfer to ontology search acceleration
         run: python arte_external_replay/v57_epoch16_transfer_ontology_acceleration_runner.py arte_external_replay/v57_epoch16_trigger.json v57_output
-      - name: Verify heldout isolation and causal search contrast
+      - name: Verify backpressure heldout isolation and causal search contrast
         run: |
           python - <<'PY'
           import json
           e=json.load(open('v57_output/external_evaluation.json'))
           r=json.load(open('v57_output/epoch_receipt.json'))
+          s=json.load(open('v57_output/checkpoint_state.json'))
           assert e['selection_used_heldout_target'] is False
           assert e['heldout_target_hidden_until_after_prediction'] is True
+          assert e['failed_run_outcome_reused'] is False
+          assert e['selected_index'] != e['excluded_failed_run_index']
           assert e['success'] is True
           assert e['full_selected']=='ORDERED_POSE'
           assert e['ablation_selected']=='ORDERED_POSE'
           assert e['full_search_cost'] < e['ablation_search_cost']
           assert e['wrong_all_turns_first_success'] is False
-          assert r['parent_state_sha256']=='eeceb3b6389eeced39c3b4ca6f3948035fa5063e21f8172ea14e2790ad948131'
-          print('epoch16 transfer->ontology acceleration verified')
+          assert r['base_parent_state_sha256']=='eeceb3b6389eeced39c3b4ca6f3948035fa5063e21f8172ea14e2790ad948131'
+          assert r['failed_run_id']=='33138655768'
+          assert r['failed_run_outcome_credit'] is False
+          assert r['failure_conditioned'] is True
+          assert s['synergy_credit']==3
+          assert s['self_model']['beta']==3
+          assert 'TRANSFER_TO_ONTOLOGY_SEARCH_ACCELERATION' in s['synergy_credit_details']
+          assert s['synergy_credit_details']['TRANSFER_TO_ONTOLOGY_SEARCH_ACCELERATION']['failed_run_outcome_credit'] is False
+          print('epoch16 failure-conditioned transfer->ontology acceleration verified')
           PY
       - uses: actions/upload-artifact@v4
         with:
-          name: arte-v57-epoch16-transfer-ontology
+          name: arte-v57-epoch16-transfer-ontology-recovery
           path: v57_output
