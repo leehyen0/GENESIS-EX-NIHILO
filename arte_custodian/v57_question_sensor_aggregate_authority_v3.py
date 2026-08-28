@@ -31,6 +31,7 @@ def verify(batch_path,freeze_path,snapshot_path,policy_path,receipt_paths,proven
     if snap.get('schema')!=SNAPSHOT_SCHEMA or not self_hash_valid(snap,'snapshot_sha256'): errors.append('BAD_OR_TAMPERED_PREFREEZE_SNAPSHOT')
     if freeze.get('schema')!=FREEZE_SCHEMA or freeze.get('formal_candidate_freeze') is not True or not self_hash_valid(freeze,'freeze_sha256'): errors.append('BAD_OR_TAMPERED_FORMAL_FREEZE')
     if policy.get('schema')!=POLICY_SCHEMA: errors.append('BAD_AUTHORITY_POLICY_SCHEMA')
+    if policy.get('authority_output_rule',{}).get('repository_local_E4_authorization_allowed') is not False: errors.append('POLICY_MUST_FORBID_LOCAL_E4_AUTHORIZATION')
     if snap.get('files',{}).get(POLICY_PATH)!=policy_raw_sha: errors.append('AUTHORITY_POLICY_NOT_BOUND_TO_PREFREEZE_SNAPSHOT')
     if freeze.get('authority_policy_sha256')!=policy_raw_sha: errors.append('AUTHORITY_POLICY_NOT_BOUND_TO_FORMAL_FREEZE')
     if freeze.get('prefreeze_snapshot_sha256')!=snap.get('snapshot_sha256'): errors.append('FREEZE_SNAPSHOT_BINDING_MISMATCH')
@@ -71,7 +72,9 @@ def verify(batch_path,freeze_path,snapshot_path,policy_path,receipt_paths,proven
         if r.get('custodian_id')!=batch.get('custodian_id'): errors.append('RECEIPT_CUSTODIAN_MISMATCH:'+g)
         if r.get('challenge_id')!=c.get('challenge_id'): errors.append('RECEIPT_CHALLENGE_ID_MISMATCH:'+g)
 
-    provenance=None; external_account_distinct=False; independent_authority_verified=False
+    # Provenance JSON is checked only for consistency. Its own claims cannot become authority.
+    provenance_consistent=False; external_account_distinct_claim=False; declared_independence_verification=False
+    structural_errors_before_provenance=list(errors)
     if provenance_path:
         provenance=load(provenance_path)
         if provenance.get('schema')!=PROVENANCE_SCHEMA: errors.append('BAD_EXTERNAL_PROVENANCE_SCHEMA')
@@ -79,23 +82,27 @@ def verify(batch_path,freeze_path,snapshot_path,policy_path,receipt_paths,proven
         if provenance.get('commitment_batch_sha256')!=batch_sha: errors.append('PROVENANCE_BATCH_SHA_MISMATCH')
         if provenance.get('formal_freeze_sha256')!=freeze.get('freeze_sha256'): errors.append('PROVENANCE_FREEZE_SHA_MISMATCH')
         owner=provenance.get('repository_owner_login'); actor=provenance.get('submission_actor_login')
-        external_account_distinct=bool(actor and owner and actor!=owner and provenance.get('actor_distinct_from_repository_owner') is True)
-        if not external_account_distinct: warnings.append('DISTINCT_EXTERNAL_SUBMISSION_ACCOUNT_NOT_ESTABLISHED')
+        external_account_distinct_claim=bool(actor and owner and actor!=owner and provenance.get('actor_distinct_from_repository_owner') is True)
         iv=provenance.get('independence_verification',{})
         verifier=iv.get('verifier_actor_login')
-        independent_authority_verified=bool(
-          external_account_distinct and iv.get('verified') is True and
+        declared_independence_verification=bool(
+          external_account_distinct_claim and iv.get('verified') is True and
           iv.get('verification_basis') in ('INDEPENDENT_THIRD_PARTY','INDEPENDENT_ORGANIZATION') and
           verifier and verifier not in {owner,actor} and iv.get('public_evidence_url') and
           iv.get('hidden_material_never_entered_candidate_boundary') is True
         )
-        if not independent_authority_verified: warnings.append('INDEPENDENT_CONTROL_AUTHORITY_NOT_VERIFIED')
+        provenance_consistent=not any(e.startswith('BAD_EXTERNAL_PROVENANCE') or e.startswith('PROVENANCE_') for e in errors)
+        if not external_account_distinct_claim: warnings.append('PROVENANCE_DOES_NOT_DECLARE_DISTINCT_SUBMISSION_ACCOUNT')
+        if not declared_independence_verification: warnings.append('PROVENANCE_DOES_NOT_DECLARE_COMPLETE_INDEPENDENCE_VERIFICATION')
+        warnings.append('REPOSITORY_LOCAL_PROVENANCE_IS_NONAUTHORITATIVE__EXTERNAL_ADJUDICATION_REQUIRED')
     else:
-        warnings.extend(['EXTERNAL_CUSTODY_PROVENANCE_MISSING','INDEPENDENT_CONTROL_AUTHORITY_NOT_VERIFIED'])
+        warnings.extend(['EXTERNAL_CUSTODY_PROVENANCE_MISSING','EXTERNAL_ADJUDICATION_REQUIRED'])
 
-    three_generation_chain_complete=not [e for e in errors if not e.startswith('BAD_EXTERNAL_PROVENANCE') and not e.startswith('PROVENANCE_')]
-    stage_order_authority_candidate=bool(three_generation_chain_complete and external_account_distinct)
-    e4=bool(not errors and independent_authority_verified)
+    three_generation_chain_complete=not structural_errors_before_provenance
+    external_authority_candidate=bool(three_generation_chain_complete and provenance_path and provenance_consistent and declared_independence_verification)
+    # Critical invariant: this repository cannot self-issue E4. Even a syntactically complete
+    # provenance packet remains only evidence for an independent adjudicator outside this boundary.
+    e4=False
     total_cases=sum(bygen.get(g,{}).get('case_count',0) or 0 for g in GENERATIONS)
     total_passed=sum(bygen.get(g,{}).get('passed_cases',0) or 0 for g in GENERATIONS)
     out={
@@ -105,12 +112,15 @@ def verify(batch_path,freeze_path,snapshot_path,policy_path,receipt_paths,proven
       'generation_challenge_ids':{g:bygen.get(g,{}).get('challenge_id') for g in GENERATIONS},
       'total_cases':total_cases,'total_passed_cases':total_passed,
       'three_generation_crypto_and_stage_hash_chain_complete':three_generation_chain_complete,
-      'external_submission_account_distinct':external_account_distinct,
-      'stage_order_authority_candidate':stage_order_authority_candidate,
-      'independent_control_authority_verified':independent_authority_verified,
-      'E4_independent_custody_authorized':e4,
+      'provenance_consistency_check_passed':provenance_consistent,
+      'external_submission_account_distinct_claimed':external_account_distinct_claim,
+      'independence_verification_declared_in_provenance':declared_independence_verification,
+      'EXTERNAL_AUTHORITY_CANDIDATE':external_authority_candidate,
+      'repository_local_authority_ceiling':'EXTERNAL_AUTHORITY_CANDIDATE',
+      'external_adjudication_required_for_E4':True,
+      'E4_independent_custody_authorized':False,
       'errors':errors,'warnings':warnings,
-      'claim_boundary':{'independent_custody':e4,'AGI':False,'ASI':False,'external_recursive_acceleration':False,'global_recursive_self_improvement':False}
+      'claim_boundary':{'independent_custody':False,'AGI':False,'ASI':False,'external_recursive_acceleration':False,'global_recursive_self_improvement':False}
     }
     out['aggregate_receipt_sha256']=sha_obj(out)
     return out
