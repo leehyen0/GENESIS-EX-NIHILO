@@ -1,0 +1,120 @@
+name: arte-v57-question-sensor-aggregate-authority-selftest
+on:
+  push:
+    paths:
+      - '.github/workflows/arte-v57-question-sensor-aggregate-authority-selftest.yml'
+  workflow_dispatch:
+jobs:
+  aggregate-authority:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile aggregate verifier
+        run: python -m py_compile arte_custodian/v57_question_sensor_aggregate_authority.py
+      - name: Exercise authority separation and tamper rejection
+        run: |
+          python - <<'PY'
+          import json, tempfile, pathlib, copy, sys
+          sys.path.insert(0,'arte_custodian')
+          import v57_question_sensor_aggregate_authority as agg
+
+          td=pathlib.Path(tempfile.mkdtemp())
+          def save(name,x):
+              p=td/name; p.write_text(json.dumps(x,sort_keys=True),encoding='utf-8'); return str(p)
+
+          batch={
+            'schema':'arte.question_sensor_commitment_batch/v57',
+            'batch_id':'BATCH-SELFTEST','custodian_id':'custodian-selftest',
+            'commitments':[
+              {'generation':'G1','challenge_id':'C1'},
+              {'generation':'G2','challenge_id':'C2'},
+              {'generation':'G3','challenge_id':'C3'}
+            ]
+          }
+          batch_sha=agg.sha_obj(batch)
+          freeze={
+            'schema':'arte.question_sensor_candidate_freeze/v57-v2',
+            'formal_candidate_freeze':True,
+            'freeze_sha256':'FROZEN-SELFTEST',
+            'commitment_batch_sha256':batch_sha,
+            'commitment_batch_id':'BATCH-SELFTEST',
+            'custodian_id':'custodian-selftest',
+            'all_G1_G2_G3_commitments_present':True
+          }
+          def rec(g,c):
+              r={
+                'schema':'arte.question_sensor_independent_verification_receipt/v57',
+                'batch_id':'BATCH-SELFTEST','challenge_id':c,'generation':g,
+                'custodian_id':'custodian-selftest','formal_freeze_sha256':'FROZEN-SELFTEST',
+                'commitment_batch_sha256':batch_sha,'case_count':3,'passed_cases':3,
+                'all_cases_passed':True,'errors':[],
+                'claim_boundary':{
+                  'this_receipt_alone_proves_independent_custody':False,
+                  'AGI':False,'ASI':False,'external_recursive_acceleration':False
+                }
+              }
+              r['receipt_sha256']=agg.sha_obj(r)
+              return r
+          rs=[rec('G1','C1'),rec('G2','C2'),rec('G3','C3')]
+          bp=save('batch.json',batch); fp=save('freeze.json',freeze)
+          rps=[save(f'r{i}.json',r) for i,r in enumerate(rs,1)]
+
+          # 1. Complete cryptographic chain alone must NOT create independent authority.
+          a=agg.verify(bp,fp,rps,None)
+          assert a['three_generation_cryptographic_chain_complete'] is True
+          assert a['E4_independent_custody_authorized'] is False
+          assert a['independent_authority_verified'] is False
+
+          # 2. Distinct external account alone remains insufficient.
+          prov={
+            'schema':'arte.question_sensor_external_custody_provenance/v57',
+            'custodian_id':'custodian-selftest','commitment_batch_sha256':batch_sha,
+            'formal_freeze_sha256':'FROZEN-SELFTEST','repository_owner_login':'ownerA',
+            'submission_actor_login':'custodianB','actor_distinct_from_repository_owner':True,
+            'independence_verification':{'verified':False}
+          }
+          pp=save('prov.json',prov)
+          b=agg.verify(bp,fp,rps,pp)
+          assert b['external_submission_account_distinct'] is True
+          assert b['E4_independent_custody_authorized'] is False
+
+          # 3. Only independently verified provenance can authorize E4 logic.
+          prov2=copy.deepcopy(prov)
+          prov2['independence_verification']={
+            'verified':True,'verification_basis':'INDEPENDENT_THIRD_PARTY',
+            'verifier_actor_login':'verifierC','public_evidence_url':'https://example.invalid/evidence'
+          }
+          pp2=save('prov2.json',prov2)
+          c=agg.verify(bp,fp,rps,pp2)
+          assert c['three_generation_cryptographic_chain_complete'] is True
+          assert c['independent_authority_verified'] is True
+          assert c['E4_independent_custody_authorized'] is True
+
+          # 4. Receipt tamper must destroy cryptographic completeness.
+          bad=copy.deepcopy(rs); bad[1]['passed_cases']=2
+          badp=[save(f'bad{i}.json',r) for i,r in enumerate(bad,1)]
+          d=agg.verify(bp,fp,badp,pp2)
+          assert d['three_generation_cryptographic_chain_complete'] is False
+          assert d['E4_independent_custody_authorized'] is False
+          assert any('RECEIPT_SELF_HASH_MISMATCH:G2'==x for x in d['errors'])
+
+          # 5. Missing G3 / duplicate generation must fail.
+          dup=[rs[0],rs[1],copy.deepcopy(rs[1])]
+          dupp=[save(f'dup{i}.json',r) for i,r in enumerate(dup,1)]
+          e=agg.verify(bp,fp,dupp,pp2)
+          assert e['three_generation_cryptographic_chain_complete'] is False
+          assert 'GENERATION_SET_MUST_BE_G1_G2_G3' in e['errors']
+
+          print(json.dumps({
+            'crypto_only_E4':a['E4_independent_custody_authorized'],
+            'distinct_account_only_E4':b['E4_independent_custody_authorized'],
+            'independently_verified_E4_logic':c['E4_independent_custody_authorized'],
+            'tamper_rejected':not d['three_generation_cryptographic_chain_complete'],
+            'missing_generation_rejected':not e['three_generation_cryptographic_chain_complete']
+          },sort_keys=True))
+          PY
