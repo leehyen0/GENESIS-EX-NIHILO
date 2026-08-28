@@ -1,0 +1,22 @@
+name: arte-v57-epoch19-identifiability-channel
+on:
+  push:
+    paths:
+      - '.github/workflows/arte-v57-epoch19-identifiability-channel.yml'
+  workflow_dispatch:
+jobs:
+  diagnose:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m py_compile arte_external_replay/v57_epoch19_identifiability_channel_diagnostic.py
+      - run: python arte_external_replay/v57_epoch19_identifiability_channel_diagnostic.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: arte-v57-epoch19-identifiability-channel
+          path: diag_output7
