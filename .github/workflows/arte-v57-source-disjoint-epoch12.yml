@@ -1,0 +1,39 @@
+name: arte-v57-source-disjoint-epoch12
+on:
+  push:
+    branches: [arte-v57-source-disjoint-crossnovel]
+    paths:
+      - 'arte_external_replay/v57_epoch12_trigger.json'
+      - 'arte_external_replay/v57_source_disjoint_runner.py'
+      - '.github/workflows/arte-v57-source-disjoint-epoch12.yml'
+  workflow_dispatch:
+jobs:
+  epoch12:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Run source-disjoint external epoch 12
+        run: python arte_external_replay/v57_source_disjoint_runner.py arte_external_replay/v57_epoch12_trigger.json v57_output
+      - name: Verify external source, isolation, continuity, and conservative claims
+        shell: python
+        run: |
+          import json,hashlib
+          from pathlib import Path
+          d=Path('v57_output');r=json.loads((d/'epoch_receipt.json').read_text());s=json.loads((d/'checkpoint_state.json').read_text());e=json.loads((d/'external_evaluation.json').read_text());m=json.loads((d/'hash_manifest.json').read_text())
+          assert r['epoch']==12 and r['hosted_external'] is True and r['actual_success'] is True
+          assert r['source_owner']=='google' and r['source_repo']=='BIG-bench'
+          assert r['target_hidden_until_after_prediction'] is True
+          assert e['inherited_transition_reused'] is True and e['remove_frontend_success'] is False and e['remove_inherited_transition_success'] is False
+          assert r['child_state_sha256']==s['state_sha256']
+          for v in r['claim_flags'].values(): assert v is False
+          for x in m['files']:assert hashlib.sha256((d/x['name']).read_bytes()).hexdigest()==x['sha256']
+          print('v57 epoch12 verified')
+      - uses: actions/upload-artifact@v4
+        with:
+          name: arte-v57-epoch12
+          path: v57_output/
