@@ -1,0 +1,67 @@
+name: arte-frontier-superiority
+
+on:
+  pull_request:
+    paths:
+      - 'arte_cognition/frontier_superiority.py'
+      - 'arte_cognition/test_frontier_superiority.py'
+      - 'evaluations/frontier_superiority_contract.json'
+      - '.github/workflows/arte-frontier-superiority.yml'
+  push:
+    branches:
+      - arte-large-scale-external-ecology-shadow
+    paths:
+      - 'arte_cognition/frontier_superiority.py'
+      - 'arte_cognition/test_frontier_superiority.py'
+      - 'evaluations/frontier_superiority_contract.json'
+      - '.github/workflows/arte-frontier-superiority.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  structural-frontier-superiority-contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Compile superiority gate
+        run: |
+          python -m py_compile arte_cognition/frontier_superiority.py
+          python -m py_compile arte_cognition/test_frontier_superiority.py
+
+      - name: Verify frozen objective
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          c = json.loads(Path('evaluations/frontier_superiority_contract.json').read_text())
+          assert c['objective'] == 'STRUCTURAL_CAPABILITY_AND_EXTERNAL_FRONTIER_SUPERIORITY'
+          assert c['primary_budget_mode'] == 'OPEN_BUDGET_CAPABILITY_PRIMARY'
+          assert c['cost_may_increase'] is True
+          assert c['cost_efficiency_is_promotion_gate'] is False
+          assert c['minimum_external_frontier_providers'] >= 3
+          assert c['live_same_task_external_receipts_required'] is True
+          assert c['published_vendor_or_leaderboard_scores_alone_authorize_arte_superiority'] is False
+          assert c['post_freeze_human_structural_intervention_allowed'] is False
+          assert c['AGI'] is False and c['ASI'] is False
+          PY
+
+      - name: Run structural superiority contracts
+        run: python -m unittest arte_cognition.test_frontier_superiority -v
+
+      - name: State evidence boundary
+        run: |
+          python - <<'PY'
+          print('STRUCTURAL_GATE_VALIDATION_ONLY')
+          print('LIVE_EXTERNAL_FRONTIER_RECEIPTS_REQUIRED_FOR_SUPERIORITY_CLAIM')
+          print('COST_IS_DIAGNOSTIC_NOT_PROMOTION_AUTHORITY')
+          PY

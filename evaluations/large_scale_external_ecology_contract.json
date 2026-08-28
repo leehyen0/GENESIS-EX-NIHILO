@@ -1,0 +1,15 @@
+{
+  "artifact_type": "arte.large_scale_external_ecology_contract/v1",
+  "canonical_parent": "f3840760cfc0b5b7eac1e03b4d0f9874b0d1d6b0",
+  "candidate_consequences_used_for_acquisition": false,
+  "required_ecologies": 6,
+  "hidden_cohort_candidate_count": 72,
+  "minimum_prospective_transitions": 3,
+  "minimum_distinct_ecologies_for_meta_acceleration_candidate": 3,
+  "minimum_more_compute_repeats_for_external_inexpressibility": 16,
+  "public_dev_can_open_development_pressure": true,
+  "public_dev_can_supply_promotion_authority": false,
+  "global_recursive_acceleration_self_certification": false,
+  "AGI": false,
+  "ASI": false
+}
