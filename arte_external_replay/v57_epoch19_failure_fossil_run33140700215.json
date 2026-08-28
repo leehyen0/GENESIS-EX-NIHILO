@@ -1,0 +1,39 @@
+{
+  "schema": "arte.epoch19_clutrr_representation_failure_fossil/v1",
+  "epoch_attempt": 19,
+  "github_run_id": "33140700215",
+  "github_head_sha": "52499fd9d89ca2d75fa0d7bed75f0718ffcc32ab",
+  "stage": "LENGTH3_VALIDATION_REPRESENTATION_GATE",
+  "failure_type": "REPRESENTATION_INSUFFICIENCY::COARSE_BINARY_KINSHIP_CLOSURE_NOT_EXACT",
+  "compile_success": true,
+  "parent_restore_success": true,
+  "train_consumed": true,
+  "validation_consumed": true,
+  "test_consumed": false,
+  "heldout_selected": false,
+  "heldout_target_consumed": false,
+  "failed_run_outcome_credit": false,
+  "full_ordered_binary_closure": {
+    "accuracy": 0.983206106870229,
+    "scored_cases": 655,
+    "rank": 1
+  },
+  "controls": {
+    "reversed_binary_closure_accuracy": 0.33163265306122447,
+    "reversed_scored_cases": 196,
+    "last_edge_accuracy": 0.29770992366412213,
+    "first_edge_accuracy": 0.07480916030534351
+  },
+  "interpretation": {
+    "ordered_relation_composition_supported": true,
+    "coarse_relation_label_as_complete_intermediate_state_supported": false,
+    "promotion_gate_relaxed": false,
+    "required_next_step": "IDENTIFY_RESIDUAL_STATE_VARIABLE_OR_HIGHER_ORDER_REPRESENTATION"
+  },
+  "claim_flags": {
+    "four_step_replication": false,
+    "external_recursive_acceleration": false,
+    "AGI": false,
+    "ASI": false
+  }
+}
