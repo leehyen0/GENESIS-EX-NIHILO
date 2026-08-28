@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import argparse, base64, hashlib, json
 from pathlib import Path
+import v57_question_sensor_challenge_semantics_v3 as sem
 
 HIDDEN_SCHEMA='arte.hidden_question_sensor_challenge/v57'
 COMMIT_SCHEMA='arte.question_sensor_commitment/v57'
@@ -15,6 +16,7 @@ PREDICTION_OUTPUT_SCHEMA='arte.independent_prediction_output/v57'
 RECEIPT_SCHEMA='arte.question_sensor_independent_verification_receipt/v57-v3'
 GENERATIONS=('G1','G2','G3')
 POLICY_PATH='arte_custodian/v57_question_sensor_independent_authority_policy.json'
+BANK_PATH='arte_candidate/v57_epoch20_question_bank.json'
 
 
 def canon(x): return json.dumps(x,ensure_ascii=False,sort_keys=True,separators=(',',':')).encode('utf-8')
@@ -24,12 +26,12 @@ def self_hash_valid(x,field):
     d=dict(x); declared=d.pop(field,None)
     return bool(declared and declared==sha(canon(d)))
 
-def verify(batch_path,freeze_path,snapshot_path,public_input_path,questions_path,sensor_input_path,predictions_path,reveal_path):
+def verify(batch_path,freeze_path,snapshot_path,bank_path,public_input_path,questions_path,sensor_input_path,predictions_path,reveal_path):
     errors=[]
     def fail(x): errors.append(x)
     batch=load(batch_path); freeze=load(freeze_path); snap=load(snapshot_path); public=load(public_input_path); questions=load(questions_path); sensor=load(sensor_input_path); preds=load(predictions_path); reveal=load(reveal_path)
 
-    # Root/freeze integrity.
+    # Root/freeze/bank integrity.
     if batch.get('schema')!=BATCH_SCHEMA: fail('BAD_BATCH_SCHEMA')
     if snap.get('schema')!=SNAPSHOT_SCHEMA: fail('BAD_PREFREEZE_SNAPSHOT_SCHEMA')
     snapshot_hash_ok=self_hash_valid(snap,'snapshot_sha256')
@@ -40,6 +42,12 @@ def verify(batch_path,freeze_path,snapshot_path,public_input_path,questions_path
     if freeze.get('prefreeze_snapshot_sha256')!=snap.get('snapshot_sha256'): fail('FREEZE_PREFREEZE_SNAPSHOT_BINDING_MISMATCH')
     if freeze.get('files')!=snap.get('files'): fail('FREEZE_FILE_HASH_MAP_MISMATCH')
     if freeze.get('authority_policy_sha256')!=snap.get('files',{}).get(POLICY_PATH): fail('FREEZE_AUTHORITY_POLICY_BINDING_MISMATCH')
+    bank_raw_sha=sha(Path(bank_path).read_bytes())
+    if snap.get('files',{}).get(BANK_PATH)!=bank_raw_sha: fail('FROZEN_BANK_RAW_SHA_NOT_BOUND_TO_SNAPSHOT')
+    try: bank,bank_idx=sem.load_bank(bank_path)
+    except Exception as e: bank={};bank_idx={};fail('FROZEN_BANK_SEMANTIC_LOAD_FAILED:'+str(e))
+    expected_bank=snap.get('learned_question_bank_canonical_sha256')
+    if bank.get('canonical_bank_sha256')!=expected_bank: fail('FROZEN_BANK_CANONICAL_SHA_MISMATCH')
     batch_sha=sha(canon(batch))
     if freeze.get('commitment_batch_sha256')!=batch_sha: fail('FREEZE_BATCH_SHA_MISMATCH')
     if freeze.get('commitment_batch_id')!=batch.get('batch_id'): fail('FREEZE_BATCH_ID_MISMATCH')
@@ -56,9 +64,8 @@ def verify(batch_path,freeze_path,snapshot_path,public_input_path,questions_path
     c=matches[0] if len(matches)==1 else {}
     if len(matches)!=1: fail('COMMITMENT_NOT_UNIQUE_FOR_PUBLIC_INPUT')
     if c.get('schema')!=COMMIT_SCHEMA: fail('BAD_COMMITMENT_SCHEMA')
-    for k in ('batch_id','challenge_id','generation','custodian_id'):
-        if k=='batch_id' and c.get(k)!=batch.get(k): fail('COMMITMENT_BATCH_BINDING_MISMATCH')
-        if k=='custodian_id' and c.get(k)!=batch.get(k): fail('COMMITMENT_CUSTODIAN_BINDING_MISMATCH')
+    if c.get('batch_id')!=batch.get('batch_id'): fail('COMMITMENT_BATCH_BINDING_MISMATCH')
+    if c.get('custodian_id')!=batch.get('custodian_id'): fail('COMMITMENT_CUSTODIAN_BINDING_MISMATCH')
     if c.get('all_generations_fixed_before_G1') is not True or c.get('key_withheld') is not True: fail('COMMITMENT_PRECOMMIT_BOUNDARY_NOT_ASSERTED')
 
     # Stage schema/binding.
@@ -67,9 +74,7 @@ def verify(batch_path,freeze_path,snapshot_path,public_input_path,questions_path
     if preds.get('schema')!=PREDICTION_OUTPUT_SCHEMA or preds.get('challenge_id')!=cid or preds.get('generation')!=gen: fail('BAD_PREDICTION_OUTPUT_BINDING')
     if reveal.get('schema')!=REVEAL_SCHEMA: fail('BAD_V3_REVEAL_SCHEMA')
     for f in ('batch_id','challenge_id','generation','custodian_id'):
-        expected=c.get(f)
-        if reveal.get(f)!=expected: fail('REVEAL_BINDING_MISMATCH:'+f)
-    expected_bank=snap.get('learned_question_bank_canonical_sha256')
+        if reveal.get(f)!=c.get(f): fail('REVEAL_BINDING_MISMATCH:'+f)
     if questions.get('question_bank_sha256')!=expected_bank: fail('QUESTION_OUTPUT_BANK_SHA_MISMATCH')
     if preds.get('question_bank_sha256')!=expected_bank: fail('PREDICTION_OUTPUT_BANK_SHA_MISMATCH')
 
@@ -100,42 +105,49 @@ def verify(batch_path,freeze_path,snapshot_path,public_input_path,questions_path
     if sha(canon(public))!=c.get('public_packet_sha256'): fail('PUBLIC_PACKET_COMMITMENT_MISMATCH')
     if hidden.get('public_packet')!=public: fail('PUBLIC_PACKET_HIDDEN_PACKAGE_MISMATCH')
 
-    # Case-level semantic verification.
+    # Independently validate the challenge semantics rather than trusting custodian-declared target/question.
+    semcheck=sem.validate_hidden_package(hidden,(bank,bank_idx)) if bank_idx else {'valid':False,'errors':['BANK_INDEX_UNAVAILABLE'],'cases':[]}
+    semantics_valid=semcheck.get('valid') is True
+    if not semantics_valid:
+        for e in semcheck.get('errors',[]): fail('HIDDEN_CHALLENGE_SEMANTICS_INVALID:'+e)
+    derived={x['case_id']:x.get('derived',{}) for x in semcheck.get('cases',[])}
+
+    # Case-level candidate verification against independently derived semantics.
     pub_cases={x.get('case_id'):x for x in public.get('cases',[])}
     q_cases={x.get('case_id'):x for x in questions.get('questions',[])}
     s_cases={x.get('case_id'):x for x in sensor.get('cases',[])}
     p_cases={x.get('case_id'):x for x in preds.get('predictions',[])}
-    h_cases={x.get('case_id'):x for x in hidden.get('cases',[])}
     ids=set(pub_cases)
     if None in ids or len(ids)!=len(public.get('cases',[])): fail('PUBLIC_CASE_IDS_MISSING_OR_DUPLICATE')
-    if ids!=set(h_cases) or ids!=set(q_cases) or ids!=set(s_cases) or ids!=set(p_cases): fail('STAGE_CASE_ID_SET_MISMATCH')
+    if ids!=set(derived) or ids!=set(q_cases) or ids!=set(s_cases) or ids!=set(p_cases): fail('STAGE_OR_DERIVED_CASE_ID_SET_MISMATCH')
     case_receipts=[]
     for case_id in sorted(ids,key=str):
-        pc=pub_cases[case_id]; hc=h_cases.get(case_id,{}); qc=q_cases.get(case_id,{}); sc=s_cases.get(case_id,{}); pr=p_cases.get(case_id,{})
-        ce=[]; expected_action=hc.get('expected_action','QUESTION')
+        pc=pub_cases[case_id]; d=derived.get(case_id,{}); qc=q_cases.get(case_id,{}); sc=s_cases.get(case_id,{}); pr=p_cases.get(case_id,{})
+        ce=[]; expected_action=d.get('action')
         if sc.get('public_observation')!=pc.get('public_observation'): ce.append('SENSOR_PUBLIC_OBSERVATION_MISMATCH')
         if expected_action=='HOLD':
             if qc.get('action')!='HOLD': ce.append('EXPECTED_QUESTION_PHASE_HOLD')
             if 'sensor_bit' in sc: ce.append('SENSOR_BIT_RELEASED_FOR_HOLD_CASE')
             if pr.get('action')!='HOLD': ce.append('EXPECTED_PREDICTION_PHASE_HOLD')
-        else:
-            eq=hc.get('expected_question')
-            eqsha=sha(canon(eq)) if isinstance(eq,dict) else None
+        elif expected_action=='QUESTION':
+            eq=d.get('question'); eqsha=sha(canon(eq))
             if qc.get('action')!='QUESTION' or qc.get('question')!=eq or qc.get('question_sha256')!=eqsha: ce.append('QUESTION_MISMATCH')
             if sc.get('question')!=eq or sc.get('question_sha256')!=eqsha: ce.append('SENSOR_QUESTION_BINDING_MISMATCH')
-            try: bit=int(sc.get('sensor_bit'))
-            except Exception: bit=-1
-            if bit!=int(hc.get('sensor_bit')): ce.append('SENSOR_BIT_MISMATCH')
-            if pr.get('action')!='PREDICT' or pr.get('prediction')!=hc.get('target'): ce.append('PREDICTION_TARGET_MISMATCH')
-        case_receipts.append({'case_id':case_id,'expected_action':expected_action,'passed':not ce,'errors':ce})
+            hc=next((x for x in hidden.get('cases',[]) if x.get('case_id')==case_id),{})
+            try: bit=int(sc.get('sensor_bit')); hidden_bit=int(hc.get('sensor_bit'))
+            except Exception: bit=-1;hidden_bit=-2
+            if bit!=hidden_bit: ce.append('SENSOR_BIT_MISMATCH')
+            if pr.get('action')!='PREDICT' or pr.get('prediction')!=d.get('target'): ce.append('PREDICTION_DERIVED_TARGET_MISMATCH')
+        else: ce.append('DERIVED_SEMANTICS_UNAVAILABLE')
+        case_receipts.append({'case_id':case_id,'expected_action':expected_action,'derived_target':d.get('target'),'passed':not ce,'errors':ce})
         errors.extend(f'{case_id}:{x}' for x in ce)
 
     receipt={
       'schema':RECEIPT_SCHEMA,'batch_id':c.get('batch_id'),'challenge_id':cid,'generation':gen,'custodian_id':c.get('custodian_id'),
       'formal_freeze_sha256':freeze.get('freeze_sha256'),'prefreeze_snapshot_sha256':snap.get('snapshot_sha256'),'commitment_batch_sha256':batch_sha,
-      'public_input_sha256':sha(canon(public)),'questions_sha256':q_sha,'sensor_input_sha256':s_sha,'predictions_sha256':p_sha,
+      'frozen_bank_raw_sha256':bank_raw_sha,'public_input_sha256':sha(canon(public)),'questions_sha256':q_sha,'sensor_input_sha256':s_sha,'predictions_sha256':p_sha,
       'hidden_plaintext_sha256':sha(plain),'formal_freeze_self_hash_valid':freeze_hash_ok,'prefreeze_snapshot_self_hash_valid':snapshot_hash_ok,
-      'question_output_hash_custodian_bound':q_bound,'prediction_output_hash_custodian_bound':p_bound,'stage_hash_chain_complete':bool(q_bound and p_bound),
+      'hidden_challenge_semantics_valid':semantics_valid,'question_output_hash_custodian_bound':q_bound,'prediction_output_hash_custodian_bound':p_bound,'stage_hash_chain_complete':bool(q_bound and p_bound),
       'case_count':len(case_receipts),'passed_cases':sum(x['passed'] for x in case_receipts),'all_cases_passed':not errors,'errors':errors,'cases':case_receipts,
       'claim_boundary':{'this_receipt_alone_proves_independent_custody':False,'AGI':False,'ASI':False,'external_recursive_acceleration':False}
     }
@@ -144,8 +156,8 @@ def verify(batch_path,freeze_path,snapshot_path,public_input_path,questions_path
 
 def main():
     ap=argparse.ArgumentParser()
-    ap.add_argument('--commitment-batch',required=True);ap.add_argument('--freeze',required=True);ap.add_argument('--prefreeze-snapshot',required=True);ap.add_argument('--public-input',required=True);ap.add_argument('--questions',required=True);ap.add_argument('--sensor-input',required=True);ap.add_argument('--predictions',required=True);ap.add_argument('--reveal',required=True);ap.add_argument('--receipt-out',required=True)
-    a=ap.parse_args(); r=verify(a.commitment_batch,a.freeze,a.prefreeze_snapshot,a.public_input,a.questions,a.sensor_input,a.predictions,a.reveal)
+    ap.add_argument('--commitment-batch',required=True);ap.add_argument('--freeze',required=True);ap.add_argument('--prefreeze-snapshot',required=True);ap.add_argument('--frozen-question-bank',required=True);ap.add_argument('--public-input',required=True);ap.add_argument('--questions',required=True);ap.add_argument('--sensor-input',required=True);ap.add_argument('--predictions',required=True);ap.add_argument('--reveal',required=True);ap.add_argument('--receipt-out',required=True)
+    a=ap.parse_args(); r=verify(a.commitment_batch,a.freeze,a.prefreeze_snapshot,a.frozen_question_bank,a.public_input,a.questions,a.sensor_input,a.predictions,a.reveal)
     Path(a.receipt_out).write_text(json.dumps(r,ensure_ascii=False,indent=2,sort_keys=True)+'\n',encoding='utf-8')
     print(json.dumps(r,sort_keys=True)); raise SystemExit(0 if r['all_cases_passed'] else 2)
 
