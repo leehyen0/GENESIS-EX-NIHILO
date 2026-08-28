@@ -1,0 +1,54 @@
+{
+  "schema": "arte.formal_e5_precommit/v65",
+  "parent_v64_body_sha256": "8f9082fd9720530ca912672da6671afe0f1c77ca247e8eb0e8b6ef2129d8a44a",
+  "formal_E4_parent_gate": true,
+  "attempt_budget": 1,
+  "feedback_before_verdict": false,
+  "source_authority": "NIST Randomness Beacon 2.0",
+  "source_endpoint": "https://beacon.nist.gov/beacon/2.0/pulse/last",
+  "target_authority": "League of Entropy drand future round",
+  "outcome_authority": "mathjs.org REST web service",
+  "provenance_authority": "GitHub artifact attestations / Sigstore",
+  "source_target_pairs": [
+    ["NIST_TABLE_RELATION", "DRAND_SYMBOLIC_RULE"],
+    ["NIST_GRAPH_WEIGHT", "DRAND_RESOURCE_SCORE"],
+    ["NIST_FEATURE_RELATION", "DRAND_SEQUENCE_RULE"],
+    ["NIST_CAUSAL_CODE", "DRAND_TOOL_SCORE"]
+  ],
+  "source_disjoint_contract": {
+    "source_cognition_must_be_committed_before_target_beacon_floor_is_fetched": true,
+    "target_beacon_round_must_be_strictly_greater_than_floor_round": true,
+    "target_entropy_authority_distinct_from_source_authority": true,
+    "FULL_may_use_source_cognition": true,
+    "TRANSFER_ABLATION_may_not_use_source_cognition_as_prior": true,
+    "both_must_be_exact": true,
+    "FULL_search_cost_must_be_lower_each_pair": true
+  },
+  "frozen_git_blob_sha1": {
+    "arte_external_replay/v65_future_drand.mjs": "45116d1542c130803868b9860a4ff05b2fc3ad43",
+    "arte_external_replay/v65_source_learn.py": "9124835b5b3499d70a1d73b6715a5ba533da1295",
+    "arte_external_replay/v65_target_prepare.py": "8d73f0327618e4a9bdfb7f0245a5820ef108ae70",
+    "arte_external_replay/v65_external_eval.py": "48e71818629909d3755272d7b85951e9d84516cb",
+    ".github/workflows/arte-v65-formal-e5.yml": "014e1f60c3e45051735a53a6562d3e26b5475b1a"
+  },
+  "promotion_conditions": [
+    "formal E4 parent gate true",
+    "frozen Git blob identities exact",
+    "NIST source receipt acquired",
+    "source cognition hash committed before future target entropy",
+    "future drand target round verified and strictly after its post-source floor",
+    "FULL and TRANSFER_ABLATION both exact on externally evaluated target heldout",
+    "FULL search cost lower in all four source-target pairs",
+    "mathjs authority HTTP 200 on every heldout",
+    "formal E5 evidence attested by GitHub/Sigstore",
+    "gh attestation verify succeeds"
+  ],
+  "claim_boundary": {
+    "formal_E5_if_all_conditions_pass": true,
+    "E6_repeated_external_acceleration": false,
+    "AGI": false,
+    "ASI": false,
+    "human_intelligence_exceeded": false
+  },
+  "precommit_sha256": "ea23ef3f3cb6a84cdb830a71abff18cfccc597ba0d4203744ff2522ea10e2bd2"
+}
