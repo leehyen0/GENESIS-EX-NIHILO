@@ -1,0 +1,35 @@
+from __future__ import annotations
+
+import argparse
+import json
+from pathlib import Path
+
+CHALLENGE = "V149-AUDITED-BASE-001"
+
+
+def main() -> None:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--output", required=True)
+    ap.add_argument("--candidate-sha", required=True)
+    a = ap.parse_args()
+    artifact = {
+        "schema": "arte.public_candidate_artifact/v149",
+        "candidate_sha": a.candidate_sha,
+        "challenge_id": CHALLENGE,
+        "challenge_digest": "f" * 64,
+        "claim_boundary": {
+            "AGI": False,
+            "ASI": True,
+            "independent_organization_custody": False,
+            "recursive_acceleration_proven": False
+        },
+        "candidate_can_modify_evaluator": False
+    }
+    p = Path(a.output)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(json.dumps(artifact, indent=2) + "\n")
+    print("V149_WRONG_WRITTEN")
+
+
+if __name__ == "__main__":
+    main()
