@@ -1,0 +1,68 @@
+name: arte-frontier-assault-20260929
+
+on:
+  push:
+    branches:
+      - agent/generative-large-scale-campaign-20260929
+    paths:
+      - '.github/workflows/arte-frontier-assault-20260929.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  frontier:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {id: obs-basis-1, script: evaluations/run_observation_basis_transfer.py, seeded: false}
+          - {id: obs-basis-2, script: evaluations/run_observation_basis_transfer.py, seeded: false}
+          - {id: obs-basis-3, script: evaluations/run_observation_basis_transfer.py, seeded: false}
+          - {id: primitive-alphabet-1, script: evaluations/run_world_driven_transform_primitive_alphabet.py, seeded: true}
+          - {id: primitive-alphabet-2, script: evaluations/run_world_driven_transform_primitive_alphabet.py, seeded: true}
+          - {id: primitive-alphabet-3, script: evaluations/run_world_driven_transform_primitive_alphabet.py, seeded: true}
+          - {id: transform-depth-1, script: evaluations/run_world_driven_transform_depth_expansion.py, seeded: true}
+          - {id: transform-depth-2, script: evaluations/run_world_driven_transform_depth_expansion.py, seeded: true}
+          - {id: transform-depth-3, script: evaluations/run_world_driven_transform_depth_expansion.py, seeded: true}
+          - {id: upstream-locus-1, script: evaluations/run_upstream_failure_locus_genesis.py, seeded: false}
+          - {id: upstream-locus-2, script: evaluations/run_upstream_failure_locus_genesis.py, seeded: false}
+          - {id: upstream-locus-3, script: evaluations/run_upstream_failure_locus_genesis.py, seeded: false}
+          - {id: relational-residual-1, script: evaluations/run_cross_domain_relational_residual_induction.py, seeded: false}
+          - {id: relational-residual-2, script: evaluations/run_cross_domain_relational_residual_induction.py, seeded: false}
+          - {id: relational-residual-3, script: evaluations/run_cross_domain_relational_residual_induction.py, seeded: false}
+          - {id: latent-ontology-1, script: evaluations/run_latent_relation_ontology_transfer.py, seeded: false}
+          - {id: latent-ontology-2, script: evaluations/run_latent_relation_ontology_transfer.py, seeded: false}
+          - {id: latent-ontology-3, script: evaluations/run_latent_relation_ontology_transfer.py, seeded: false}
+          - {id: generic-symbolic-1, script: evaluations/run_generic_symbolic_primitive_search.py, seeded: true}
+          - {id: generic-symbolic-2, script: evaluations/run_generic_symbolic_primitive_search.py, seeded: true}
+          - {id: generic-symbolic-3, script: evaluations/run_generic_symbolic_primitive_search.py, seeded: true}
+          - {id: primitive-resume-1, script: evaluations/run_persistent_primitive_developmental_resume.py, seeded: true}
+          - {id: primitive-resume-2, script: evaluations/run_persistent_primitive_developmental_resume.py, seeded: true}
+          - {id: primitive-resume-3, script: evaluations/run_persistent_primitive_developmental_resume.py, seeded: true}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Execute frontier evaluator
+        shell: bash
+        run: |
+          mkdir -p artifacts/frontier-assault
+          if [ "${{ matrix.seeded }}" = "true" ]; then
+            printf '%s\n' "$((20260929300 + ${{ strategy.job-index }}))" > /tmp/frontier-seed
+            PYTHONPATH=. python "${{ matrix.script }}" /tmp/frontier-seed | tee "artifacts/frontier-assault/${{ matrix.id }}.jsonl"
+          else
+            PYTHONPATH=. python "${{ matrix.script }}" | tee "artifacts/frontier-assault/${{ matrix.id }}.jsonl"
+          fi
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontier-${{ matrix.id }}
+          path: artifacts/frontier-assault/
+          if-no-files-found: warn
+          retention-days: 30
