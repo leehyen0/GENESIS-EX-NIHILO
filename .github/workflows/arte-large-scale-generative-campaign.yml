@@ -1,0 +1,63 @@
+name: arte-large-scale-generative-campaign
+
+on:
+  push:
+    branches:
+      - agent/generative-large-scale-campaign-20260929
+    paths:
+      - 'evaluations/run_large_scale_generative_campaign.py'
+      - '.github/workflows/arte-large-scale-generative-campaign.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  large-scale-campaign:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Compile campaign harness
+        run: python -m py_compile evaluations/run_large_scale_generative_campaign.py
+
+      - name: Full cognition regression
+        id: regression
+        continue-on-error: true
+        run: |
+          mkdir -p artifacts/large-scale-generative-campaign
+          set -o pipefail
+          python -m unittest discover -s arte_cognition -p 'test_*.py' -v 2>&1 | tee artifacts/large-scale-generative-campaign/regression.log
+
+      - name: Record regression outcome
+        if: always()
+        run: |
+          mkdir -p artifacts/large-scale-generative-campaign
+          echo '{"regression_step_outcome":"'${{ steps.regression.outcome }}'"}' > artifacts/large-scale-generative-campaign/regression_status.json
+
+      - name: Run 64-evaluation fresh campaign
+        if: always()
+        run: |
+          PYTHONPATH=. python evaluations/run_large_scale_generative_campaign.py \
+            --seeded-replicates 4 \
+            --static-replicates 2 \
+            --base-seed ARTE-LARGE-SCALE-20260929
+
+      - name: Print campaign summary
+        if: always()
+        run: |
+          cat artifacts/large-scale-generative-campaign/summary.md || true
+          cat artifacts/large-scale-generative-campaign/summary.json || true
+
+      - name: Upload raw campaign evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: arte-large-scale-generative-campaign
+          path: artifacts/large-scale-generative-campaign/
+          if-no-files-found: error
+          retention-days: 30
