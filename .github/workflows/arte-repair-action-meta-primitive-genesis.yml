@@ -1,0 +1,41 @@
+name: arte-repair-action-meta-primitive-genesis
+
+on:
+  push:
+    branches:
+      - agent/generative-large-scale-campaign-20260929
+    paths:
+      - 'evaluations/run_repair_action_meta_primitive_genesis.py'
+      - '.github/workflows/arte-repair-action-meta-primitive-genesis.yml'
+      - 'research/ARTE_REPAIR_ACTION_META_PRIMITIVE_GENESIS_PRECOMMIT_20260929.json'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  action-metaop:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        seed: [20260929801, 20260929802, 20260929803, 20260929804, 20260929805]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Execute repair action meta-primitive genesis
+        run: |
+          mkdir -p artifacts/repair-action-metaop
+          set -o pipefail
+          PYTHONPATH=. python evaluations/run_repair_action_meta_primitive_genesis.py --seed ${{ matrix.seed }} | tee artifacts/repair-action-metaop/result-${{ matrix.seed }}.jsonl
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: repair-action-metaop-${{ matrix.seed }}
+          path: artifacts/repair-action-metaop/
+          if-no-files-found: error
+          retention-days: 30
