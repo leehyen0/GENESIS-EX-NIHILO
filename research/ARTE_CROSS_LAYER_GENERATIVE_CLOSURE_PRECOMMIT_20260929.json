@@ -1,0 +1,56 @@
+{
+  "schema": "arte.cross_layer_generative_closure_precommit/v1",
+  "experiment_id": "cross-layer-generated-basis-class-action-closure-20260929",
+  "frozen_before_execution": true,
+  "target_chain": [
+    "old residual basis proven inexpressive",
+    "generate observation-basis schemas from raw intervention traces",
+    "generate repair macro primitives from repeated successful micro-op programs",
+    "learn mapping from generated basis class IDs to generated macro IDs",
+    "select generated macro pre-outcome on fresh worlds",
+    "execute and score treatment/remove/wrong/old-more-compute",
+    "cold-process reconstruct both generated basis mapping and macro library"
+  ],
+  "old_substrates": {
+    "scalar_residual_basis_identical_across_repair_types": true,
+    "atomic_action_vocabulary": [
+      "OPEN_FRONTIER",
+      "SYNTHESIZE",
+      "VERIFY",
+      "PRUNE",
+      "CACHE"
+    ],
+    "final_action_slot_budget": 1
+  },
+  "generated_objects_required": {
+    "observation_basis_classes_min": 2,
+    "repair_macros_min": 2,
+    "mapping_generated_class_to_generated_macro": true
+  },
+  "pass_rule": {
+    "old_scalar_basis_inexpressive": true,
+    "old_fixed_lag_basis_fails": true,
+    "old_atomic_action_alphabet_cannot_solve_in_one_slot": true,
+    "generated_class_macro_mapping_train_accuracy": 1,
+    "heldout_preoutcome_selection_accuracy": 1,
+    "treatment_success_all": true,
+    "wrong_macro_degrades_all_nonnull": true,
+    "remove_generated_basis_or_macro_degrades": true,
+    "old_more_compute_repetition_32_no_expressivity_gain": true,
+    "cold_reconstruction_exact": true
+  },
+  "claim_boundary": {
+    "raw_trace_representation_human_authored": true,
+    "observation_basis_induction_rule_human_authored": true,
+    "atomic_micro_ops_human_authored": true,
+    "macro_abstraction_rule_human_authored": true,
+    "evaluator_task_generator_human_authored": true,
+    "unrestricted_feature_or_action_language_genesis": false,
+    "independent_organizational_custody": false,
+    "physical_world": false,
+    "global_recursive_acceleration": false,
+    "AGI": false,
+    "ASI": false,
+    "superintelligence": false
+  }
+}
