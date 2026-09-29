@@ -1,0 +1,67 @@
+{
+  "schema": "arte.generated_basis_to_repair_ontology_precommit/v1",
+  "experiment_id": "generated-basis-to-repair-ontology-20260929",
+  "frozen_before_execution": true,
+  "objective": "Prove a fixed residual basis is inexpressive, generate a temporal/relation observation basis from raw intervention contrasts, use generated basis identities as repair ontology classes, and transfer pre-outcome to fresh mechanism-distinct worlds.",
+  "predecessor": {
+    "scalar_residual_basis": [
+      "frontier_complete",
+      "best_base_capability",
+      "candidate_count",
+      "evidence_cost"
+    ],
+    "contract": "all training worlds receive exactly the same scalar residual vector",
+    "fixed_lag_relation_predecessor": 1,
+    "more_compute_repetitions": 16
+  },
+  "raw_world_channel": {
+    "input": "opaque low/high intervention timelines with randomized node names",
+    "semantic_relation_labels": false,
+    "node_kind_labels": false,
+    "repair_need_label_visible_to_basis_generator": false
+  },
+  "generated_basis": {
+    "mechanism": "WorldDerivedObservationBasisInducer",
+    "class_identity": "generated observation-path schema_id",
+    "training_groups": 2,
+    "named_repair_classes_predeclared": false
+  },
+  "repair_action_vocabulary": [
+    "SYNTHESIZE_MISSING_OPERATOR",
+    "COMPILE_SEARCH_SELECTOR",
+    "NULL"
+  ],
+  "heldout_protocol": [
+    "freeze learned basis->action map after training outcomes",
+    "construct fresh worlds with new node names and domain labels",
+    "classify from raw traces only",
+    "SHA256 seal repair selections",
+    "reveal repair outcomes after seal",
+    "score FULL / REMOVE / WRONG_ACTION / OLD_FIXED_BASIS_MORE_COMPUTE",
+    "cold-process reconstruct map and classify one extra world"
+  ],
+  "pass_rule": {
+    "predecessor_scalar_basis_inexpressive": true,
+    "predecessor_fixed_lag_paths_zero": true,
+    "generated_basis_classes_min": 2,
+    "train_action_mapping_accuracy": 1,
+    "heldout_preoutcome_accuracy": 1,
+    "treatment_success_all": true,
+    "remove_or_wrong_degrades": true,
+    "old_basis_more_compute_not_sufficient": true,
+    "cold_reconstruction_exact": true
+  },
+  "claim_boundary": {
+    "raw_intervention_representation_human_authored": true,
+    "lag_scan_and_peak_rule_human_authored": true,
+    "repair_action_vocabulary_human_authored": true,
+    "evaluator_world_generator_human_authored": true,
+    "unrestricted_feature_language_genesis": false,
+    "independent_organizational_custody": false,
+    "physical_world": false,
+    "global_recursive_acceleration": false,
+    "AGI": false,
+    "ASI": false,
+    "superintelligence": false
+  }
+}
