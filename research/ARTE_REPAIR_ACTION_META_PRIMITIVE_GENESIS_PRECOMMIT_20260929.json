@@ -1,0 +1,56 @@
+{
+  "schema": "arte.repair_action_meta_primitive_genesis_precommit/v1",
+  "experiment_id": "repair-action-meta-primitive-genesis-20260929",
+  "frozen_before_execution": true,
+  "state_bits": [
+    "frontier",
+    "verified"
+  ],
+  "old_action_language": {
+    "primitives": [
+      "IDENTITY",
+      "SET_FRONTIER",
+      "SET_VERIFIED"
+    ],
+    "composition_max_depth": 6,
+    "monotone_only": true,
+    "exhaustive_closure_required": true
+  },
+  "meta_generator": {
+    "candidate_space": "all 16 deterministic boolean update functions verified'=f(frontier,verified), frontier'=frontier",
+    "semantic_names_hidden": true,
+    "primitive_id": "GEN_REPAIR_PRIMITIVE::<sha256(truth-table)>"
+  },
+  "hidden_transition_family": "verified' = frontier XOR verified; frontier unchanged",
+  "protocol": [
+    "prove old action closure cannot realize all four training transitions",
+    "enumerate all 16 anonymous transition primitives before scoring",
+    "select exact primitive from training transitions",
+    "freeze primitive",
+    "seal heldout next-state predictions",
+    "REMOVE generated primitive",
+    "WRONG truth-table control",
+    "cold-process reconstruct primitive"
+  ],
+  "pass_rule": {
+    "old_language_exact_solution_count": 0,
+    "generated_primitive_absent_from_old_language": true,
+    "training_transition_accuracy": 1,
+    "heldout_transition_accuracy": 1,
+    "remove_accuracy_below_full": true,
+    "wrong_accuracy_below_full": true,
+    "cold_exact": true
+  },
+  "claim_boundary": {
+    "state_bit_vocabulary_human_authored": true,
+    "truth_table_enumerator_human_authored": true,
+    "finite_transition_universe_human_authored": true,
+    "unrestricted_action_language_genesis": false,
+    "independent_organizational_custody": false,
+    "physical_world": false,
+    "global_recursive_acceleration": false,
+    "AGI": false,
+    "ASI": false,
+    "superintelligence": false
+  }
+}
