@@ -1,0 +1,49 @@
+{
+  "schema": "arte.cross_domain_matched_compute_policy_growth_precommit/v1",
+  "experiment_id": "cross-domain-matched-compute-policy-growth-20260929",
+  "frozen_before_execution": true,
+  "generations": {
+    "G0": "NULL only; no learned repair classes",
+    "G1": "learn one EXPAND class from software grammar world",
+    "G2": "inherit G1 and learn one REFINE class from matched descendant-search world"
+  },
+  "heldout_tasks": [
+    "selector representation-program genesis (mechanism-distinct EXPAND task)",
+    "certificate morphology search (mechanism-distinct REFINE task)",
+    "efficient NULL task"
+  ],
+  "matched_budget": "each generation selects exactly one abstract repair action per heldout task; 3 action decisions total",
+  "protocol": [
+    "execute training WORLD0 and WORLD1 only",
+    "construct G0/G1/G2 hash-chained policies",
+    "generate all G0/G1/G2 heldout predictions from pre-outcome diagnostics",
+    "seal predictions",
+    "only then execute selector-program and morphology heldout evaluators",
+    "score all generations against the same revealed heldout control matrix",
+    "run REMOVE latest class and WRONG-SWAP G2 controls",
+    "cold-process reconstruct G2"
+  ],
+  "pass_rule": {
+    "matched_action_budget_each_generation": 3,
+    "g0_successes": 1,
+    "g1_successes": 2,
+    "g2_successes": 3,
+    "strict_generation_accuracy_increase": true,
+    "remove_latest_drops_to_g1": true,
+    "wrong_swap_degrades": true,
+    "cold_g2_exact": true
+  },
+  "claim_boundary": {
+    "diagnostic_features_human_authored": true,
+    "incremental_rule_learner_human_authored": true,
+    "abstract_action_vocabulary_human_authored": true,
+    "heldout_task_adapters_human_authored": true,
+    "same_repository_research_lineage": true,
+    "independent_organizational_custody": false,
+    "physical_world": false,
+    "global_recursive_acceleration": false,
+    "AGI": false,
+    "ASI": false,
+    "superintelligence": false
+  }
+}
