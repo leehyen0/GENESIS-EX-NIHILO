@@ -1,0 +1,48 @@
+{
+  "schema": "arte.meta_language_arity_expansion_precommit/v1",
+  "experiment_id": "predicate-meta-language-arity-expansion-20260929",
+  "frozen_before_execution": true,
+  "g0_language": {
+    "operator_arity": 2,
+    "candidate_universe_size": 16,
+    "application_budget": 1,
+    "target_input_count": 3
+  },
+  "falsification": "prove no binary one-call operator over any selected input pair can realize 3-bit parity on complete truth table",
+  "expansion_rule": "if complete current-arity universe is falsified, increment arity by exactly one and enumerate complete deterministic boolean function universe",
+  "g1_language": {
+    "operator_arity": 3,
+    "candidate_universe_size": 256,
+    "application_budget": 1
+  },
+  "protocol": [
+    "complete exhaustive G0 falsification before arity expansion",
+    "enumerate all 256 ternary functions before outcome scoring",
+    "select exact minimum-id operator",
+    "freeze and seal heldout predictions",
+    "REMOVE to binary universe",
+    "WRONG ternary truth table",
+    "cold-process reconstruction"
+  ],
+  "pass_rule": {
+    "g0_exact_solutions": 0,
+    "generated_arity": 3,
+    "training_accuracy": 1,
+    "heldout_accuracy": 1,
+    "binary_remove_accuracy_below_full": true,
+    "wrong_accuracy_below_full": true,
+    "cold_exact": true
+  },
+  "claim_boundary": {
+    "boolean_feature_vocabulary_human_authored": true,
+    "arity_increment_rule_human_authored": true,
+    "complete_truth_table_enumerator_human_authored": true,
+    "unrestricted_arity_or_language_genesis": false,
+    "independent_organizational_custody": false,
+    "physical_world": false,
+    "global_recursive_acceleration": false,
+    "AGI": false,
+    "ASI": false,
+    "superintelligence": false
+  }
+}
