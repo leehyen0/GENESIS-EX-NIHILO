@@ -1,0 +1,43 @@
+name: arte-runtime-repair-locus-partition-v2
+
+on:
+  push:
+    branches:
+      - agent/generative-large-scale-campaign-20260929
+    paths:
+      - 'evaluations/run_runtime_repair_locus_partition_v2.py'
+      - '.github/workflows/arte-runtime-repair-locus-partition-v2.yml'
+      - 'research/ARTE_RUNTIME_REPAIR_LOCUS_PARTITION_V2_PRECOMMIT_20260929.json'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  locus-partition-v2:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        seed: [20260929711, 20260929712, 20260929713, 20260929714]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile evaluator
+        run: python -m py_compile evaluations/run_runtime_repair_locus_partition_v2.py
+      - name: Execute global locus partition
+        run: |
+          mkdir -p artifacts/runtime-repair-locus-v2
+          set -o pipefail
+          PYTHONPATH=. python evaluations/run_runtime_repair_locus_partition_v2.py --seed ${{ matrix.seed }} | tee artifacts/runtime-repair-locus-v2/result-${{ matrix.seed }}.jsonl
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: runtime-repair-locus-v2-${{ matrix.seed }}
+          path: artifacts/runtime-repair-locus-v2/
+          if-no-files-found: error
+          retention-days: 30
