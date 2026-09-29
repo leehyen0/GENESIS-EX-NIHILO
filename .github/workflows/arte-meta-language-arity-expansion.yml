@@ -1,0 +1,41 @@
+name: arte-meta-language-arity-expansion
+
+on:
+  push:
+    branches:
+      - agent/generative-large-scale-campaign-20260929
+    paths:
+      - 'evaluations/run_meta_language_arity_expansion.py'
+      - '.github/workflows/arte-meta-language-arity-expansion.yml'
+      - 'research/ARTE_META_LANGUAGE_ARITY_EXPANSION_PRECOMMIT_20260929.json'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  arity-expansion:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        seed: [20260929921, 20260929922, 20260929923, 20260929924, 20260929925]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Execute arity expansion
+        run: |
+          mkdir -p artifacts/meta-language-arity
+          set -o pipefail
+          PYTHONPATH=. python evaluations/run_meta_language_arity_expansion.py --seed ${{ matrix.seed }} | tee artifacts/meta-language-arity/result-${{ matrix.seed }}.jsonl
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: meta-language-arity-${{ matrix.seed }}
+          path: artifacts/meta-language-arity/
+          if-no-files-found: error
+          retention-days: 30
