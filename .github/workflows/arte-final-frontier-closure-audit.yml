@@ -1,0 +1,36 @@
+name: arte-final-frontier-closure-audit
+
+on:
+  push:
+    branches:
+      - agent/generative-large-scale-campaign-20260929
+    paths:
+      - '.github/workflows/arte-final-frontier-closure-audit.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  final-audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Full cognition regression
+        run: python -m unittest discover -s arte_cognition -p 'test_*.py' -v
+      - name: Generated basis to repair ontology
+        run: PYTHONPATH=. python evaluations/run_generated_basis_to_repair_ontology.py --seed 20260929901
+      - name: Two-generation repair macro library
+        run: PYTHONPATH=. python evaluations/run_repair_macro_library_genesis.py --seed 20260929902
+      - name: Cross-layer generated basis-class-action closure V4
+        run: PYTHONPATH=. python evaluations/run_cross_layer_generative_closure_v4.py --seed 20260929903
+      - name: Global repair-locus partition V2
+        run: PYTHONPATH=. python evaluations/run_runtime_repair_locus_partition_v2.py --seed 20260929904
+      - name: Three-generation cross-layer heredity
+        run: PYTHONPATH=. python evaluations/run_multigeneration_cross_layer_heredity.py --seed 20260929905
+      - name: Closed causal meta-policy heredity
+        run: PYTHONPATH=. python evaluations/run_closed_causal_meta_policy_heredity.py --seed 20260929906
