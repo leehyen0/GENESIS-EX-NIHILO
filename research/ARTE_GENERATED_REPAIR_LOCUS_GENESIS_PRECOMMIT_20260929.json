@@ -1,0 +1,46 @@
+{
+  "schema": "arte.generated_repair_locus_genesis_precommit/v1",
+  "experiment_id": "generated-repair-locus-genesis-20260929",
+  "frozen_before_execution": true,
+  "base_loci": [
+    "OBSERVATION_BASIS",
+    "CATEGORY_BOUNDARY",
+    "ACTION_LIBRARY",
+    "SEARCH_POLICY",
+    "NULL"
+  ],
+  "locus_composition_grammar": "unordered pair of base loci -> GEN_REPAIR_LOCUS::<sha256(pair)>",
+  "training_requirement": "across >=2 worlds, neither constituent repair alone succeeds, joint repair succeeds, and matched-more-compute over either singleton remains insufficient",
+  "heldout_protocol": [
+    "generate composite locus only from training causal-control receipts",
+    "freeze/hash locus identity",
+    "on fresh mechanism-distinct world select composite locus before outcome reveal",
+    "execute FULL joint repair",
+    "REMOVE each constituent separately",
+    "WRONG composite pair",
+    "MATCHED_MORE_COMPUTE singleton",
+    "serialize and cold-process reconstruct generated locus"
+  ],
+  "pass_rule": {
+    "generated_locus_not_in_base_vocabulary": true,
+    "both_constituents_causally_necessary": true,
+    "full_capability": 1,
+    "remove_basis_capability": 0,
+    "remove_action_capability": 0,
+    "wrong_composite_capability": 0,
+    "matched_more_compute_singleton_capability": 0,
+    "cold_exact_locus_hash": true,
+    "fresh_transfer_capability": 1
+  },
+  "claim_boundary": {
+    "base_locus_vocabulary_human_authored": true,
+    "composition_grammar_human_authored": true,
+    "unrestricted_locus_language_genesis": false,
+    "independent_organizational_custody": false,
+    "physical_world": false,
+    "global_recursive_acceleration": false,
+    "AGI": false,
+    "ASI": false,
+    "superintelligence": false
+  }
+}
