@@ -1,0 +1,85 @@
+{
+  "schema": "arte.meta_repair_ontology_genesis_precommit/v1",
+  "experiment_id": "meta-repair-ontology-genesis-20260929",
+  "frozen_before_execution": true,
+  "bootstrap_boundary": {
+    "named_residual_classes_predeclared": [],
+    "residual_feature_vocabulary": [
+      "frontier_complete",
+      "best_base_capability",
+      "candidate_count",
+      "successful_base_candidates",
+      "evidence_cost"
+    ],
+    "predicate_grammar": [
+      "FEATURE <= MIDPOINT",
+      "FEATURE >= MIDPOINT",
+      "AND(predicate,predicate)"
+    ],
+    "predicate_max_depth": 2,
+    "repair_primitive_vocabulary": [
+      "SYNTHESIZE_MISSING_OPERATOR",
+      "COMPILE_SEARCH_SELECTOR",
+      "NULL"
+    ],
+    "class_ids": "SHA256(predicate AST); no semantic class name supplied",
+    "class_boundary_thresholds_predeclared": false,
+    "action_mapping_predeclared": false
+  },
+  "worlds": {
+    "training": [
+      "numeric-operator-frontier",
+      "string-normalizer-frontier",
+      "graph-route-search",
+      "sequence-window-search"
+    ],
+    "heldout": [
+      "record-field-operator-frontier",
+      "token-rewrite-frontier",
+      "relation-join-search",
+      "tree-path-search"
+    ],
+    "mechanism_names_visible_to_ontology_learner": false
+  },
+  "protocol": [
+    "execute complete baseline frontier for each training world",
+    "derive only residual feature vectors from baseline evidence",
+    "execute each bootstrap repair primitive under causal controls to identify useful repair outcome on training worlds",
+    "enumerate predicate ASTs from observed feature midpoints",
+    "choose minimum-complexity ontology that separates repair outcomes on all training worlds",
+    "serialize ontology with hash lineage",
+    "for each fresh heldout world execute baseline frontier only",
+    "classify residual and select repair primitive",
+    "SHA256 seal all heldout selections before any repair primitive outcome",
+    "execute selected repair and controls",
+    "cold-process restore ontology and repeat a ninth fresh world"
+  ],
+  "pass_rule": {
+    "generated_classes_min": 2,
+    "generated_class_ids_absent_from_bootstrap": true,
+    "train_classification_accuracy": 1,
+    "heldout_selected_repair_correct_all": true,
+    "heldout_treatment_capability_all": 1,
+    "heldout_remove_or_null_not_equivalent": true,
+    "wrong_class_mapping_degrades": true,
+    "fixed_more_compute_cannot_replace_missing_operator": true,
+    "selector_world_treatment_preserves_capability_and_reduces_cost": true,
+    "cold_process_exact_ontology_hash": true,
+    "cold_world_selected_repair_correct": true,
+    "cold_world_treatment_success": true
+  },
+  "claim_boundary": {
+    "residual_feature_vocabulary_human_authored": true,
+    "predicate_grammar_human_authored": true,
+    "repair_primitive_vocabulary_human_authored": true,
+    "world_generator_human_authored": true,
+    "unrestricted_ontology_language_genesis": false,
+    "independent_organizational_custody": false,
+    "physical_world": false,
+    "foundation_weight_change": false,
+    "global_recursive_acceleration": false,
+    "AGI": false,
+    "ASI": false,
+    "superintelligence": false
+  }
+}
