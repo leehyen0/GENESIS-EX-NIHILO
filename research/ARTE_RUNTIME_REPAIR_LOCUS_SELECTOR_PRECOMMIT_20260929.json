@@ -1,0 +1,60 @@
+{
+  "schema": "arte.runtime_repair_locus_selector_precommit/v1",
+  "experiment_id": "runtime-repair-locus-selector-20260929",
+  "frozen_before_execution": true,
+  "locus_vocabulary": [
+    "OBSERVATION_BASIS",
+    "CATEGORY_BOUNDARY",
+    "ACTION_LIBRARY",
+    "SEARCH_POLICY",
+    "NULL"
+  ],
+  "diagnostic_features": [
+    "old_basis_expressive",
+    "current_categories_separate_outcomes",
+    "current_action_alphabet_expressive",
+    "capability_present",
+    "normalized_evidence_cost"
+  ],
+  "training_contract": {
+    "examples_per_locus": 4,
+    "single_feature_shortcut_forbidden": true,
+    "classifier_grammar": "depth<=3 conjunction rules over observed boolean/threshold predicates",
+    "label_source": "oracle repair outcome only after all candidate loci are evaluated"
+  },
+  "heldout_contract": {
+    "examples_per_locus": 2,
+    "predictions_sealed_before_locus_outcome_reveal": true,
+    "wrong_locus_control": true,
+    "null_as_valid_action": true,
+    "cold_process_restore": true
+  },
+  "downstream_binding": {
+    "OBSERVATION_BASIS": "world-derived observation basis family",
+    "CATEGORY_BOUNDARY": "meta-repair ontology predicate family",
+    "ACTION_LIBRARY": "repair macro library family",
+    "SEARCH_POLICY": "cross-context projection metapolicy family",
+    "NULL": "no structural mutation"
+  },
+  "pass_rule": {
+    "generated_locus_rules_min": 4,
+    "train_accuracy": 1,
+    "heldout_accuracy": 1,
+    "wrong_locus_degrades_all_nonnull": true,
+    "null_cases_select_null": true,
+    "cold_exact": true
+  },
+  "claim_boundary": {
+    "diagnostic_feature_vocabulary_human_authored": true,
+    "locus_vocabulary_human_authored": true,
+    "classifier_grammar_human_authored": true,
+    "downstream_binding_human_authored": true,
+    "autonomous_new_locus_invention": false,
+    "independent_organizational_custody": false,
+    "physical_world": false,
+    "global_recursive_acceleration": false,
+    "AGI": false,
+    "ASI": false,
+    "superintelligence": false
+  }
+}
