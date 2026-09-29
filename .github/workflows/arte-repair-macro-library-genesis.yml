@@ -1,0 +1,43 @@
+name: arte-repair-macro-library-genesis
+
+on:
+  push:
+    branches:
+      - agent/generative-large-scale-campaign-20260929
+    paths:
+      - 'evaluations/run_repair_macro_library_genesis.py'
+      - '.github/workflows/arte-repair-macro-library-genesis.yml'
+      - 'research/ARTE_REPAIR_MACRO_LIBRARY_GENESIS_PRECOMMIT_20260929.json'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  macro-library:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        seed: [20260929501, 20260929502, 20260929503, 20260929504]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile evaluator
+        run: python -m py_compile evaluations/run_repair_macro_library_genesis.py
+      - name: Execute repair macro library genesis
+        run: |
+          mkdir -p artifacts/repair-macro-library
+          set -o pipefail
+          PYTHONPATH=. python evaluations/run_repair_macro_library_genesis.py --seed ${{ matrix.seed }} | tee artifacts/repair-macro-library/result-${{ matrix.seed }}.jsonl
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: repair-macro-library-${{ matrix.seed }}
+          path: artifacts/repair-macro-library/
+          if-no-files-found: error
+          retention-days: 30
