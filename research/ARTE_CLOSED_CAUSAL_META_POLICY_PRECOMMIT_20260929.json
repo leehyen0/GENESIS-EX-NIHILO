@@ -1,0 +1,106 @@
+{
+  "schema": "arte.closed_causal_meta_policy_precommit/v1",
+  "experiment_id": "closed-causal-meta-policy-heredity-20260929",
+  "frozen_before_execution": true,
+  "objective": "Test whether world outcomes can causally update a small repair-policy genome, have a fresh descendant select an abstract repair action before outcome reveal in mechanism-distinct domains, and survive cold-process reconstruction.",
+  "authored_boundaries": {
+    "residual_classes": [
+      "COMPLETE_FRONTIER_FAILURE",
+      "VALID_BUT_HIGH_COST"
+    ],
+    "action_vocabulary": [
+      "EXPAND_GENERATOR",
+      "REFINE_SEARCH",
+      "NULL"
+    ],
+    "residual_classifier_schema_human_authored": true,
+    "action_to_concrete_implementation_binding_human_authored": true,
+    "evaluator_code_preexisting": true
+  },
+  "training_worlds": [
+    {
+      "id": "WORLD0_SOFTWARE_GRAMMAR",
+      "residual_class": "COMPLETE_FRONTIER_FAILURE",
+      "evaluator": "evaluations/run_world_driven_software_repair_grammar_expansion.py",
+      "positive_action": "EXPAND_GENERATOR",
+      "required_evidence": [
+        "treatment_capability=1",
+        "remove_same_checkpoint_capability=0",
+        "wrong_capability=0",
+        "old_more_compute_or_reset_not_sufficient"
+      ]
+    },
+    {
+      "id": "WORLD1_DESCENDANT_SEARCH",
+      "residual_class": "VALID_BUT_HIGH_COST",
+      "evaluator": "evaluations/run_matched_descendant_search_acceleration.py",
+      "positive_action": "REFINE_SEARCH",
+      "required_evidence": [
+        "capability trajectory remains 1",
+        "proposal_count strictly decreases",
+        "external_pair_count strictly decreases",
+        "wrong_swap capability=0"
+      ]
+    }
+  ],
+  "transfer_worlds": [
+    {
+      "id": "WORLD2_SELECTOR_PROGRAM",
+      "residual_class": "COMPLETE_FRONTIER_FAILURE",
+      "evaluator": "evaluations/run_selector_representation_program_genesis.py",
+      "expected_action": "EXPAND_GENERATOR",
+      "mechanism_distinct_from_training": true
+    },
+    {
+      "id": "WORLD2_MORPHOLOGY_CERT",
+      "residual_class": "VALID_BUT_HIGH_COST",
+      "evaluator": "evaluations/run_certificate_driven_morphology_search.py",
+      "expected_action": "REFINE_SEARCH",
+      "mechanism_distinct_from_training": true
+    },
+    {
+      "id": "WORLD3_COLD_DATAFLOW",
+      "residual_class": "COMPLETE_FRONTIER_FAILURE",
+      "evaluator": "evaluations/run_source_derived_dataflow_path_genesis.py",
+      "expected_action": "EXPAND_GENERATOR",
+      "cold_process_required": true
+    }
+  ],
+  "protocol": [
+    "execute WORLD0 and WORLD1 with fresh evaluator-owned seeds",
+    "update policy only from completed world evidence",
+    "serialize hash-chained policy genome",
+    "restore a fresh G2 controller from serialized genome",
+    "seal G2 action predictions before WORLD2 evaluator execution",
+    "execute WORLD2 evaluators and score against their preexisting REMOVE/WRONG/old-more-compute controls",
+    "spawn a new Python process, restore policy from bytes, seal WORLD3 action prediction",
+    "only then execute WORLD3 evaluator",
+    "no post-outcome policy edits"
+  ],
+  "pass_rule": {
+    "world0_policy_update": "COMPLETE_FRONTIER_FAILURE -> EXPAND_GENERATOR",
+    "world1_policy_update": "VALID_BUT_HIGH_COST -> REFINE_SEARCH",
+    "world2_selector_preoutcome_action": "EXPAND_GENERATOR",
+    "world2_selector_treatment_capability": 1,
+    "world2_selector_remove_capability": 0,
+    "world2_selector_wrong_capability": 0,
+    "world2_morphology_preoutcome_action": "REFINE_SEARCH",
+    "world2_morphology_remove_capability": 0,
+    "world2_morphology_wrong_capability": 0,
+    "world3_cold_prediction_exact_match": true,
+    "world3_treatment_capability": 1,
+    "world3_remove_capability": 0,
+    "world3_wrong_capability": 0
+  },
+  "claim_boundary": {
+    "autonomous_residual_class_invention": false,
+    "autonomous_action_vocabulary_invention": false,
+    "independent_organizational_custody": false,
+    "physical_world": false,
+    "foundation_model_weight_change": false,
+    "global_recursive_acceleration": false,
+    "AGI": false,
+    "ASI": false,
+    "superintelligence": false
+  }
+}
