@@ -1,0 +1,65 @@
+name: arte-large-scale-generative-sharded
+
+on:
+  push:
+    branches:
+      - agent/generative-large-scale-campaign-20260929
+    paths:
+      - '.github/workflows/arte-large-scale-generative-sharded.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  eval:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {id: world-rewrite, script: evaluations/run_world_caused_cognition_rewrite.py, seeded: true}
+          - {id: descendant-accel, script: evaluations/run_matched_descendant_search_acceleration.py, seeded: true}
+          - {id: multi-episode, script: evaluations/run_multi_episode_world_rewrite.py, seeded: true}
+          - {id: end-to-end-world, script: evaluations/run_end_to_end_world_genesis.py, seeded: true}
+          - {id: morphology-meta, script: evaluations/run_morphology_meta_acceleration.py, seeded: true}
+          - {id: morphology-cert, script: evaluations/run_certificate_driven_morphology_search.py, seeded: true}
+          - {id: primitive-genesis, script: evaluations/run_world_driven_primitive_genesis.py, seeded: true}
+          - {id: grammar-genesis, script: evaluations/run_compositional_causal_grammar_genesis.py, seeded: true}
+          - {id: linear-primitive, script: evaluations/run_falsification_driven_linear_primitive_genesis.py, seeded: true}
+          - {id: morphology-schema, script: evaluations/run_generated_morphology_rewrite_schema.py, seeded: true}
+          - {id: morphology-macro-transfer, script: evaluations/run_parametric_morphology_macro_transfer.py, seeded: true}
+          - {id: relation-access, script: evaluations/run_relation_access_plan_genesis.py, seeded: true}
+          - {id: reflective-relation, script: evaluations/run_reflective_relation_genesis.py, seeded: true}
+          - {id: natural-repair-class, script: evaluations/run_natural_repair_class_genesis.py, seeded: false}
+          - {id: natural-repair-constructor, script: evaluations/run_natural_repair_constructor_genesis.py, seeded: false}
+          - {id: natural-failure-extractor, script: evaluations/run_natural_failure_extractor_program_genesis.py, seeded: false}
+          - {id: source-binding-schema, script: evaluations/run_source_derived_binding_schema_genesis.py, seeded: false}
+          - {id: source-dataflow, script: evaluations/run_source_derived_dataflow_path_genesis.py, seeded: false}
+          - {id: selector-program, script: evaluations/run_selector_representation_program_genesis.py, seeded: false}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Execute evaluator
+        shell: bash
+        run: |
+          mkdir -p artifacts/sharded
+          if [ "${{ matrix.seeded }}" = "true" ]; then
+            echo 2026092901 > /tmp/seed1
+            echo 2026092902 > /tmp/seed2
+            PYTHONPATH=. python "${{ matrix.script }}" /tmp/seed1 | tee "artifacts/sharded/${{ matrix.id }}-1.log"
+            PYTHONPATH=. python "${{ matrix.script }}" /tmp/seed2 | tee "artifacts/sharded/${{ matrix.id }}-2.log"
+          else
+            PYTHONPATH=. python "${{ matrix.script }}" | tee "artifacts/sharded/${{ matrix.id }}.log"
+          fi
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sharded-${{ matrix.id }}
+          path: artifacts/sharded/
+          if-no-files-found: warn
+          retention-days: 30
