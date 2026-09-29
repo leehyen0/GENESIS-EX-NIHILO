@@ -1,0 +1,43 @@
+name: arte-closed-causal-meta-policy-heredity
+
+on:
+  push:
+    branches:
+      - agent/generative-large-scale-campaign-20260929
+    paths:
+      - 'evaluations/run_closed_causal_meta_policy_heredity.py'
+      - '.github/workflows/arte-closed-causal-meta-policy-heredity.yml'
+      - 'research/ARTE_CLOSED_CAUSAL_META_POLICY_PRECOMMIT_20260929.json'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  closed-chain:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile evaluator
+        run: python -m py_compile evaluations/run_closed_causal_meta_policy_heredity.py
+      - name: Execute precommitted closed causal chain
+        run: |
+          mkdir -p artifacts/closed-causal-meta-policy
+          set -o pipefail
+          PYTHONPATH=. python evaluations/run_closed_causal_meta_policy_heredity.py --seed 20260929001 | tee artifacts/closed-causal-meta-policy/result.jsonl
+      - name: Execute independent seed replicate
+        run: |
+          set -o pipefail
+          PYTHONPATH=. python evaluations/run_closed_causal_meta_policy_heredity.py --seed 20260929002 | tee artifacts/closed-causal-meta-policy/result-seed2.jsonl
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: arte-closed-causal-meta-policy-heredity
+          path: artifacts/closed-causal-meta-policy/
+          if-no-files-found: error
+          retention-days: 30
