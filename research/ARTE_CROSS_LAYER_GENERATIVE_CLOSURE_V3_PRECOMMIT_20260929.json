@@ -1,0 +1,36 @@
+{
+  "schema": "arte.cross_layer_generative_closure_precommit/v3",
+  "experiment_id": "cross-layer-generated-basis-class-action-closure-v3-20260929",
+  "frozen_before_execution": true,
+  "ancestry": [
+    {
+      "run_id": 36551214524,
+      "verdict": "INVALID_CONTROL_IMPLEMENTATION",
+      "bug": "NULL WRONG was NULL"
+    },
+    {
+      "run_id": 36551453449,
+      "verdict": "INVALID_NULL_WRONG_CONTROL",
+      "bug": "NULL WRONG used non-mutating M1 and preserved the already-satisfied NULL target"
+    }
+  ],
+  "only_protocol_change": "For NULL selections, WRONG_ACTION is generated M2 (SYNTHESIZE+VERIFY+PRUNE), which changes the exact-cost invariant and is therefore a genuine wrong action. No treatment/data/basis/macro/threshold gate changed.",
+  "pass_rule": {
+    "all_seeds": 4,
+    "selection_accuracy": 1,
+    "nonnull_remove_basis_degrades": true,
+    "nonnull_remove_macro_degrades": true,
+    "wrong_action_degrades_all": true,
+    "old_one_slot_inexpressive": true,
+    "cold_exact": true
+  },
+  "claim_boundary": {
+    "unrestricted_feature_or_action_language_genesis": false,
+    "independent_organizational_custody": false,
+    "physical_world": false,
+    "global_recursive_acceleration": false,
+    "AGI": false,
+    "ASI": false,
+    "superintelligence": false
+  }
+}
