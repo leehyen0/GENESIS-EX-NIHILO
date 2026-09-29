@@ -1,0 +1,43 @@
+name: arte-generated-basis-to-repair-ontology
+
+on:
+  push:
+    branches:
+      - agent/generative-large-scale-campaign-20260929
+    paths:
+      - 'evaluations/run_generated_basis_to_repair_ontology.py'
+      - '.github/workflows/arte-generated-basis-to-repair-ontology.yml'
+      - 'research/ARTE_GENERATED_BASIS_TO_REPAIR_ONTOLOGY_PRECOMMIT_20260929.json'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  basis-to-ontology:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        seed: [20260929401, 20260929402, 20260929403, 20260929404]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile evaluator
+        run: python -m py_compile evaluations/run_generated_basis_to_repair_ontology.py
+      - name: Execute generated-basis ontology transfer
+        run: |
+          mkdir -p artifacts/generated-basis-ontology
+          set -o pipefail
+          PYTHONPATH=. python evaluations/run_generated_basis_to_repair_ontology.py --seed ${{ matrix.seed }} | tee artifacts/generated-basis-ontology/result-${{ matrix.seed }}.jsonl
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: generated-basis-ontology-${{ matrix.seed }}
+          path: artifacts/generated-basis-ontology/
+          if-no-files-found: error
+          retention-days: 30
