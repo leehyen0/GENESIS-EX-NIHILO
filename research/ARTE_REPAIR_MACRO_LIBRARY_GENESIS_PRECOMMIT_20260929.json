@@ -1,0 +1,61 @@
+{
+  "schema": "arte.repair_macro_library_genesis_precommit/v1",
+  "experiment_id": "repair-macro-library-genesis-20260929",
+  "frozen_before_execution": true,
+  "external_research_inspiration": "wake-sleep/library-learning style abstraction; implementation is an ARTE-specific bounded symbolic repair-plan experiment",
+  "bootstrap": {
+    "atomic_micro_ops": [
+      "OPEN_FRONTIER",
+      "SYNTHESIZE",
+      "VERIFY",
+      "PRUNE",
+      "CACHE"
+    ],
+    "macro_names_predeclared": [],
+    "macro_bodies_predeclared": [],
+    "search": "deterministic BFS over currently available action tokens",
+    "abstraction": "compile a repeated successful program body into a hash-named executable macro",
+    "action_slot_budget_for_final_test": 2
+  },
+  "generations": [
+    "G0 solves two capability+verification repair tasks and may compile one repeated macro",
+    "G1 solves two capability+verification+cost repair tasks using inherited G0 library and may compile a second macro",
+    "G2 cold descendant receives only serialized macro library"
+  ],
+  "fresh_test": {
+    "target": "capability + verification + cost reduction + cached evidence",
+    "matched_action_slot_budget": 2,
+    "controls": [
+      "G2_FULL",
+      "G1_REMOVE_LATEST_MACRO",
+      "G0_REMOVE_ALL_MACROS",
+      "WRONG_MACRO",
+      "OLD_MORE_COMPUTE_REPEAT_32"
+    ]
+  },
+  "pass_rule": {
+    "g1_macro_generated": true,
+    "g2_macro_generated_from_inherited_macro": true,
+    "fresh_g2_solution_within_two_slots": true,
+    "g1_no_solution_within_two_slots": true,
+    "g0_no_solution_within_two_slots": true,
+    "wrong_macro_no_solution": true,
+    "old_more_compute_cannot_change_depth2_expressivity": true,
+    "cold_descendant_exact_library_hash": true,
+    "cold_descendant_fresh_solution": true
+  },
+  "claim_boundary": {
+    "atomic_micro_ops_human_authored": true,
+    "state_transition_semantics_human_authored": true,
+    "abstraction_rule_human_authored": true,
+    "task_generator_human_authored": true,
+    "macros_generated_not_predeclared": true,
+    "unrestricted_action_semantics_genesis": false,
+    "independent_organizational_custody": false,
+    "physical_world": false,
+    "global_recursive_acceleration": false,
+    "AGI": false,
+    "ASI": false,
+    "superintelligence": false
+  }
+}
