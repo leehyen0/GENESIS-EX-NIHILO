@@ -1,0 +1,36 @@
+name: arte-large-scale-generative-campaign-b
+
+on:
+  push:
+    branches:
+      - agent/generative-large-scale-campaign-20260929
+    paths:
+      - '.github/workflows/arte-large-scale-generative-campaign-b.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  campaign-b:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Run independent 64-evaluation campaign B
+        run: |
+          PYTHONPATH=. python evaluations/run_large_scale_generative_campaign.py \
+            --seeded-replicates 4 \
+            --static-replicates 2 \
+            --base-seed ARTE-LARGE-SCALE-B-20260929
+      - name: Upload campaign B evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: arte-large-scale-generative-campaign-b
+          path: artifacts/large-scale-generative-campaign/
+          if-no-files-found: error
+          retention-days: 30
