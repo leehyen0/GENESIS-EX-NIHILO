@@ -1,0 +1,40 @@
+{
+  "schema": "arte.cross_layer_generative_closure_precommit/v2",
+  "experiment_id": "cross-layer-generated-basis-class-action-closure-v2-20260929",
+  "frozen_before_execution": true,
+  "parent_v1": {
+    "run_id": 36551214524,
+    "verdict": "INVALID_CONTROL_IMPLEMENTATION",
+    "selection_all_correct": true,
+    "nonnull_remove_wrong_controls_pass": true,
+    "bug": "NULL case defined WRONG as NULL itself, making the wrong-control degradation gate logically impossible",
+    "retroactive_promotion_forbidden": true
+  },
+  "only_protocol_change": "For a correct NULL selection, WRONG_ACTION is now a generated non-NULL macro. All data generation, basis induction, macro genesis, heldout worlds and other gates remain unchanged.",
+  "pass_rule": {
+    "generated_basis_classes_min": 2,
+    "generated_macros_min": 2,
+    "heldout_selection_accuracy": 1,
+    "nonnull_remove_basis_degrades": true,
+    "nonnull_remove_macro_degrades": true,
+    "wrong_macro_degrades_including_null": true,
+    "old_atomic_one_slot_inexpressive": true,
+    "old_more_compute_32_no_gain": true,
+    "cold_exact": true,
+    "seeds_required": 4,
+    "all_seeds_pass": true
+  },
+  "claim_boundary": {
+    "raw_trace_representation_human_authored": true,
+    "observation_basis_rule_human_authored": true,
+    "atomic_micro_ops_human_authored": true,
+    "macro_abstraction_rule_human_authored": true,
+    "unrestricted_feature_or_action_language_genesis": false,
+    "independent_organizational_custody": false,
+    "physical_world": false,
+    "global_recursive_acceleration": false,
+    "AGI": false,
+    "ASI": false,
+    "superintelligence": false
+  }
+}
