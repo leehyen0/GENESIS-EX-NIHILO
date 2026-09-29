@@ -1,0 +1,41 @@
+name: arte-generated-composite-repair-locus
+
+on:
+  push:
+    branches:
+      - agent/generative-large-scale-campaign-20260929
+    paths:
+      - 'evaluations/run_generated_composite_repair_locus.py'
+      - '.github/workflows/arte-generated-composite-repair-locus.yml'
+      - 'research/ARTE_GENERATED_REPAIR_LOCUS_GENESIS_PRECOMMIT_20260929.json'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  generated-locus:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        seed: [20260929411, 20260929412, 20260929413]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Execute generated locus chain
+        run: |
+          mkdir -p artifacts/generated-composite-locus
+          set -o pipefail
+          PYTHONPATH=. python evaluations/run_generated_composite_repair_locus.py --seed ${{ matrix.seed }} | tee artifacts/generated-composite-locus/result-${{ matrix.seed }}.jsonl
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: generated-composite-locus-${{ matrix.seed }}
+          path: artifacts/generated-composite-locus/
+          if-no-files-found: error
+          retention-days: 30
