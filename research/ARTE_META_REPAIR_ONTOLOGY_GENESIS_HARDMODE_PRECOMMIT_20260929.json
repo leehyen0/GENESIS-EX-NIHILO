@@ -1,0 +1,69 @@
+{
+  "schema": "arte.meta_repair_ontology_genesis_hardmode_precommit/v2",
+  "experiment_id": "meta-repair-ontology-genesis-hardmode-20260929",
+  "frozen_before_execution": true,
+  "purpose": "Eliminate the single-feature shortcut observed in v1. Generated non-NULL repair classes must require conjunctions of multiple residual dimensions.",
+  "bootstrap_boundary": {
+    "named_residual_classes_predeclared": [],
+    "residual_feature_vocabulary": [
+      "frontier_complete",
+      "best_base_capability",
+      "candidate_count",
+      "successful_base_candidates",
+      "evidence_cost"
+    ],
+    "predicate_grammar": [
+      "FEATURE <= MIDPOINT",
+      "FEATURE >= MIDPOINT",
+      "AND(predicate,predicate)"
+    ],
+    "predicate_max_depth": 2,
+    "repair_primitive_vocabulary": [
+      "SYNTHESIZE_MISSING_OPERATOR",
+      "COMPILE_SEARCH_SELECTOR",
+      "NULL"
+    ],
+    "default_action": "NULL",
+    "class_ids": "SHA256(predicate AST)",
+    "class_boundary_thresholds_predeclared": false,
+    "action_mapping_predeclared": false
+  },
+  "anti_shortcut_requirements": [
+    "at least one training world has best_base_capability=0 but correct action NULL because frontier_complete=0",
+    "at least one training world has best_base_capability=1 but correct action NULL because evidence_cost is already low",
+    "every generated non-NULL class predicate complexity must be exactly 2",
+    "no single atomic predicate may exactly identify a non-NULL action class"
+  ],
+  "heldout_protocol": [
+    "include EXPAND, REFINE, INCOMPLETE_NULL, and EFFICIENT_NULL worlds",
+    "select action from baseline residual only",
+    "seal all actions before repair outcomes",
+    "execute TREATMENT / WRONG / NULL / fixed-more-compute controls",
+    "cold-process restore ontology and classify a ninth world"
+  ],
+  "pass_rule": {
+    "generated_nonnull_classes": 2,
+    "all_generated_nonnull_predicate_complexity": 2,
+    "no_atomic_shortcut": true,
+    "train_accuracy": 1,
+    "heldout_accuracy": 1,
+    "expand_treatment_capability": 1,
+    "refine_treatment_preserves_capability_and_reduces_cost": true,
+    "null_worlds_select_null": true,
+    "wrong_mapping_degrades": true,
+    "cold_exact_hash_and_action": true
+  },
+  "claim_boundary": {
+    "residual_feature_vocabulary_human_authored": true,
+    "predicate_grammar_human_authored": true,
+    "repair_primitive_vocabulary_human_authored": true,
+    "world_generator_human_authored": true,
+    "unrestricted_ontology_language_genesis": false,
+    "independent_organizational_custody": false,
+    "physical_world": false,
+    "global_recursive_acceleration": false,
+    "AGI": false,
+    "ASI": false,
+    "superintelligence": false
+  }
+}
