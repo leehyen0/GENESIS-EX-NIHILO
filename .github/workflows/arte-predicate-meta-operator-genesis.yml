@@ -1,0 +1,41 @@
+name: arte-predicate-meta-operator-genesis
+
+on:
+  push:
+    branches:
+      - agent/generative-large-scale-campaign-20260929
+    paths:
+      - 'evaluations/run_predicate_meta_operator_genesis.py'
+      - '.github/workflows/arte-predicate-meta-operator-genesis.yml'
+      - 'research/ARTE_PREDICATE_META_OPERATOR_GENESIS_PRECOMMIT_20260929.json'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  predicate-metaop:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        seed: [20260929701, 20260929702, 20260929703, 20260929704, 20260929705]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Execute predicate meta-operator genesis
+        run: |
+          mkdir -p artifacts/predicate-metaop
+          set -o pipefail
+          PYTHONPATH=. python evaluations/run_predicate_meta_operator_genesis.py --seed ${{ matrix.seed }} | tee artifacts/predicate-metaop/result-${{ matrix.seed }}.jsonl
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: predicate-metaop-${{ matrix.seed }}
+          path: artifacts/predicate-metaop/
+          if-no-files-found: error
+          retention-days: 30
