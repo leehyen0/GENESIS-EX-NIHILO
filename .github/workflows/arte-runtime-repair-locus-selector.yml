@@ -1,0 +1,43 @@
+name: arte-runtime-repair-locus-selector
+
+on:
+  push:
+    branches:
+      - agent/generative-large-scale-campaign-20260929
+    paths:
+      - 'evaluations/run_runtime_repair_locus_selector.py'
+      - '.github/workflows/arte-runtime-repair-locus-selector.yml'
+      - 'research/ARTE_RUNTIME_REPAIR_LOCUS_SELECTOR_PRECOMMIT_20260929.json'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  locus-selector:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        seed: [20260929701, 20260929702, 20260929703, 20260929704]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile evaluator
+        run: python -m py_compile evaluations/run_runtime_repair_locus_selector.py
+      - name: Execute locus selector
+        run: |
+          mkdir -p artifacts/runtime-repair-locus
+          set -o pipefail
+          PYTHONPATH=. python evaluations/run_runtime_repair_locus_selector.py --seed ${{ matrix.seed }} | tee artifacts/runtime-repair-locus/result-${{ matrix.seed }}.jsonl
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: runtime-repair-locus-${{ matrix.seed }}
+          path: artifacts/runtime-repair-locus/
+          if-no-files-found: error
+          retention-days: 30
