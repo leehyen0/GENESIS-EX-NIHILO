@@ -1,0 +1,52 @@
+{
+  "schema": "arte.runtime_repair_locus_partition_precommit/v2",
+  "experiment_id": "runtime-repair-locus-global-partition-v2-20260929",
+  "frozen_before_execution": true,
+  "parent_v1": {
+    "run_id": 36552524468,
+    "result": "1/4 PASS; independent one-vs-rest rules overlapped/misclassified on fresh points",
+    "preserve_failure": true
+  },
+  "design_change": "Generate one global mutually-exclusive decision partition over all loci instead of independent class predicates.",
+  "diagnostic_features": [
+    "old_basis_expressive",
+    "current_categories_separate_outcomes",
+    "current_action_alphabet_expressive",
+    "capability_present",
+    "normalized_evidence_cost"
+  ],
+  "locus_vocabulary": [
+    "OBSERVATION_BASIS",
+    "CATEGORY_BOUNDARY",
+    "ACTION_LIBRARY",
+    "SEARCH_POLICY",
+    "NULL"
+  ],
+  "tree_grammar": {
+    "splits": "FEATURE <=/> midpoint from training values",
+    "max_depth": 5,
+    "objective": "minimum nodes then minimum depth then canonical AST"
+  },
+  "pass_rule": {
+    "train_accuracy": 1,
+    "heldout_accuracy": 1,
+    "mutually_exclusive_by_construction": true,
+    "wrong_locus_degrades_all": true,
+    "null_correct": true,
+    "cold_exact": true,
+    "seeds": 4,
+    "all_seeds_pass": true
+  },
+  "claim_boundary": {
+    "diagnostic_feature_vocabulary_human_authored": true,
+    "locus_vocabulary_human_authored": true,
+    "tree_grammar_human_authored": true,
+    "autonomous_new_locus_invention": false,
+    "independent_organizational_custody": false,
+    "physical_world": false,
+    "global_recursive_acceleration": false,
+    "AGI": false,
+    "ASI": false,
+    "superintelligence": false
+  }
+}
