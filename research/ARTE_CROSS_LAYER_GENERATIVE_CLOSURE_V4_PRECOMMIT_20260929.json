@@ -1,0 +1,42 @@
+{
+  "schema": "arte.cross_layer_generative_closure_precommit/v4",
+  "experiment_id": "cross-layer-generated-basis-class-action-closure-v4-20260929",
+  "frozen_before_execution": true,
+  "ancestry": [
+    {
+      "run_id": 36551214524,
+      "verdict": "INVALID_CONTROL_IMPLEMENTATION",
+      "bug": "NULL wrong was NULL"
+    },
+    {
+      "run_id": 36551453449,
+      "verdict": "INVALID_NULL_WRONG_CONTROL",
+      "bug": "NULL wrong M1 did not violate target"
+    },
+    {
+      "run_id": 36551998591,
+      "verdict": "INVALID_STALE_GATE_REFERENCE",
+      "bug": "actual WRONG=M2 violated target, but final gate still re-executed old M1"
+    }
+  ],
+  "only_protocol_change": "NULL wrong-control gate evaluates the already executed wrong_out selected by the V3 protocol. No world generation, generated basis, generated macro, treatment, target or success threshold changed.",
+  "retroactive_promotion_forbidden": true,
+  "pass_rule": {
+    "seeds": 4,
+    "all_seeds_must_pass": true,
+    "selection_accuracy": 1,
+    "nonnull_remove_controls": true,
+    "wrong_action_degrades_all": true,
+    "old_one_slot_inexpressive": true,
+    "cold_exact": true
+  },
+  "claim_boundary": {
+    "unrestricted_feature_or_action_language_genesis": false,
+    "independent_organizational_custody": false,
+    "physical_world": false,
+    "global_recursive_acceleration": false,
+    "AGI": false,
+    "ASI": false,
+    "superintelligence": false
+  }
+}
