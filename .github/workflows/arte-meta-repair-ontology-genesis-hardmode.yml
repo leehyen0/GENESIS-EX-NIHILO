@@ -1,0 +1,43 @@
+name: arte-meta-repair-ontology-genesis-hardmode
+
+on:
+  push:
+    branches:
+      - agent/generative-large-scale-campaign-20260929
+    paths:
+      - 'evaluations/run_meta_repair_ontology_genesis_hardmode.py'
+      - '.github/workflows/arte-meta-repair-ontology-genesis-hardmode.yml'
+      - 'research/ARTE_META_REPAIR_ONTOLOGY_GENESIS_HARDMODE_PRECOMMIT_20260929.json'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ontology-hardmode:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        seed: [20260929101, 20260929102, 20260929103]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile evaluator
+        run: python -m py_compile evaluations/run_meta_repair_ontology_genesis_hardmode.py
+      - name: Execute hard-mode ontology genesis
+        run: |
+          mkdir -p artifacts/meta-repair-ontology-hardmode
+          set -o pipefail
+          PYTHONPATH=. python evaluations/run_meta_repair_ontology_genesis_hardmode.py --seed ${{ matrix.seed }} | tee artifacts/meta-repair-ontology-hardmode/result-${{ matrix.seed }}.jsonl
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: meta-repair-ontology-hardmode-${{ matrix.seed }}
+          path: artifacts/meta-repair-ontology-hardmode/
+          if-no-files-found: error
+          retention-days: 30
