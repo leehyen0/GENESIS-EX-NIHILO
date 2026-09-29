@@ -1,0 +1,59 @@
+{
+  "schema": "arte.cross_language_heredity_precommit/v1",
+  "experiment_id": "predicate-action-meta-language-heredity-20260929",
+  "frozen_before_execution": true,
+  "lineage": {
+    "G0": "old predicate AND/OR + old actions IDENTITY/SET_FRONTIER/SET_VERIFIED",
+    "G1": "inherits generated predicate connective from WORLD0",
+    "G2": "inherits G1 predicate connective and generated action primitive from WORLD1"
+  },
+  "old_predicate_language": {
+    "connectives": [
+      "AND",
+      "OR"
+    ],
+    "negation": false
+  },
+  "old_action_language": {
+    "primitives": [
+      "IDENTITY",
+      "SET_FRONTIER",
+      "SET_VERIFIED"
+    ]
+  },
+  "world0": "classification boundary requires XOR",
+  "world1": "repair transition requires XOR update",
+  "heldout": "fresh tasks require BOTH generated predicate op and generated action primitive",
+  "protocol": [
+    "prove old predicate/action closures separately inexpressive",
+    "generate predicate operator and checkpoint G1",
+    "generate action primitive and checkpoint G2 with parent hash G1",
+    "seal fresh-task classifications and next-state actions before labels/targets",
+    "FULL G2 vs REMOVE_PREDICATE vs REMOVE_ACTION vs WRONG_PREDICATE vs WRONG_ACTION vs old-more-compute",
+    "cold-process reconstruct G2"
+  ],
+  "pass_rule": {
+    "g0_joint_success": 0,
+    "g1_joint_success": 0,
+    "g2_joint_success_all": true,
+    "remove_predicate_joint_success": 0,
+    "remove_action_joint_success": 0,
+    "wrong_predicate_joint_success": 0,
+    "wrong_action_joint_success": 0,
+    "old_more_compute_joint_success": 0,
+    "cold_g2_exact": true,
+    "checkpoint_hash_chain": true
+  },
+  "claim_boundary": {
+    "input_state_vocabulary_human_authored": true,
+    "finite_truth_table_generators_human_authored": true,
+    "language_update_protocol_human_authored": true,
+    "unrestricted_language_genesis": false,
+    "independent_organizational_custody": false,
+    "physical_world": false,
+    "global_recursive_acceleration": false,
+    "AGI": false,
+    "ASI": false,
+    "superintelligence": false
+  }
+}
