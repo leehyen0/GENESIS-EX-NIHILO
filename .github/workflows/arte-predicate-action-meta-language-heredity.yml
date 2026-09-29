@@ -1,0 +1,41 @@
+name: arte-predicate-action-meta-language-heredity
+
+on:
+  push:
+    branches:
+      - agent/generative-large-scale-campaign-20260929
+    paths:
+      - 'evaluations/run_predicate_action_meta_language_heredity.py'
+      - '.github/workflows/arte-predicate-action-meta-language-heredity.yml'
+      - 'research/ARTE_PREDICATE_ACTION_META_LANGUAGE_HEREDITY_PRECOMMIT_20260929.json'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  meta-language:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        seed: [20260929911, 20260929912, 20260929913, 20260929914, 20260929915]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Execute cross-language heredity
+        run: |
+          mkdir -p artifacts/predicate-action-language
+          set -o pipefail
+          PYTHONPATH=. python evaluations/run_predicate_action_meta_language_heredity.py --seed ${{ matrix.seed }} | tee artifacts/predicate-action-language/result-${{ matrix.seed }}.jsonl
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: predicate-action-language-${{ matrix.seed }}
+          path: artifacts/predicate-action-language/
+          if-no-files-found: error
+          retention-days: 30
