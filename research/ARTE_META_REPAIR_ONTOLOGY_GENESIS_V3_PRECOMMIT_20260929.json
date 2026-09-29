@@ -1,0 +1,91 @@
+{
+  "schema": "arte.meta_repair_ontology_genesis_adversarial_overlap_precommit/v3",
+  "experiment_id": "meta-repair-ontology-genesis-adversarial-overlap-20260929",
+  "frozen_before_execution": true,
+  "parent_v2": {
+    "run_id": 36546875744,
+    "result": "1/3 PASS; 2/3 correctly rejected because random candidate_count accidentally became an atomic shortcut",
+    "preserve_failures": true
+  },
+  "design_change": "World generator now matches candidate_count distributions across all residual types by construction. High evidence_cost is shared by EXPAND, REFINE, and INCOMPLETE_NULL. No single observed feature is permitted to identify either non-NULL repair class.",
+  "bootstrap_boundary": {
+    "named_residual_classes_predeclared": [],
+    "residual_feature_vocabulary": [
+      "frontier_complete",
+      "best_base_capability",
+      "candidate_count",
+      "successful_base_candidates",
+      "evidence_cost"
+    ],
+    "predicate_grammar": [
+      "FEATURE <= MIDPOINT",
+      "FEATURE >= MIDPOINT",
+      "AND(predicate,predicate)"
+    ],
+    "predicate_max_depth": 2,
+    "repair_primitive_vocabulary": [
+      "SYNTHESIZE_MISSING_OPERATOR",
+      "COMPILE_SEARCH_SELECTOR",
+      "NULL"
+    ],
+    "default_action": "NULL",
+    "class_boundary_thresholds_predeclared": false,
+    "class_ids": "SHA256(predicate AST)"
+  },
+  "adversarial_overlap_contract": {
+    "candidate_count_values_matched_across_modes": [
+      12,
+      16
+    ],
+    "high_cost_modes": [
+      "EXPAND",
+      "REFINE",
+      "INCOMPLETE_NULL"
+    ],
+    "low_cost_mode": "EFFICIENT_NULL",
+    "low_capability_modes": [
+      "EXPAND",
+      "INCOMPLETE_NULL"
+    ],
+    "high_capability_modes": [
+      "REFINE",
+      "EFFICIENT_NULL"
+    ],
+    "complete_frontier_modes": [
+      "EXPAND",
+      "REFINE",
+      "EFFICIENT_NULL"
+    ],
+    "incomplete_frontier_mode": "INCOMPLETE_NULL",
+    "atomic_predicate_exact_nonnull_class_forbidden": true
+  },
+  "pass_rule": {
+    "generated_nonnull_classes": 2,
+    "all_nonnull_predicates_complexity": 2,
+    "atomic_shortcut_count_each_nonnull_class": 0,
+    "train_accuracy": 1,
+    "four_type_heldout_accuracy": 1,
+    "expand_treatment_capability": 1,
+    "refine_treatment_preserves_capability_and_reduces_cost": true,
+    "both_null_types_select_NULL": true,
+    "wrong_mapping_degrades": true,
+    "fixed_more_compute_fails_to_replace_missing_operator": true,
+    "cold_process_exact_hash_and_action": true,
+    "seeds_required": 3,
+    "all_seeds_must_pass": true
+  },
+  "claim_boundary": {
+    "residual_feature_vocabulary_human_authored": true,
+    "predicate_grammar_human_authored": true,
+    "repair_primitive_vocabulary_human_authored": true,
+    "adversarial_world_generator_human_authored": true,
+    "unrestricted_ontology_language_genesis": false,
+    "independent_organizational_custody": false,
+    "physical_world": false,
+    "foundation_weight_change": false,
+    "global_recursive_acceleration": false,
+    "AGI": false,
+    "ASI": false,
+    "superintelligence": false
+  }
+}
