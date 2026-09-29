@@ -1,0 +1,58 @@
+{
+  "schema": "arte.multigeneration_cross_layer_heredity_precommit/v1",
+  "experiment_id": "multigeneration-basis-class-action-heredity-20260929",
+  "frozen_before_execution": true,
+  "generations": [
+    "G0 empty generated basis/class/macro libraries",
+    "WORLD0 -> generate basis A + macro M1 -> G1",
+    "WORLD1 -> inherited G1 cannot classify/solve new repair in one generated macro; generate basis B + macro M2 using M1 -> G2",
+    "WORLD2 -> inherited G2 cannot classify/solve new repair in one generated macro; generate basis C + macro M3 using M2 -> G3",
+    "G3 fresh A/B/C/NULL heldout predictions sealed before target scoring",
+    "cold G3 reconstruct exact lineage and execute fresh world"
+  ],
+  "authored_bootstrap": {
+    "raw_intervention_trace_format": true,
+    "observation_basis_induction_rule": true,
+    "atomic_micro_ops": [
+      "OPEN_FRONTIER",
+      "SYNTHESIZE",
+      "VERIFY",
+      "PRUNE",
+      "CACHE"
+    ],
+    "macro_compilation_rule": true,
+    "world_generator": true
+  },
+  "generated_required": {
+    "three_basis_class_ids": true,
+    "three_macro_ids": true,
+    "m2_consumes_m1": true,
+    "m3_consumes_m2": true,
+    "hash_chained_G0_G1_G2_G3": true
+  },
+  "controls": [
+    "REMOVE_CLASS",
+    "REMOVE_LATEST_MACRO",
+    "WRONG_MACRO",
+    "OLD_ATOMIC_ONE_SLOT",
+    "OLD_MORE_COMPUTE_32",
+    "NULL"
+  ],
+  "pass_rule": {
+    "three_world_updates": true,
+    "fresh_A_B_C_NULL_all_correct": true,
+    "remove_wrong_controls": true,
+    "cold_G3_exact": true,
+    "seeds": 4,
+    "all_seeds_pass": true
+  },
+  "claim_boundary": {
+    "unrestricted_feature_or_action_language_genesis": false,
+    "independent_organizational_custody": false,
+    "physical_world": false,
+    "global_recursive_acceleration": false,
+    "AGI": false,
+    "ASI": false,
+    "superintelligence": false
+  }
+}
