@@ -8,14 +8,23 @@ EXPAND="EXPAND_GENERATOR"; REFINE="REFINE_SEARCH"; NULL="NULL"
 def canon(x): return json.dumps(x,sort_keys=True,separators=(",",":"))
 def sha(x): return hashlib.sha256(canon(x).encode()).hexdigest()
 
-def run_json(script,*args):
-    cp=subprocess.run([sys.executable,script,*map(str,args)],cwd=ROOT,text=True,capture_output=True,timeout=240,check=False,env={**os.environ,"PYTHONPATH":str(ROOT)})
+def _parse_json_process(script,cp):
     if cp.returncode!=0: raise AssertionError(f"{script} rc={cp.returncode}\n{cp.stdout[-5000:]}\n{cp.stderr[-5000:]}")
     for line in reversed([x.strip() for x in cp.stdout.splitlines() if x.strip()]):
         if line.startswith("{"):
             try:return json.loads(line)
             except:pass
     raise AssertionError(f"no json from {script}")
+
+def run_json(script,*args):
+    cp=subprocess.run([sys.executable,script,*map(str,args)],cwd=ROOT,text=True,capture_output=True,timeout=240,check=False,env={**os.environ,"PYTHONPATH":str(ROOT)})
+    return _parse_json_process(script,cp)
+
+def run_seeded_json(script,seed):
+    with tempfile.TemporaryDirectory(prefix="arte_seed_adapter_") as td:
+        sp=Path(td)/"seed.txt"; sp.write_text(str(int(seed)),encoding="utf-8")
+        cp=subprocess.run([sys.executable,script,str(sp)],cwd=ROOT,text=True,capture_output=True,timeout=240,check=False,env={**os.environ,"PYTHONPATH":str(ROOT)})
+    return _parse_json_process(script,cp)
 
 def make_policy(generation,parent_hash,rules):
     core={"generation":generation,"parent_hash":parent_hash,"rules":rules}
@@ -37,7 +46,7 @@ def cold_mode(path,features_json):
 
 def main(seed):
     # Training WORLD0: software grammar expansion.
-    w0=run_json("evaluations/run_world_driven_software_repair_grammar_expansion.py",seed+1)
+    w0=run_seeded_json("evaluations/run_world_driven_software_repair_grammar_expansion.py",seed+1)
     if not (w0.get("treatment_capability")==1.0 and w0.get("remove_same_checkpoint_capability")==0.0 and w0.get("wrong_capability")==0.0):
         raise AssertionError("WORLD0 did not authorize EXPAND")
     g0=make_policy(0,"",[])
@@ -45,7 +54,7 @@ def main(seed):
     g1=make_policy(1,g0["policy_hash"],[g1_rule])
 
     # Training WORLD1: capability exists but search/evidence cost contracts with learned schedule.
-    w1=run_json("evaluations/run_matched_descendant_search_acceleration.py",seed+2)
+    w1=run_seeded_json("evaluations/run_matched_descendant_search_acceleration.py",seed+2)
     if not (w1.get("validated_capability_trajectory")==[1.0,1.0,1.0] and
             w1.get("proposal_count_trajectory")==[12,8,4] and
             w1.get("external_pair_count_trajectory")==[24,16,8] and
@@ -65,7 +74,7 @@ def main(seed):
 
     # Reveal mechanism-distinct heldout evaluator outcomes only after all generations are sealed.
     selector=run_json("evaluations/run_selector_representation_program_genesis.py")
-    morphology=run_json("evaluations/run_certificate_driven_morphology_search.py",seed+3)
+    morphology=run_seeded_json("evaluations/run_certificate_driven_morphology_search.py",seed+3)
 
     if not (selector.get("treatment_capability")==1.0 and selector.get("remove_same_checkpoint_capability")==0.0 and selector.get("wrong_program_capability")==0.0):
         raise AssertionError("selector heldout matrix invalid")
