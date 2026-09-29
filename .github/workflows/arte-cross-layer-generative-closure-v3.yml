@@ -1,0 +1,43 @@
+name: arte-cross-layer-generative-closure-v3
+
+on:
+  push:
+    branches:
+      - agent/generative-large-scale-campaign-20260929
+    paths:
+      - 'evaluations/run_cross_layer_generative_closure_v3.py'
+      - '.github/workflows/arte-cross-layer-generative-closure-v3.yml'
+      - 'research/ARTE_CROSS_LAYER_GENERATIVE_CLOSURE_V3_PRECOMMIT_20260929.json'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  cross-layer-v3:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        seed: [20260929621, 20260929622, 20260929623, 20260929624]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile evaluator
+        run: python -m py_compile evaluations/run_cross_layer_generative_closure_v3.py
+      - name: Execute cross-layer closure V3
+        run: |
+          mkdir -p artifacts/cross-layer-generative-closure-v3
+          set -o pipefail
+          PYTHONPATH=. python evaluations/run_cross_layer_generative_closure_v3.py --seed ${{ matrix.seed }} | tee artifacts/cross-layer-generative-closure-v3/result-${{ matrix.seed }}.jsonl
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cross-layer-generative-closure-v3-${{ matrix.seed }}
+          path: artifacts/cross-layer-generative-closure-v3/
+          if-no-files-found: error
+          retention-days: 30
