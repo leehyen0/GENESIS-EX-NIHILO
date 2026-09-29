@@ -1,0 +1,54 @@
+name: arte-frontier-basis-primitive-metapolicy-matrix
+
+on:
+  push:
+    branches:
+      - agent/generative-large-scale-campaign-20260929
+    paths:
+      - '.github/workflows/arte-frontier-basis-primitive-metapolicy-matrix.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  frontier:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {id: observation-basis, script: evaluations/run_observation_basis_transfer.py, seeded: false}
+          - {id: latent-relation-ontology, script: evaluations/run_latent_relation_ontology_transfer.py, seeded: false}
+          - {id: cross-context-metapolicy, script: evaluations/run_cross_context_projection_metapolicy.py, seeded: true}
+          - {id: transform-primitive-alphabet, script: evaluations/run_world_driven_transform_primitive_alphabet.py, seeded: true}
+          - {id: transform-generator, script: evaluations/run_compositional_transform_generator_genesis.py, seeded: true}
+          - {id: persistent-primitive-resume, script: evaluations/run_persistent_primitive_developmental_resume.py, seeded: true}
+          - {id: upstream-failure-locus, script: evaluations/run_upstream_failure_locus_genesis.py, seeded: false}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Execute 3 frontier replicates
+        shell: bash
+        run: |
+          mkdir -p artifacts/frontier-matrix
+          set -o pipefail
+          for R in 1 2 3; do
+            if [ "${{ matrix.seeded }}" = "true" ]; then
+              echo $((20260929300 + R)) > /tmp/frontier-seed
+              PYTHONPATH=. python "${{ matrix.script }}" /tmp/frontier-seed | tee "artifacts/frontier-matrix/${{ matrix.id }}-${R}.jsonl"
+            else
+              PYTHONPATH=. python "${{ matrix.script }}" | tee "artifacts/frontier-matrix/${{ matrix.id }}-${R}.jsonl"
+            fi
+          done
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontier-${{ matrix.id }}
+          path: artifacts/frontier-matrix/
+          if-no-files-found: error
+          retention-days: 30
