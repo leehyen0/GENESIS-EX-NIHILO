@@ -1,0 +1,41 @@
+name: arte-cross-domain-matched-compute-policy-growth
+
+on:
+  push:
+    branches:
+      - agent/generative-large-scale-campaign-20260929
+    paths:
+      - 'evaluations/run_cross_domain_matched_compute_policy_growth.py'
+      - '.github/workflows/arte-cross-domain-matched-compute-policy-growth.yml'
+      - 'research/ARTE_CROSS_DOMAIN_MATCHED_COMPUTE_POLICY_GROWTH_PRECOMMIT_20260929.json'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  matched-growth:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        seed: [20260929511, 20260929512, 20260929513]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Execute matched-compute policy growth
+        run: |
+          mkdir -p artifacts/matched-compute-policy-growth
+          set -o pipefail
+          PYTHONPATH=. python evaluations/run_cross_domain_matched_compute_policy_growth.py --seed ${{ matrix.seed }} | tee artifacts/matched-compute-policy-growth/result-${{ matrix.seed }}.jsonl
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: matched-compute-policy-growth-${{ matrix.seed }}
+          path: artifacts/matched-compute-policy-growth/
+          if-no-files-found: error
+          retention-days: 30
