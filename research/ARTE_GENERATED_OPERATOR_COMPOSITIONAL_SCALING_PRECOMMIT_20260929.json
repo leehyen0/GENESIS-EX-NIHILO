@@ -1,0 +1,58 @@
+{
+  "schema": "arte.generated_operator_compositional_scaling_precommit/v1",
+  "experiment_id": "generated-operator-compositional-scaling-20260929",
+  "frozen_before_execution": true,
+  "inherited_generated_primitive": {
+    "operator_id": "GEN_PRED_OP::a5c3dd48facf21ed5f91",
+    "truth_table": [
+      0,
+      1,
+      1,
+      0
+    ],
+    "origin_run": 36559003018
+  },
+  "old_language": {
+    "operators": [
+      "AND",
+      "OR"
+    ],
+    "negation": false
+  },
+  "compiler": "left-fold inherited generated binary operator over n inputs",
+  "evaluation_arities": [
+    3,
+    4,
+    8,
+    16
+  ],
+  "efficiency_comparison": {
+    "exhaustive_truth_function_universe_formula": "2^(2^n)",
+    "composed_operator_applications": "n-1 per example"
+  },
+  "protocol": [
+    "freeze inherited operator before high-arity tasks",
+    "compile one program per arity without task labels",
+    "seal predictions before parity labels",
+    "FULL vs REMOVE generated operator vs WRONG generated operator vs old-more-compute",
+    "cold-process reconstruction at highest arity"
+  ],
+  "pass_rule": {
+    "full_accuracy_all_arities": 1,
+    "remove_below_full_all_arities": true,
+    "wrong_below_full_all_arities": true,
+    "linear_operator_application_growth": true,
+    "cold_arity16_exact": true
+  },
+  "claim_boundary": {
+    "fold_compiler_human_authored": true,
+    "input_bit_vocabulary_human_authored": true,
+    "inherited_generated_operator_bounded": true,
+    "unrestricted_program_language_genesis": false,
+    "independent_organizational_custody": false,
+    "global_recursive_acceleration": false,
+    "AGI": false,
+    "ASI": false,
+    "superintelligence": false
+  }
+}
