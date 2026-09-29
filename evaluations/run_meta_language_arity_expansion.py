@@ -116,6 +116,6 @@ def main(seed):
     return 0
 
 if __name__=="__main__":
-    ap=argparse.ArgumentParser();ap.add_argument("--seed",type=int,required=True);ap.add_argument("--cold",nargs=2);a=ap.parse_args()
+    ap=argparse.ArgumentParser();ap.add_argument("--seed",type=int,default=20260929921);ap.add_argument("--cold",nargs=2);a=ap.parse_args()
     if a.cold:raise SystemExit(cold_mode(a.cold[0],a.cold[1]))
     raise SystemExit(main(a.seed))
